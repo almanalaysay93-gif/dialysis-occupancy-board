@@ -66,15 +66,15 @@ export default function AssignSessionDialog({
 
   return (
     <Dialog open={open} onOpenChange={v => !v && onClose()}>
-      <DialogContent className="max-w-md bg-[#FDF9F0]">
+      <DialogContent className="max-w-md bg-[#FBFCFD]">
         <DialogHeader>
           <p className="smallcaps-detail text-muted-foreground">
             New Treatment Session
           </p>
-          <DialogTitle className="font-display text-3xl text-[#2B2620]">
+          <DialogTitle className="font-display text-3xl text-[#1F2A52]">
             Assign {machineLabel}
           </DialogTitle>
-          <DialogDescription className="font-serif-light text-base text-[#6B6152]">
+          <DialogDescription className="font-serif-light text-base text-[#556680]">
             Record the patient, treatment duration, isolation classification,
             and urgency before starting the session.
           </DialogDescription>
@@ -82,7 +82,7 @@ export default function AssignSessionDialog({
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-5">
           <div className="flex flex-col gap-2">
-            <Label htmlFor="patient-id" className="smallcaps-detail text-[#6B6152]">
+            <Label htmlFor="patient-id" className="smallcaps-detail text-[#556680]">
               Patient Identifier
             </Label>
             <Input
@@ -90,14 +90,14 @@ export default function AssignSessionDialog({
               value={patientId}
               onChange={e => setPatientId(e.target.value)}
               placeholder="e.g. P-1042"
-              className="h-11 border-[#D9CFBA] bg-[#F6F1E7] font-serif-light text-lg"
+              className="h-11 border-[#D4DFE5] bg-[#F4F7F8] font-serif-light text-lg"
               autoFocus
               required
             />
           </div>
 
           <div className="flex flex-col gap-2">
-            <Label className="smallcaps-detail text-[#6B6152]">
+            <Label className="smallcaps-detail text-[#556680]">
               Treatment Duration
             </Label>
             <RadioGroup
@@ -113,17 +113,17 @@ export default function AssignSessionDialog({
                 <label
                   key={opt.v}
                   htmlFor={`duration-${opt.v}`}
-                  className="flex cursor-pointer flex-col items-center gap-0.5 border border-[#D9CFBA] bg-[#F6F1E7] p-3 transition-colors has-[[data-state=checked]]:border-[#2B2620] has-[[data-state=checked]]:bg-[#EFE9DC]"
+                  className="flex cursor-pointer flex-col items-center gap-0.5 border border-[#D4DFE5] bg-[#F4F7F8] p-3 transition-colors has-[[data-state=checked]]:border-[#1F2A52] has-[[data-state=checked]]:bg-[#E8EFF1]"
                 >
                   <RadioGroupItem
                     id={`duration-${opt.v}`}
                     value={String(opt.v)}
                     className="sr-only"
                   />
-                  <span className="font-display text-2xl text-[#2B2620]">
+                  <span className="font-display text-2xl text-[#1F2A52]">
                     {opt.label}
                   </span>
-                  <span className="smallcaps-detail text-[#8A7A5F]">
+                  <span className="smallcaps-detail text-[#7684A0]">
                     {opt.sub}
                   </span>
                 </label>
@@ -132,7 +132,7 @@ export default function AssignSessionDialog({
           </div>
 
           <div className="flex flex-col gap-2">
-            <Label className="smallcaps-detail text-[#6B6152]">
+            <Label className="smallcaps-detail text-[#556680]">
               Isolation Tag — based on diagnosis
             </Label>
             <div className="grid grid-cols-2 gap-2">
@@ -141,39 +141,39 @@ export default function AssignSessionDialog({
                 onClick={() => setTag("clean")}
                 className={`flex items-center justify-center gap-2 border p-3 transition-colors ${
                   tag === "clean"
-                    ? "border-[#4E7A48] bg-[#4E7A48]/10"
-                    : "border-[#D9CFBA] bg-[#F6F1E7] hover:bg-[#EFE9DC]"
+                    ? "border-[#3E8A6A] bg-[#3E8A6A]/10"
+                    : "border-[#D4DFE5] bg-[#F4F7F8] hover:bg-[#E8EFF1]"
                 }`}
               >
-                <Droplets className="h-4 w-4 text-[#4E7A48]" />
-                <span className="smallcaps-detail text-[#2B2620]">Clean</span>
+                <Droplets className="h-4 w-4 text-[#3E8A6A]" />
+                <span className="smallcaps-detail text-[#1F2A52]">Clean</span>
               </button>
               <button
                 type="button"
                 onClick={() => setTag("dirty")}
                 className={`flex items-center justify-center gap-2 border p-3 transition-colors ${
                   tag === "dirty"
-                    ? "border-[#A0562F] bg-[#A0562F]/10"
-                    : "border-[#D9CFBA] bg-[#F6F1E7] hover:bg-[#EFE9DC]"
+                    ? "border-[#2E9A9B] bg-[#2E9A9B]/10"
+                    : "border-[#D4DFE5] bg-[#F4F7F8] hover:bg-[#E8EFF1]"
                 }`}
               >
-                <Droplets className="h-4 w-4 text-[#A0562F]" />
-                <span className="smallcaps-detail text-[#2B2620]">Dirty</span>
+                <Droplets className="h-4 w-4 text-[#2E9A9B]" />
+                <span className="smallcaps-detail text-[#1F2A52]">Dirty</span>
               </button>
             </div>
-            <p className="text-[11px] leading-relaxed text-[#8A7A5F]">
+            <p className="text-[11px] leading-relaxed text-[#7684A0]">
               Use “dirty” for patients requiring isolation due to infectious
               diagnosis; the machine will need dedicated sanitation after the
               session ends.
             </p>
           </div>
 
-          <label className="flex items-center justify-between border border-[#D9CFBA] bg-[#F6F1E7] p-3">
+          <label className="flex items-center justify-between border border-[#D4DFE5] bg-[#F4F7F8] p-3">
             <div className="flex items-center gap-2.5">
-              <BellRing className="h-4 w-4 text-[#A03A25]" />
+              <BellRing className="h-4 w-4 text-[#9E1F2B]" />
               <div className="flex flex-col">
-                <span className="smallcaps-detail text-[#2B2620]">Urgent Case</span>
-                <span className="mt-0.5 text-[11px] text-[#8A7A5F]">
+                <span className="smallcaps-detail text-[#1F2A52]">Urgent Case</span>
+                <span className="mt-0.5 text-[11px] text-[#7684A0]">
                   Highlight as priority on the board
                 </span>
               </div>
@@ -191,14 +191,14 @@ export default function AssignSessionDialog({
               variant="outline"
               onClick={onClose}
               disabled={submitting}
-              className="h-11 flex-1 border-[#D9CFBA] bg-transparent text-[#2B2620] hover:bg-[#EFE9DC]"
+              className="h-11 flex-1 border-[#D4DFE5] bg-transparent text-[#1F2A52] hover:bg-[#E8EFF1]"
             >
               Cancel
             </Button>
             <Button
               type="submit"
               disabled={submitting || !patientId.trim()}
-              className="h-11 flex-[2] bg-[#2B2620] text-[#F6F1E7] hover:bg-[#1A1611] font-serif-light text-base"
+              className="h-11 flex-[2] bg-[#1F2A52] text-[#F4F7F8] hover:bg-[#151D3A] font-serif-light text-base"
             >
               {submitting ? "Starting session…" : "Start Session"}
             </Button>

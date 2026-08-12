@@ -39,3 +39,10 @@
 - [x] Add Room dialog and Remove Room confirmation with safety guards (must be empty of machines)
 - [x] Wire Rooms into sidebar navigation (DashboardLayout)
 - [x] Vitest coverage for room add/remove guards (8 new tests, 17 passing); screenshots verified; checkpoint
+
+## SKTI rebrand (new request)
+- [x] Upload SKTI logo asset via manus-upload-file --webdev
+- [x] Update theme tokens (index.css): navy ink, crimson red, teal/green accents replacing cream/ink palette
+- [x] Sidebar branding: SKTI logo + updated wordmark ("Dialysis." + "SPMC Kidney & Transplant") + sign-in page logo
+- [x] Page headers/boards updated to SPMCKTI identity and palette (all legacy hex replaced; index.html title updated)
+- [x] Verify colors and logo rendering on all pages (/ /rooms /urgent), checkpoint, deliver

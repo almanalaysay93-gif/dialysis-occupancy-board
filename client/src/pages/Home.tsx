@@ -109,11 +109,11 @@ export default function Home() {
       <div className="px-4 py-6 sm:px-6 lg:px-10 lg:py-8">
         {/* Editorial masthead */}
         <header className="flex flex-col gap-2">
-          <div className="flex items-center justify-between border-b border-[#2B2620]/80 pb-3">
-            <p className="smallcaps-detail text-[#8A7A5F]">
-              Dialysis Center · Live Board
+          <div className="flex items-center justify-between border-b border-[#1F2A52]/80 pb-3">
+            <p className="smallcaps-detail text-[#7684A0]">
+              SPMC Kidney & Transplant Institute · Live Board
             </p>
-            <p className="smallcaps-detail text-[#8A7A5F]">
+            <p className="smallcaps-detail text-[#7684A0]">
               {new Date().toLocaleDateString([], {
                 weekday: "long",
                 month: "long",
@@ -125,39 +125,39 @@ export default function Home() {
 
           <div className="flex flex-wrap items-end justify-between gap-6 pt-5">
             <div>
-              <h1 className="font-display text-4xl text-[#2B2620] sm:text-5xl lg:text-6xl">
+              <h1 className="font-display text-4xl text-[#1F2A52] sm:text-5xl lg:text-6xl">
                 The Occupancy Board
               </h1>
-              <p className="font-serif-light mt-2 max-w-xl text-base italic text-[#6B6152] sm:text-lg">
+              <p className="font-serif-light mt-2 max-w-xl text-base italic text-[#556680] sm:text-lg">
                 A live register of every hemodialysis machine, arranged by
                 floor — which are in treatment, which stand vacant, and which
                 cases demand immediate attention.
               </p>
             </div>
             <div className="flex flex-col items-stretch gap-3 sm:flex-row">
-              <div className="flex items-baseline gap-3 border-l border-[#D9CFBA] pl-4">
-                <span className="font-display text-3xl text-[#4E7A48]">
+              <div className="flex items-baseline gap-3 border-l border-[#D4DFE5] pl-4">
+                <span className="font-display text-3xl text-[#3E8A6A]">
                   {stats.vacant}
                 </span>
-                <span className="smallcaps-detail text-[#8A7A5F]">Vacant</span>
+                <span className="smallcaps-detail text-[#7684A0]">Vacant</span>
               </div>
-              <div className="flex items-baseline gap-3 border-l border-[#D9CFBA] pl-4">
-                <span className="font-display text-3xl text-[#2B2620]">
+              <div className="flex items-baseline gap-3 border-l border-[#D4DFE5] pl-4">
+                <span className="font-display text-3xl text-[#1F2A52]">
                   {stats.occupied}
                 </span>
-                <span className="smallcaps-detail text-[#8A7A5F]">In Use</span>
+                <span className="smallcaps-detail text-[#7684A0]">In Use</span>
               </div>
-              <div className="flex items-baseline gap-3 border-l border-[#D9CFBA] pl-4">
-                <span className="font-display text-3xl text-[#A03A25]">
+              <div className="flex items-baseline gap-3 border-l border-[#D4DFE5] pl-4">
+                <span className="font-display text-3xl text-[#9E1F2B]">
                   {stats.urgent}
                 </span>
-                <span className="smallcaps-detail text-[#8A7A5F]">Urgent</span>
+                <span className="smallcaps-detail text-[#7684A0]">Urgent</span>
               </div>
-              <div className="flex items-baseline gap-3 border-l border-[#D9CFBA] pl-4">
-                <span className="font-display text-3xl text-[#A0562F]">
+              <div className="flex items-baseline gap-3 border-l border-[#D4DFE5] pl-4">
+                <span className="font-display text-3xl text-[#2E9A9B]">
                   {stats.dirty}
                 </span>
-                <span className="smallcaps-detail text-[#8A7A5F]">
+                <span className="smallcaps-detail text-[#7684A0]">
                   Isolation
                 </span>
               </div>
@@ -168,31 +168,31 @@ export default function Home() {
         {/* Legend */}
         <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2">
           <span className="flex items-center gap-2">
-            <span className="h-3 w-3 border border-[#D9CFBA] bg-[#F6F1E7]" />
-            <span className="smallcaps-detail text-[#6B6152]">Vacant</span>
+            <span className="h-3 w-3 border border-[#D4DFE5] bg-[#F4F7F8]" />
+            <span className="smallcaps-detail text-[#556680]">Vacant</span>
           </span>
           <span className="flex items-center gap-2">
-            <span className="h-3 w-3 bg-[#4E7A48]" />
-            <span className="smallcaps-detail text-[#6B6152]">In Treatment</span>
+            <span className="h-3 w-3 bg-[#3E8A6A]" />
+            <span className="smallcaps-detail text-[#556680]">In Treatment</span>
           </span>
           <span className="flex items-center gap-2">
-            <span className="h-3 w-3 bg-[#A03A25]" />
-            <span className="smallcaps-detail text-[#6B6152]">Urgent Case</span>
+            <span className="h-3 w-3 bg-[#9E1F2B]" />
+            <span className="smallcaps-detail text-[#556680]">Urgent Case</span>
           </span>
           <span className="flex items-center gap-2">
-            <span className="smallcaps-detail text-[#4E7A48]">Clean</span>
-            <span className="text-[#D9CFBA]">·</span>
-            <span className="smallcaps-detail text-[#A0562F]">Dirty</span>
-            <span className="smallcaps-detail text-[#8A7A5F]">isolation tag</span>
+            <span className="smallcaps-detail text-[#3E8A6A]">Clean</span>
+            <span className="text-[#D4DFE5]">·</span>
+            <span className="smallcaps-detail text-[#2E9A9B]">Dirty</span>
+            <span className="smallcaps-detail text-[#7684A0]">isolation tag</span>
           </span>
         </div>
 
         {/* Auth gate for actions */}
         {!isAuthenticated && (
-          <div className="mt-5 flex items-center justify-between border border-[#D9CFBA] bg-[#EFE9DC] px-4 py-3 sm:px-5">
+          <div className="mt-5 flex items-center justify-between border border-[#D4DFE5] bg-[#E8EFF1] px-4 py-3 sm:px-5">
             <div className="flex items-center gap-3">
-              <Activity className="h-5 w-5 text-[#8A7A5F]" />
-              <p className="text-sm text-[#6B6152]">
+              <Activity className="h-5 w-5 text-[#7684A0]" />
+              <p className="text-sm text-[#556680]">
                 Sign in as clinical staff to assign sessions, control machines,
                 or add machines.
               </p>
@@ -200,7 +200,7 @@ export default function Home() {
             <Button
               size="sm"
               onClick={() => startLogin()}
-              className="bg-[#2B2620] text-[#F6F1E7] hover:bg-[#1A1611]"
+              className="bg-[#1F2A52] text-[#F4F7F8] hover:bg-[#151D3A]"
             >
               Sign in
             </Button>
@@ -217,15 +217,15 @@ export default function Home() {
               </div>
             ))
           ) : floorGroups.length === 0 ? (
-            <div className="flex flex-col items-center gap-3 border border-dashed border-[#D9CFBA] py-16">
-              <p className="font-serif-light text-xl italic text-[#6B6152]">
+            <div className="flex flex-col items-center gap-3 border border-dashed border-[#D4DFE5] py-16">
+              <p className="font-serif-light text-xl italic text-[#556680]">
                 No machines registered yet.
               </p>
               {isAuthenticated && (
                 <Button
                   size="sm"
                   onClick={() => setAddOpen(true)}
-                  className="bg-[#2B2620] text-[#F6F1E7] hover:bg-[#1A1611]"
+                  className="bg-[#1F2A52] text-[#F4F7F8] hover:bg-[#151D3A]"
                 >
                   <Plus className="mr-2 h-4 w-4" />
                   Add your first machine
@@ -247,8 +247,8 @@ export default function Home() {
 
         {/* Footer controls for authenticated staff */}
         {isAuthenticated && !isLoading && (
-          <div className="mt-6 flex items-center justify-between border-t border-[#D9CFBA] pt-4">
-            <p className="font-serif-light italic text-[#6B6152]">
+          <div className="mt-6 flex items-center justify-between border-t border-[#D4DFE5] pt-4">
+            <p className="font-serif-light italic text-[#556680]">
               {stats.vacant} machine{stats.vacant === 1 ? "" : "s"} vacant ·{" "}
               {data?.length ?? 0} machine
               {data?.length === 1 ? "" : "s"} on the board
@@ -258,7 +258,7 @@ export default function Home() {
                 size="sm"
                 variant="outline"
                 onClick={() => setAddOpen(true)}
-                className="h-9 border-[#8A7A5F]/60 text-[#2B2620] hover:bg-[#EFE9DC]"
+                className="h-9 border-[#7684A0]/60 text-[#1F2A52] hover:bg-[#E8EFF1]"
               >
                 <Plus className="mr-2 h-4 w-4" />
                 Add Machine
@@ -270,7 +270,7 @@ export default function Home() {
                     const first = data?.find(r => !r.session);
                     if (first) setAssignTarget(first.machine.id);
                   }}
-                  className="h-9 bg-[#2B2620] text-[#F6F1E7] hover:bg-[#1A1611] font-serif-light"
+                  className="h-9 bg-[#1F2A52] text-[#F4F7F8] hover:bg-[#151D3A] font-serif-light"
                 >
                   <Plus className="mr-2 h-4 w-4" />
                   Assign Next Vacant

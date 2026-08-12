@@ -45,12 +45,12 @@ export default function AddRoomDialog({
 
   return (
     <Dialog open={open} onOpenChange={open => !open && onClose()}>
-      <DialogContent className="bg-[#F6F1E7] sm:max-w-md">
+      <DialogContent className="bg-[#F4F7F8] sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className="font-display text-3xl text-[#2B2620]">
+          <DialogTitle className="font-display text-3xl text-[#1F2A52]">
             Add Room
           </DialogTitle>
-          <DialogDescription className="font-serif-light italic text-[#6B6152]">
+          <DialogDescription className="font-serif-light italic text-[#556680]">
             Register a new dialysis room. Machines can then be placed in it
             from the Add Machine control on the board.
           </DialogDescription>
@@ -66,7 +66,7 @@ export default function AddRoomDialog({
               value={name}
               onChange={e => setName(e.target.value)}
               placeholder="e.g. Floor 4 · East Wing"
-              className="bg-[#FDF9F0] text-[#2B2620]"
+              className="bg-[#FBFCFD] text-[#1F2A52]"
               autoFocus
             />
           </div>
@@ -76,14 +76,14 @@ export default function AddRoomDialog({
           <Button
             variant="outline"
             onClick={onClose}
-            className="border-[#D9CFBA] text-[#2B2620]"
+            className="border-[#D4DFE5] text-[#1F2A52]"
           >
             Cancel
           </Button>
           <Button
             onClick={handleSubmit}
             disabled={addRoom.isPending}
-            className="bg-[#2B2620] text-[#F6F1E7] hover:bg-[#1A1611]"
+            className="bg-[#1F2A52] text-[#F4F7F8] hover:bg-[#151D3A]"
           >
             {addRoom.isPending ? "Adding…" : "Add Room"}
           </Button>

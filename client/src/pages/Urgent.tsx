@@ -55,26 +55,26 @@ export default function Urgent() {
   return (
     <DashboardLayout>
       <div className="px-6 py-8 lg:px-12 lg:py-10">
-        <header className="border-b border-[#2B2620]/80 pb-4">
-          <p className="smallcaps-detail text-[#8A7A5F]">Priority Register</p>
-          <h1 className="font-display mt-2 text-4xl text-[#2B2620] sm:text-5xl">
+        <header className="border-b border-[#1F2A52]/80 pb-4">
+          <p className="smallcaps-detail text-[#7684A0]">SPMCKTI · Priority Register</p>
+          <h1 className="font-display mt-2 text-4xl text-[#1F2A52] sm:text-5xl">
             Urgent Cases
           </h1>
-          <p className="font-serif-light mt-3 max-w-xl text-lg italic text-[#6B6152]">
+          <p className="font-serif-light mt-3 max-w-xl text-lg italic text-[#556680]">
             Active sessions currently flagged as urgent — reviewed at a glance,
             one register.
           </p>
         </header>
 
         {!isAuthenticated && (
-          <div className="mt-6 flex items-center justify-between border border-[#D9CFBA] bg-[#EFE9DC] px-5 py-4">
-            <p className="text-sm text-[#6B6152]">
+          <div className="mt-6 flex items-center justify-between border border-[#D4DFE5] bg-[#E8EFF1] px-5 py-4">
+            <p className="text-sm text-[#556680]">
               Sign in as clinical staff to manage urgent flags.
             </p>
             <Button
               size="sm"
               onClick={() => startLogin()}
-              className="bg-[#2B2620] text-[#F6F1E7] hover:bg-[#1A1611]"
+              className="bg-[#1F2A52] text-[#F4F7F8] hover:bg-[#151D3A]"
             >
               Sign in
             </Button>
@@ -85,13 +85,13 @@ export default function Urgent() {
           {isLoading ? (
             <>
               {Array.from({ length: 3 }).map((_, i) => (
-                <div key={i} className="h-[88px] animate-pulse bg-[#EFE9DC]" />
+                <div key={i} className="h-[88px] animate-pulse bg-[#E8EFF1]" />
               ))}
             </>
           ) : urgentRows.length === 0 ? (
-            <div className="flex flex-col items-center gap-3 border border-dashed border-[#D9CFBA] py-16">
-              <BellRing className="h-6 w-6 text-[#8A7A5F]" />
-              <p className="font-serif-light text-xl italic text-[#6B6152]">
+            <div className="flex flex-col items-center gap-3 border border-dashed border-[#D4DFE5] py-16">
+              <BellRing className="h-6 w-6 text-[#7684A0]" />
+              <p className="font-serif-light text-xl italic text-[#556680]">
                 No urgent cases on the floor at this moment.
               </p>
             </div>
@@ -105,25 +105,25 @@ export default function Urgent() {
               return (
                 <div
                   key={row.machine.id}
-                  className="flex flex-wrap items-center gap-4 border border-[#A03A25]/50 bg-[#A03A25]/5 px-5 py-4"
+                  className="flex flex-wrap items-center gap-4 border border-[#9E1F2B]/50 bg-[#9E1F2B]/5 px-5 py-4"
                 >
-                  <div className="flex h-12 w-12 items-center justify-center bg-[#A03A25]">
-                    <span className="font-display text-xl text-[#F6F1E7]">
+                  <div className="flex h-12 w-12 items-center justify-center bg-[#9E1F2B]">
+                    <span className="font-display text-xl text-[#F4F7F8]">
                       {row.machine.label.replace("HD-", "")}
                     </span>
                   </div>
                   <div className="min-w-[180px]">
-                    <p className="smallcaps-detail text-[#8A7A5F]">
+                    <p className="smallcaps-detail text-[#7684A0]">
                       {row.machine.location} · {row.machine.label}
                     </p>
-                    <p className="font-serif-light mt-1 text-lg text-[#2B2620]">
+                    <p className="font-serif-light mt-1 text-lg text-[#1F2A52]">
                       Patient {session.patientId}
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <Badge
                       variant="outline"
-                      className="smallcaps-detail border-[#A03A25]/50 text-[#A03A25]"
+                      className="smallcaps-detail border-[#9E1F2B]/50 text-[#9E1F2B]"
                     >
                       Urgent
                     </Badge>
@@ -131,20 +131,20 @@ export default function Urgent() {
                       variant="outline"
                       className={`smallcaps-detail ${
                         session.isolationTag === "clean"
-                          ? "border-[#4E7A48]/50 text-[#4E7A48]"
-                          : "border-[#A0562F]/50 text-[#A0562F]"
+                          ? "border-[#3E8A6A]/50 text-[#3E8A6A]"
+                          : "border-[#2E9A9B]/50 text-[#2E9A9B]"
                       }`}
                     >
                       <Droplets className="mr-1 h-2.5 w-2.5" />
                       {session.isolationTag}
                     </Badge>
-                    <span className="smallcaps-detail flex items-center text-[#6B6152]">
+                    <span className="smallcaps-detail flex items-center text-[#556680]">
                       {durationLabel(session.durationMinutes)}
                     </span>
                   </div>
-                  <div className="ml-auto flex items-center gap-2 font-mono text-lg tabular-nums text-[#A03A25]">
+                  <div className="ml-auto flex items-center gap-2 font-mono text-lg tabular-nums text-[#9E1F2B]">
                     {formatHMS(remaining)}
-                    <span className="smallcaps-detail text-[#8A7A5F]">left</span>
+                    <span className="smallcaps-detail text-[#7684A0]">left</span>
                   </div>
                   {isAuthenticated && (
                     <div className="flex gap-2">
@@ -154,7 +154,7 @@ export default function Urgent() {
                         onClick={() =>
                           toggleUrgent.mutate({ sessionId: session.id })
                         }
-                        className="h-9 border-[#A03A25]/50 text-[#A03A25] hover:bg-[#A03A25]/10"
+                        className="h-9 border-[#9E1F2B]/50 text-[#9E1F2B] hover:bg-[#9E1F2B]/10"
                       >
                         Clear flag
                       </Button>
@@ -167,7 +167,7 @@ export default function Urgent() {
                             machineLabel: row.machine.label,
                           })
                         }
-                        className="h-9 border-[#D9CFBA] text-[#2B2620] hover:bg-[#EFE9DC]"
+                        className="h-9 border-[#D4DFE5] text-[#1F2A52] hover:bg-[#E8EFF1]"
                       >
                         <Power className="mr-1.5 h-3.5 w-3.5" />
                         End session

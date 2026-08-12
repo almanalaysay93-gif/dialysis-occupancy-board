@@ -87,18 +87,18 @@ export function FloorMachineChip({
         disabled={!isStaff}
         aria-label={`Assign a session to machine ${row.machine.label}`}
         className={cn(
-          "group flex h-14 w-full flex-col items-center justify-center gap-0.5 border border-[#D9CFBA]/70 bg-[#FDF9F0] text-center transition-all",
-          isStaff && "hover:border-[#8A7A5F] hover:bg-[#EFE9DC]"
+          "group flex h-14 w-full flex-col items-center justify-center gap-0.5 border border-[#D4DFE5]/70 bg-[#FBFCFD] text-center transition-all",
+          isStaff && "hover:border-[#7684A0] hover:bg-[#E8EFF1]"
         )}
       >
-        <span className="font-display text-lg leading-none text-[#2B2620]">
+        <span className="font-display text-lg leading-none text-[#1F2A52]">
           {row.machine.label.replace("HD-", "")}
         </span>
-        <span className="smallcaps-detail text-[9px] tracking-[0.15em] text-[#8A7A5F]">
+        <span className="smallcaps-detail text-[9px] tracking-[0.15em] text-[#7684A0]">
           Vacant
         </span>
         {isStaff && (
-          <Plus className="absolute right-1 top-1 h-3 w-3 text-[#8A7A5F] opacity-0 transition-opacity group-hover:opacity-100" />
+          <Plus className="absolute right-1 top-1 h-3 w-3 text-[#7684A0] opacity-0 transition-opacity group-hover:opacity-100" />
         )}
       </button>
     );
@@ -119,13 +119,13 @@ export function FloorMachineChip({
       className={cn(
         "relative flex h-14 w-full flex-col items-center justify-center gap-0.5 border text-center",
         urgent
-          ? "border-[#A03A25] bg-[#A03A25] text-[#F6F1E7]"
-          : "border-[#4E7A48] bg-[#4E7A48] text-[#F6F1E7]"
+          ? "border-[#9E1F2B] bg-[#9E1F2B] text-[#F4F7F8]"
+          : "border-[#3E8A6A] bg-[#3E8A6A] text-[#F4F7F8]"
       )}
     >
       {done && (
         <span className="absolute left-1 top-0.5">
-          <AlertTriangle className="h-2.5 w-2.5 text-[#F2C9B8]" />
+          <AlertTriangle className="h-2.5 w-2.5 text-[#F3D9DA]" />
         </span>
       )}
       <span className="font-display text-lg leading-none">
@@ -136,7 +136,7 @@ export function FloorMachineChip({
           {countdownMs === null ? "--:--" : formatHMS(countdownMs)}
         </span>
         {session.isolationTag === "dirty" && (
-          <Droplets className="h-2.5 w-2.5 text-[#E8C396]" />
+          <Droplets className="h-2.5 w-2.5 text-[#CDE4E4]" />
         )}
         {urgent && <BellRing className="h-2.5 w-2.5" />}
       </span>
@@ -147,7 +147,7 @@ export function FloorMachineChip({
             <DropdownMenuTrigger asChild>
               <button
                 aria-label={`Actions for machine ${row.machine.label}`}
-                className="rounded-sm p-0.5 text-[#F6F1E7]/70 hover:bg-[#F6F1E7]/20"
+                className="rounded-sm p-0.5 text-[#F4F7F8]/70 hover:bg-[#F4F7F8]/20"
               >
                 <MoreVertical className="h-3 w-3" />
               </button>
@@ -217,36 +217,36 @@ export function FloorRow({
   onAssign: (machineId: number) => void;
 }) {
   return (
-    <div className="border border-[#D9CFBA]/80 bg-[#FDF9F0]">
+    <div className="border border-[#D4DFE5]/80 bg-[#FBFCFD]">
       {/* Floor heading */}
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#D9CFBA]/60 bg-[#F6F1E7]/60 px-4 py-2.5">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#D4DFE5]/60 bg-[#F4F7F8]/60 px-4 py-2.5">
         <div className="flex items-baseline gap-3">
-          <h3 className="font-display text-2xl text-[#2B2620]">{floorName}</h3>
-          <span className="smallcaps-detail text-[#8A7A5F]">
+          <h3 className="font-display text-2xl text-[#1F2A52]">{floorName}</h3>
+          <span className="smallcaps-detail text-[#7684A0]">
             {machines.length} machine{machines.length === 1 ? "" : "s"}
           </span>
         </div>
         <div className="flex flex-wrap items-center gap-x-5 gap-y-1">
-          <span className="smallcaps-detail text-[#8A7A5F]">
-            <span className="font-display text-base text-[#4E7A48]">
+          <span className="smallcaps-detail text-[#7684A0]">
+            <span className="font-display text-base text-[#3E8A6A]">
               {machines.length - floorStats.occupied}
             </span>{" "}
             vacant
           </span>
-          <span className="smallcaps-detail text-[#8A7A5F]">
-            <span className="font-display text-base text-[#2B2620]">
+          <span className="smallcaps-detail text-[#7684A0]">
+            <span className="font-display text-base text-[#1F2A52]">
               {floorStats.occupied}
             </span>{" "}
             in use
           </span>
           {floorStats.urgent > 0 && (
-            <span className="smallcaps-detail text-[#A03A25]">
+            <span className="smallcaps-detail text-[#9E1F2B]">
               <span className="font-display text-base">{floorStats.urgent}</span>{" "}
               urgent
             </span>
           )}
           {floorStats.dirty > 0 && (
-            <span className="smallcaps-detail text-[#A0562F]">
+            <span className="smallcaps-detail text-[#2E9A9B]">
               <span className="font-display text-base">{floorStats.dirty}</span>{" "}
               dirty
             </span>

@@ -70,12 +70,12 @@ export default function AddMachineDialog({
 
   return (
     <Dialog open={open} onOpenChange={open => !open && onClose()}>
-      <DialogContent className="bg-[#F6F1E7] sm:max-w-md">
+      <DialogContent className="bg-[#F4F7F8] sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className="font-display text-3xl text-[#2B2620]">
+          <DialogTitle className="font-display text-3xl text-[#1F2A52]">
             Add Machine
           </DialogTitle>
-          <DialogDescription className="font-serif-light italic text-[#6B6152]">
+          <DialogDescription className="font-serif-light italic text-[#556680]">
             Register a new hemodialysis machine on the board. It appears in its
             assigned floor row immediately.
           </DialogDescription>
@@ -91,14 +91,14 @@ export default function AddMachineDialog({
               value={label}
               onChange={e => setLabel(e.target.value)}
               placeholder="e.g. HD-161"
-              className="bg-[#FDF9F0] text-[#2B2620]"
+              className="bg-[#FBFCFD] text-[#1F2A52]"
             />
           </div>
 
           <div className="flex flex-col gap-2">
             <Label className="smallcaps-detail">Floor</Label>
             <Select value={floorId === "none" ? "none" : floorId} onValueChange={setFloorId}>
-              <SelectTrigger className="w-full bg-[#FDF9F0] text-[#2B2620]">
+              <SelectTrigger className="w-full bg-[#FBFCFD] text-[#1F2A52]">
                 <SelectValue placeholder="Select floor" />
               </SelectTrigger>
               <SelectContent>
@@ -124,7 +124,7 @@ export default function AddMachineDialog({
               value={location}
               onChange={e => setLocation(e.target.value)}
               placeholder="e.g. Row 3 · Pos 2"
-              className="bg-[#FDF9F0] text-[#2B2620]"
+              className="bg-[#FBFCFD] text-[#1F2A52]"
             />
           </div>
         </div>
@@ -133,14 +133,14 @@ export default function AddMachineDialog({
           <Button
             variant="outline"
             onClick={onClose}
-            className="border-[#D9CFBA] text-[#2B2620]"
+            className="border-[#D4DFE5] text-[#1F2A52]"
           >
             Cancel
           </Button>
           <Button
             onClick={handleSubmit}
             disabled={addMachine.isPending}
-            className="bg-[#2B2620] text-[#F6F1E7] hover:bg-[#1A1611]"
+            className="bg-[#1F2A52] text-[#F4F7F8] hover:bg-[#151D3A]"
           >
             {addMachine.isPending ? "Adding…" : "Add Machine"}
           </Button>

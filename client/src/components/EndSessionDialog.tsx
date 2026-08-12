@@ -42,35 +42,35 @@ export default function EndSessionDialog({
 
   return (
     <AlertDialog open={open} onOpenChange={v => !v && onClose()}>
-      <AlertDialogContent className="max-w-sm bg-[#FDF9F0]">
+      <AlertDialogContent className="max-w-sm bg-[#FBFCFD]">
         <AlertDialogHeader>
           <p className="smallcaps-detail text-muted-foreground">
             Release Machine
           </p>
-          <AlertDialogTitle className="font-display text-2xl text-[#2B2620]">
+          <AlertDialogTitle className="font-display text-2xl text-[#1F2A52]">
             End session on {machineLabel}?
           </AlertDialogTitle>
-          <AlertDialogDescription className="font-serif-light text-base text-[#6B6152]">
+          <AlertDialogDescription className="font-serif-light text-base text-[#556680]">
             The machine will be returned to vacant status on the occupancy
             board. If the patient carried a <strong>dirty</strong> isolation
             tag, schedule dedicated sanitation before the next treatment.
           </AlertDialogDescription>
-          <div className="flex items-center gap-2 border border-[#D9CFBA] bg-[#F6F1E7] px-3 py-2">
-            <Droplets className="h-4 w-4 text-[#8A7A5F]" />
-            <span className="smallcaps-detail text-[#6B6152]">
+          <div className="flex items-center gap-2 border border-[#D4DFE5] bg-[#F4F7F8] px-3 py-2">
+            <Droplets className="h-4 w-4 text-[#7684A0]" />
+            <span className="smallcaps-detail text-[#556680]">
               Sanitation checklist reminder
             </span>
           </div>
         </AlertDialogHeader>
         <AlertDialogFooter className="gap-2">
-          <AlertDialogCancel className="h-10 border-[#D9CFBA] bg-transparent text-[#2B2620] hover:bg-[#EFE9DC]">
+          <AlertDialogCancel className="h-10 border-[#D4DFE5] bg-transparent text-[#1F2A52] hover:bg-[#E8EFF1]">
             Keep session
           </AlertDialogCancel>
           <AlertDialogAction
             onClick={() =>
               sessionId && endSession.mutate({ sessionId })
             }
-            className="h-10 bg-[#A03A25] text-[#F6F1E7] hover:bg-[#852E1E]"
+            className="h-10 bg-[#9E1F2B] text-[#F4F7F8] hover:bg-[#831924]"
           >
             {endSession.isPending ? "Ending…" : "End Session"}
           </AlertDialogAction>
