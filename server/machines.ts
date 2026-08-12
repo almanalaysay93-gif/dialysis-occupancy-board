@@ -249,6 +249,30 @@ export async function addRoom(input: { name: string }) {
   return result[0];
 }
 
+export async function renameRoom(input: { roomId: number; name: string }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const newName = input.name.trim();
+  if (!newName) throw new Error("ROOM_NAME_REQUIRED");
+  if (newName.length > 64) throw new Error("ROOM_NAME_TOO_LONG");
+
+  // Prevent duplicate room names (excluding the room being renamed)
+  const existing = await db
+    .select({ id: floors.id })
+    .from(floors)
+    .where(and(eq(floors.name, newName), sql`${floors.id} <> ${input.roomId}`))
+    .limit(1);
+  if (existing.length > 0) {
+    throw new Error("ROOM_EXISTS");
+  }
+
+  await db
+    .update(floors)
+    .set({ name: newName })
+    .where(eq(floors.id, input.roomId));
+}
+
 export async function removeRoom(input: { roomId: number }) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");

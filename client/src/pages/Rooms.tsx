@@ -1,12 +1,13 @@
 import AddRoomDialog from "@/components/AddRoomDialog";
 import DashboardLayout from "@/components/DashboardLayout";
 import RemoveRoomDialog from "@/components/RemoveRoomDialog";
+import RenameRoomDialog from "@/components/RenameRoomDialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { startLogin } from "@/const";
 import { trpc } from "@/lib/trpc";
-import { LayoutGrid, Plus, Trash2 } from "lucide-react";
+import { LayoutGrid, Pencil, Plus, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 
 export default function Rooms() {
@@ -24,6 +25,10 @@ export default function Rooms() {
     roomId: number;
     roomName: string;
     machineCount: number;
+  } | null>(null);
+  const [renameTarget, setRenameTarget] = useState<{
+    roomId: number;
+    roomName: string;
   } | null>(null);
 
   const machineCounts = useMemo(() => {
@@ -177,6 +182,21 @@ export default function Rooms() {
                     )}
                   </div>
                   {isAuthenticated && (
+                    <>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() =>
+                        setRenameTarget({
+                          roomId: room.id,
+                          roomName: room.name,
+                        })
+                      }
+                      className="h-9 border-[#D4DFE5] text-[#1F2A52] hover:bg-[#E8EFF1]"
+                    >
+                      <Pencil className="mr-1.5 h-3.5 w-3.5" />
+                      Rename
+                    </Button>
                     <Button
                       size="sm"
                       variant="outline"
@@ -192,6 +212,7 @@ export default function Rooms() {
                       <Trash2 className="mr-1.5 h-3.5 w-3.5" />
                       Remove
                     </Button>
+                    </>
                   )}
                 </div>
               );
@@ -215,6 +236,12 @@ export default function Rooms() {
         machineCount={removeTarget?.machineCount ?? 0}
         onClose={() => setRemoveTarget(null)}
         onRemoved={() => setRemoveTarget(null)}
+      />
+      <RenameRoomDialog
+        open={renameTarget !== null}
+        roomId={renameTarget?.roomId ?? null}
+        roomName={renameTarget?.roomName ?? ""}
+        onClose={() => setRenameTarget(null)}
       />
     </DashboardLayout>
   );

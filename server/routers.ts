@@ -125,6 +125,31 @@ export const appRouter = router({
         }
       }),
 
+    /** Rename a room (staff only). */
+    rename: protectedProcedure
+      .input(z.object({ roomId: z.number().int().positive(), name: z.string().trim().min(1, "Room name is required").max(64) }))
+      .mutation(async ({ input }) => {
+        try {
+          await machineDb.renameRoom({ roomId: input.roomId, name: input.name });
+          return { success: true } as const;
+        } catch (error) {
+          const msg = (error as Error)?.message;
+          if (msg === "ROOM_EXISTS") {
+            throw new TRPCError({
+              code: "CONFLICT",
+              message: "A room with this name already exists.",
+            });
+          }
+          if (msg === "ROOM_NAME_REQUIRED") {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "Room name cannot be empty." });
+          }
+          if (msg === "ROOM_NAME_TOO_LONG") {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "Room name is too long (max 64 characters)." });
+          }
+          throw error;
+        }
+      }),
+
     /** Remove a room (staff only). Blocks if the room has machines or active sessions. */
     remove: protectedProcedure
       .input(z.object({ roomId: z.number().int().positive() }))

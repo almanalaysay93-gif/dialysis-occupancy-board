@@ -58,3 +58,9 @@
 - [x] New routes: /floor/:id showing only that floor's machines (/floor/30002 = Floor 2, /floor/30003 = Floor 3)
 - [x] Sidebar navigation entries: "Floor Boards" group with one entry per floor (loaded dynamically from the floors table)
 - [x] Verify per-floor boards render with scoped stats; checkpoint
+
+## Floor rename (new request)
+- [x] Backend: rooms.rename procedure (protected, validates name 1–64 chars, duplicate check, error mapping)
+- [x] UI: RenameRoomDialog on the Rooms page (Rename button + Pencil icon per room row)
+- [x] Applied new names: 30001 → SKTI Main, 30002 → RDU Annex, 30003 → RDU Main (sidebar + board headers update dynamically)
+- [x] Vitest coverage (6 new rename tests, 31 passing), screenshots verified, checkpoint
