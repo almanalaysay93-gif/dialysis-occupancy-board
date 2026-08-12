@@ -26,6 +26,51 @@ export const appRouter = router({
     /** All machines with their active session (if any). Auto-polling on the
      *  client provides cross-device real-time sync. */
     list: publicProcedure.query(() => machineDb.listMachines()),
+
+    /** Floors machines are grouped into on the board. */
+    listFloors: publicProcedure.query(() => machineDb.listFloors()),
+
+    /** Add a new machine to the inventory (staff only). */
+    add: protectedProcedure
+      .input(
+        z.object({
+          label: z.string().trim().min(1, "Machine label is required").max(32),
+          floorId: z.number().int().positive().nullable().default(null),
+          location: z.string().trim().max(64).default("—"),
+        })
+      )
+      .mutation(async ({ input }) => {
+        try {
+          const result = await machineDb.addMachine(input);
+          return { success: true, machineId: result.id } as const;
+        } catch (error) {
+          if ((error as Error)?.message === "MACHINE_LABEL_EXISTS") {
+            throw new TRPCError({
+              code: "CONFLICT",
+              message: "A machine with this label already exists on the board.",
+            });
+          }
+          throw error;
+        }
+      }),
+
+    /** Remove a machine from the inventory (staff only). Vacant machines only. */
+    remove: protectedProcedure
+      .input(z.object({ machineId: z.number().int().positive() }))
+      .mutation(async ({ input }) => {
+        try {
+          await machineDb.removeMachine({ machineId: input.machineId });
+          return { success: true } as const;
+        } catch (error) {
+          if ((error as Error)?.message === "MACHINE_IN_TREATMENT") {
+            throw new TRPCError({
+              code: "CONFLICT",
+              message: "Cannot remove a machine that is currently in treatment.",
+            });
+          }
+          throw error;
+        }
+      }),
   }),
 
   sessions: router({

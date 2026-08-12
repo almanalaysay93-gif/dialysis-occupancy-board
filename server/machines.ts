@@ -1,9 +1,9 @@
-import { and, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { getDb } from "./db";
-import { machines, sessions } from "../drizzle/schema";
+import { floors, machines, sessions } from "../drizzle/schema";
 
 export type MachineWithSession = {
-  machine: { id: number; label: string; location: string; sortOrder: number };
+  machine: { id: number; label: string; location: string; floorId: number | null; sortOrder: number };
   session: {
     id: number;
     machineId: number;
@@ -21,7 +21,7 @@ export async function listMachines(): Promise<MachineWithSession[]> {
   const db = await getDb();
   if (!db) return [];
 
-  const allMachines = await db.select().from(machines).orderBy(machines.sortOrder, machines.id);
+  const allMachines = await db.select().from(machines).orderBy(machines.floorId, machines.sortOrder, machines.id);
 
   const rows = await db
     .select()
@@ -32,7 +32,7 @@ export async function listMachines(): Promise<MachineWithSession[]> {
   for (const row of rows) byMachine.set(row.machineId, row);
 
   return allMachines.map(m => ({
-    machine: { id: m.id, label: m.label, location: m.location, sortOrder: m.sortOrder },
+    machine: { id: m.id, label: m.label, location: m.location, floorId: m.floorId, sortOrder: m.sortOrder },
     session: (() => {
       const s = byMachine.get(m.id);
       if (!s) return null;
@@ -127,4 +127,68 @@ export async function updateIsolationTag(input: {
     .update(sessions)
     .set({ isolationTag: input.isolationTag })
     .where(eq(sessions.id, input.sessionId));
+}
+
+export async function listFloors() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(floors).orderBy(floors.sortOrder, floors.id);
+}
+
+export async function addMachine(input: {
+  label: string;
+  floorId: number | null;
+  location: string;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  // Prevent duplicate labels
+  const existing = await db
+    .select({ id: machines.id })
+    .from(machines)
+    .where(eq(machines.label, input.label.trim()))
+    .limit(1);
+  if (existing.length > 0) {
+    throw new Error("MACHINE_LABEL_EXISTS");
+  }
+
+  const maxOrder = await db
+    .select({ sortOrder: machines.sortOrder })
+    .from(machines)
+    .where(input.floorId ? eq(machines.floorId, input.floorId) : isNull(machines.floorId))
+    .orderBy(desc(machines.sortOrder))
+    .limit(1);
+
+  const nextOrder = (maxOrder[0]?.sortOrder ?? 0) + 1;
+
+  const result = await db
+    .insert(machines)
+    .values({
+      label: input.label.trim(),
+      location: input.location.trim() || "—",
+      floorId: input.floorId,
+      sortOrder: nextOrder,
+    })
+    .$returningId();
+
+  return result[0];
+}
+
+export async function removeMachine(input: { machineId: number }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  // Refuse to remove a machine mid-treatment
+  const active = await db
+    .select({ id: sessions.id })
+    .from(sessions)
+    .where(and(eq(sessions.machineId, input.machineId), eq(sessions.status, "active")))
+    .limit(1);
+  if (active.length > 0) {
+    throw new Error("MACHINE_IN_TREATMENT");
+  }
+
+  await db.delete(sessions).where(eq(sessions.machineId, input.machineId));
+  await db.delete(machines).where(eq(machines.id, input.machineId));
 }

@@ -23,3 +23,12 @@
 - [x] Vitest unit tests for session router procedures
 - [x] Visual verification via screenshots (desktop board + urgent register with seeded sessions, mobile layout)
 - [x] TypeScript check passes
+
+## Floor rows & machine management (new request)
+- [x] Add `floors` table to schema and floorId column on machines
+- [x] Migrate seed data: Floor 1 = 100 machines, Floor 2 = 36, Floor 3 = 24 (total 160)
+- [x] Backend: floor listing, add machine (protected), remove machine
+- [x] UI: floor-based rows/sections on the board, compact tile rows (FloorMachineRow chips)
+- [x] UI: Add Machine dialog/control for staff
+- [x] Per-floor stats in each floor heading (vacant/in-use/urgent)
+- [x] Update tests (pnpm test 9 passing), verify screenshots, checkpoint

@@ -29,6 +29,8 @@ export const machines = mysqlTable("machines", {
   label: varchar("label", { length: 32 }).notNull(),
   /** Physical location within the unit, e.g. "Bay A". */
   location: varchar("location", { length: 64 }).notNull(),
+  /** Floor this machine belongs to (nullable for legacy/unassigned machines). */
+  floorId: int("floorId"),
   /** Sort/display order. */
   sortOrder: int("sortOrder").notNull().default(0),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -37,6 +39,25 @@ export const machines = mysqlTable("machines", {
 
 export type Machine = typeof machines.$inferSelect;
 export type InsertMachine = typeof machines.$inferInsert;
+
+/**
+ * Building floors within the dialysis center. Machines are grouped into
+ * floor-based rows on the occupancy board (e.g. Floor 1 · 100 machines,
+ * Floor 2 · 36 machines, Floor 3 · 24 machines).
+ */
+export const floors = mysqlTable("floors", {
+  id: int("id").autoincrement().primaryKey(),
+  /** Floor identifier, e.g. "F1". */
+  code: varchar("code", { length: 16 }).notNull().unique(),
+  /** Display name, e.g. "Floor 1". */
+  name: varchar("name", { length: 64 }).notNull(),
+  /** Sort/display order. */
+  sortOrder: int("sortOrder").notNull().default(0),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type Floor = typeof floors.$inferSelect;
+export type InsertFloor = typeof floors.$inferInsert;
 
 /**
  * Active treatment session on a machine. A machine has at most one session
