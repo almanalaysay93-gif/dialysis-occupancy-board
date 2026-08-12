@@ -4,6 +4,7 @@ import EndSessionDialog from "@/components/EndSessionDialog";
 import { FloorRow } from "@/components/FloorMachineRow";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
+import WaitingListPanel from "@/components/WaitingListPanel";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { startLogin } from "@/const";
@@ -18,6 +19,26 @@ type FloorGroup = {
   name: string;
   machines: MachineWithSession[];
 };
+
+/** Header stat showing how many patients wait on this board. */
+function WaitingCount({ floorId }: { floorId: number }) {
+  const { data: waiting } = trpc.waiting.list.useQuery(
+    { floorId },
+    { refetchInterval: 5_000 }
+  );
+  const total = waiting?.length ?? 0;
+  const veryUrgent = waiting?.filter(w => w.priority === "veryUrgent").length ?? 0;
+  return (
+    <div className="flex items-baseline gap-3 border-l border-[#D4DFE5] pl-4">
+      <span className={`font-display text-3xl ${veryUrgent > 0 ? "text-[#9E1F2B]" : "text-[#1F2A52]"}`}>
+        {total}
+      </span>
+      <span className="smallcaps-detail text-[#7684A0]">
+        Waiting{veryUrgent > 0 ? ` · ${veryUrgent} very urgent` : ""}
+      </span>
+    </div>
+  );
+}
 
 /**
  * Shared occupancy board used by the main board (/) and the per-floor
@@ -111,6 +132,9 @@ export function OccupancyBoard({ floorId }: { floorId?: number }) {
     ? floors?.find(f => f.id === floorId)?.name
     : undefined;
 
+  // Waiting list scope: only show on a scoped (per-floor) board page
+  const waitingFloorId = floorId !== undefined ? floorId : undefined;
+
   const floorStats = (group: FloorGroup) => {
     let occupied = 0;
     let urgent = 0;
@@ -195,6 +219,7 @@ export function OccupancyBoard({ floorId }: { floorId?: number }) {
                   Isolation
                 </span>
               </div>
+              {waitingFloorId !== undefined && <WaitingCount floorId={waitingFloorId} />}
             </div>
           </div>
         </header>
@@ -278,6 +303,11 @@ export function OccupancyBoard({ floorId }: { floorId?: number }) {
             ))
           )}
         </section>
+
+        {/* Per-board waiting list (visible on each floor's board) */}
+        {waitingFloorId !== undefined && (
+          <WaitingListPanel floorId={waitingFloorId} />
+        )}
 
         {/* Footer controls for authenticated staff */}
         {isAuthenticated && !isLoading && (

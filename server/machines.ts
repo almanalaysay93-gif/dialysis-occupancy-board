@@ -1,6 +1,6 @@
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { getDb } from "./db";
-import { floors, machines, sessions } from "../drizzle/schema";
+import { floors, machines, sessions, waitingList } from "../drizzle/schema";
 
 export type MachineWithSession = {
   machine: { id: number; label: string; location: string; floorId: number | null; sortOrder: number };
@@ -297,4 +297,173 @@ export async function removeRoom(input: { roomId: number }) {
   }
 
   await db.delete(floors).where(eq(floors.id, input.roomId));
+}
+
+// ---------------------------------------------------------------------------
+// Waiting list helpers
+// ---------------------------------------------------------------------------
+
+export type WaitingEntryView = {
+  id: number;
+  patientId: string;
+  floorId: number;
+  priority: "normal" | "urgent" | "veryUrgent";
+  addedBy: string | null;
+  joinedAt: Date;
+};
+
+export async function listWaiting(input: { floorId: number }): Promise<WaitingEntryView[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  const rows = await db
+    .select()
+    .from(waitingList)
+    .where(and(eq(waitingList.floorId, input.floorId), eq(waitingList.status, "waiting")))
+    .orderBy(desc(waitingList.priority), waitingList.joinedAt, waitingList.id);
+
+  return rows.map(r => ({
+    id: r.id,
+    patientId: r.patientId,
+    floorId: r.floorId,
+    priority: r.priority,
+    addedBy: r.addedBy,
+    joinedAt: r.joinedAt,
+  }));
+}
+
+export async function addWaiting(input: {
+  floorId: number;
+  patientId: string;
+  priority: "normal" | "urgent" | "veryUrgent";
+  addedBy: string;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const trimmed = input.patientId.trim();
+  if (!trimmed) throw new Error("PATIENT_ID_REQUIRED");
+  if (trimmed.length > 64) throw new Error("PATIENT_ID_TOO_LONG");
+
+  const result = await db
+    .insert(waitingList)
+    .values({
+      floorId: input.floorId,
+      patientId: trimmed,
+      priority: input.priority,
+      addedBy: input.addedBy,
+    })
+    .$returningId();
+
+  return result[0];
+}
+
+export async function removeWaiting(input: { entryId: number; floorId: number }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db
+    .delete(waitingList)
+    .where(
+      and(eq(waitingList.id, input.entryId), eq(waitingList.floorId, input.floorId), eq(waitingList.status, "waiting"))
+    );
+}
+
+export async function markWaitingUrgent(input: {
+  entryId: number;
+  floorId: number;
+  priority: "normal" | "urgent" | "veryUrgent";
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db
+    .update(waitingList)
+    .set({ priority: input.priority })
+    .where(and(eq(waitingList.id, input.entryId), eq(waitingList.floorId, input.floorId), eq(waitingList.status, "waiting")));
+}
+
+/** Number of vacant machines on a floor (no active session). */
+export async function countVacantMachines(input: { floorId: number }): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+
+  const floorMachines = await db
+    .select({ id: machines.id })
+    .from(machines)
+    .where(eq(machines.floorId, input.floorId));
+
+  const occupiedIds = await db
+    .select({ machineId: sessions.machineId })
+    .from(sessions)
+    .where(eq(sessions.status, "active"));
+  const occupied = new Set(occupiedIds.map(o => o.machineId));
+
+  return floorMachines.filter(m => !occupied.has(m.id)).length;
+}
+
+/**
+ * Admit the top waiting patient onto the first vacant machine of the floor.
+ * Marks the waiting entry as admitted and starts a session. Throws
+ * NO_WAITING_PATIENTS if the queue is empty or NO_VACANT_MACHINE if the floor
+ * has no free machine.
+ */
+export async function admitWaiting(input: {
+  floorId: number;
+  entryId: number;
+  durationMinutes: number;
+  isolationTag: "clean" | "dirty";
+  urgent: boolean;
+  startedBy: string;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  // Locate the waiting entry on this floor (status must still be 'waiting')
+  const entry = await db
+    .select()
+    .from(waitingList)
+    .where(and(eq(waitingList.id, input.entryId), eq(waitingList.floorId, input.floorId), eq(waitingList.status, "waiting")))
+    .limit(1);
+  if (entry.length === 0) {
+    throw new Error("NO_WAITING_PATIENT");
+  }
+
+  // Find the first vacant machine on this floor (lowest sortOrder)
+  const floorMachines = await db
+    .select({ id: machines.id })
+    .from(machines)
+    .where(eq(machines.floorId, input.floorId))
+    .orderBy(machines.sortOrder, machines.id);
+
+  const occupiedIds = await db
+    .select({ machineId: sessions.machineId })
+    .from(sessions)
+    .where(eq(sessions.status, "active"));
+  const occupied = new Set(occupiedIds.map(o => o.machineId));
+
+  const vacant = floorMachines.find(m => !occupied.has(m.id));
+  if (!vacant) {
+    throw new Error("NO_VACANT_MACHINE");
+  }
+
+  const now = new Date();
+  const endsAt = new Date(now.getTime() + input.durationMinutes * 60 * 1000);
+
+  // Start the session, then mark the waiting entry admitted
+  await db.insert(sessions).values({
+    machineId: vacant.id,
+    patientId: entry[0].patientId,
+    durationMinutes: input.durationMinutes,
+    startedAt: now,
+    endsAt,
+    isolationTag: input.isolationTag,
+    urgent: input.urgent || entry[0].priority === "veryUrgent",
+    startedBy: input.startedBy,
+  });
+
+  await db
+    .update(waitingList)
+    .set({ status: "admitted", admittedAt: now })
+    .where(eq(waitingList.id, input.entryId));
 }

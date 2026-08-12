@@ -88,3 +88,27 @@ export const sessions = mysqlTable("sessions", {
 
 export type Session = typeof sessions.$inferSelect;
 export type InsertSession = typeof sessions.$inferInsert;
+
+/**
+ * Patient waiting list per floor. Patients queue for a machine on a given
+ * floor; very-urgent patients are sorted to the top of the list and shown
+ * with a distinct high-priority marker on the board.
+ */
+export const waitingList = mysqlTable("waiting_list", {
+  id: int("id").autoincrement().primaryKey(),
+  /** Patient identifier entered by staff, e.g. "P-4821". */
+  patientId: varchar("patientId", { length: 64 }).notNull(),
+  /** Floor this patient is waiting for a machine on. */
+  floorId: int("floorId").notNull(),
+  /** Waiting priority tier. */
+  priority: mysqlEnum("priority", ["normal", "urgent", "veryUrgent"]).notNull().default("normal"),
+  addedBy: text("addedBy"),
+  joinedAt: timestamp("joinedAt").defaultNow().notNull(),
+  /** When the patient was admitted onto a machine (leaves the list). */
+  admittedAt: timestamp("admittedAt"),
+  status: mysqlEnum("status", ["waiting", "admitted"]).notNull().default("waiting"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type WaitingEntry = typeof waitingList.$inferSelect;
+export type InsertWaitingEntry = typeof waitingList.$inferInsert;

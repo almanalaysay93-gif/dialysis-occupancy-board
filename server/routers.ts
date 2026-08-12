@@ -11,6 +11,7 @@ const durationMinutesSchema = z
   .union([z.enum(["180", "360", "480", "custom"]), z.number().int().min(15).max(1440)])
   .transform(v => (typeof v === "string" ? (v === "custom" ? null : Number(v)) : v));
 const isolationTagSchema = z.enum(["clean", "dirty"]);
+const waitingPrioritySchema = z.enum(["normal", "urgent", "veryUrgent"]);
 
 export const appRouter = router({
   system: systemRouter,
@@ -251,6 +252,118 @@ export const appRouter = router({
           isolationTag: input.isolationTag,
         });
         return { success: true } as const;
+      }),
+  }),
+
+  waiting: router({
+    /** Waiting patients per floor. Public so every staff device sees the same queue. */
+    list: publicProcedure
+      .input(z.object({ floorId: z.number().int().positive() }))
+      .query(({ input }) => machineDb.listWaiting({ floorId: input.floorId })),
+
+    /** Add a patient to the waiting list (staff only). */
+    add: protectedProcedure
+      .input(
+        z.object({
+          floorId: z.number().int().positive(),
+          patientId: z.string().trim().min(1, "Patient identifier is required").max(64),
+          priority: waitingPrioritySchema.default("normal"),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        try {
+          const result = await machineDb.addWaiting({
+            floorId: input.floorId,
+            patientId: input.patientId,
+            priority: input.priority,
+            addedBy: ctx.user.name ?? ctx.user.email ?? "staff",
+          });
+          return { success: true, entryId: result.id } as const;
+        } catch (error) {
+          const msg = (error as Error)?.message;
+          if (msg === "PATIENT_ID_REQUIRED") {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "Patient identifier cannot be empty." });
+          }
+          if (msg === "PATIENT_ID_TOO_LONG") {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "Patient identifier is too long (max 64 characters)." });
+          }
+          throw error;
+        }
+      }),
+
+    /** Remove a patient from the waiting list (staff only). */
+    remove: protectedProcedure
+      .input(
+        z.object({
+          entryId: z.number().int().positive(),
+          floorId: z.number().int().positive(),
+        })
+      )
+      .mutation(async ({ input }) => {
+        await machineDb.removeWaiting({ entryId: input.entryId, floorId: input.floorId });
+        return { success: true } as const;
+      }),
+
+    /** Change a waiting patient's priority (staff only), e.g. escalate to very urgent. */
+    setPriority: protectedProcedure
+      .input(
+        z.object({
+          entryId: z.number().int().positive(),
+          floorId: z.number().int().positive(),
+          priority: waitingPrioritySchema,
+        })
+      )
+      .mutation(async ({ input }) => {
+        await machineDb.markWaitingUrgent({
+          entryId: input.entryId,
+          floorId: input.floorId,
+          priority: input.priority,
+        });
+        return { success: true } as const;
+      }),
+
+    /** Number of vacant machines on a floor (for enabling the admit control). */
+    vacantCount: publicProcedure
+      .input(z.object({ floorId: z.number().int().positive() }))
+      .query(({ input }) => machineDb.countVacantMachines({ floorId: input.floorId })),
+
+    /**
+     * Admit a waiting patient onto the first vacant machine of the floor.
+     * Starts the treatment session and marks the waiting entry as admitted.
+     */
+    admit: protectedProcedure
+      .input(
+        z.object({
+          entryId: z.number().int().positive(),
+          floorId: z.number().int().positive(),
+          durationMinutes: z.number().int().min(15).max(1440),
+          isolationTag: isolationTagSchema,
+          urgent: z.boolean().default(false),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const entry = await machineDb.listWaiting({ floorId: input.floorId });
+        const patient = entry.find(e => e.id === input.entryId);
+        try {
+          await machineDb.admitWaiting({
+            entryId: input.entryId,
+            floorId: input.floorId,
+            durationMinutes: input.durationMinutes,
+            isolationTag: input.isolationTag,
+            urgent: input.urgent,
+            startedBy: ctx.user.name ?? ctx.user.email ?? "staff",
+          });
+          return { success: true, patientId: patient?.patientId ?? "" } as const;
+        } catch (error) {
+          const msg = (error as Error)?.message;
+          if (msg === "NO_WAITING_PATIENT") {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "This patient is no longer waiting — they may already have been admitted." });
+          }
+          if (msg === "NO_VACANT_MACHINE") {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "No vacant machine on this floor — end or release a session first." });
+          }
+          throw error;
+        }
       }),
   }),
 });

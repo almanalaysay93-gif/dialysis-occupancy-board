@@ -219,3 +219,13 @@
     }
   }
 }
+
+/* Waiting list — very urgent patient pulsing marker */
+@keyframes waitpulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 oklch(0.42 0.19 20 / 0.45);
+  }
+  50% {
+    box-shadow: 0 0 0 6px oklch(0.42 0.19 20 / 0);
+  }
+}
