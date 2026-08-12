@@ -21,17 +21,34 @@ import {
 } from "@/components/ui/sidebar";
 import { startLogin } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { Activity, BellRing, LogOut, PanelLeft, LayoutGrid } from "lucide-react";
-import { CSSProperties, useEffect, useRef, useState } from "react";
+import { Activity, BellRing, LogOut, PanelLeft, LayoutGrid, Layers } from "lucide-react";
+import { CSSProperties, useRef } from "react";
 import { useLocation } from "wouter";
+import { trpc } from "@/lib/trpc";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 import { Button } from "./ui/button";
 
-const menuItems = [
+const menuItems: { icon: typeof Activity; label: string; path: string }[] = [
   { icon: Activity, label: "Occupancy Board", path: "/" },
   { icon: BellRing, label: "Urgent Cases", path: "/urgent" },
   { icon: LayoutGrid, label: "Rooms", path: "/rooms" },
 ];
+
+/** Per-floor board entries loaded from the floors table at runtime. */
+function useFloorBoardItems() {
+  const { data: floors } = trpc.machines.listFloors.useQuery(undefined, {
+    refetchInterval: 30_000,
+    staleTime: 20_000,
+  });
+  return (
+    floors?.map(f => ({
+      icon: Layers,
+      label: `${f.name} Board`,
+      path: `/floor/${f.id}`,
+      floorId: f.id,
+    })) ?? []
+  );
+}
 
 export default function DashboardLayout({
   children,
@@ -100,7 +117,9 @@ function DashboardLayoutContent({
   const { state } = useSidebar();
   const isCollapsed = state === "collapsed";
   const sidebarRef = useRef<HTMLDivElement>(null);
-  const activeMenuItem = menuItems.find(item => item.path === location);
+  const floorBoardItems = useFloorBoardItems();
+  const activeMenuItem = menuItems.find(item => item.path === location) ??
+    floorBoardItems.find(item => location.startsWith("/floor/"));
   const isMobile = useIsMobile();
 
   return (
@@ -146,6 +165,30 @@ function DashboardLayoutContent({
           <SidebarContent className="gap-0">
             <SidebarMenu className="px-2 py-1">
               {menuItems.map(item => {
+                const isActive = location === item.path;
+                return (
+                  <SidebarMenuItem key={item.path}>
+                    <SidebarMenuButton
+                      isActive={isActive}
+                      onClick={() => setLocation(item.path)}
+                      tooltip={item.label}
+                      className="h-11 transition-all font-normal data-[active=true]:bg-primary data-[active=true]:text-primary-foreground data-[active=true]:font-medium rounded-sm"
+                    >
+                      <item.icon className="h-4 w-4" />
+                      <span className="text-[13px] tracking-wide">{item.label}</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
+            </SidebarMenu>
+
+            {floorBoardItems.length > 0 && (
+              <p className="mt-3 px-3 text-[10px] uppercase tracking-[0.22em] text-muted-foreground/80">
+                Floor Boards
+              </p>
+            )}
+            <SidebarMenu className="px-2 py-1">
+              {floorBoardItems.map(item => {
                 const isActive = location === item.path;
                 return (
                   <SidebarMenuItem key={item.path}>

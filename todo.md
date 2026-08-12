@@ -52,3 +52,9 @@
 - [x] UI: rename machine from vacant tile hover menu (RenameMachineDialog)
 - [x] UI: "Custom" duration option in assign dialog with hours/minutes inputs
 - [x] Vitest coverage for rename and custom duration (8 new tests, 25 passing); verify; checkpoint
+
+## Per-floor occupancy boards (new request)
+- [x] Support a floor filter parameter on the board so a single board view can show one floor only (shared OccupancyBoard component with floorId prop)
+- [x] New routes: /floor/:id showing only that floor's machines (/floor/30002 = Floor 2, /floor/30003 = Floor 3)
+- [x] Sidebar navigation entries: "Floor Boards" group with one entry per floor (loaded dynamically from the floors table)
+- [x] Verify per-floor boards render with scoped stats; checkpoint

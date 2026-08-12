@@ -10,6 +10,7 @@ import { startLogin } from "@/const";
 import { trpc } from "@/lib/trpc";
 import { Activity, Plus } from "lucide-react";
 import { useMemo, useState } from "react";
+import { Link } from "wouter";
 import type { MachineWithSession } from "../../../server/machines";
 
 type FloorGroup = {
@@ -18,7 +19,12 @@ type FloorGroup = {
   machines: MachineWithSession[];
 };
 
-export default function Home() {
+/**
+ * Shared occupancy board used by the main board (/) and the per-floor
+ * boards (/floor/:id). When floorId is provided, only that floor's
+ * machines are shown and page scope is limited to it.
+ */
+export function OccupancyBoard({ floorId }: { floorId?: number }) {
   const { isAuthenticated } = useAuth();
   const { data, isLoading } = trpc.machines.list.useQuery(undefined, {
     // Cross-device real-time sync: re-sync board state every 5 seconds
@@ -29,6 +35,7 @@ export default function Home() {
   });
 
   const [assignTarget, setAssignTarget] = useState<number | null>(null);
+  const scoped = floorId !== undefined;
   const [addOpen, setAddOpen] = useState(false);
   const [addInitialFloor, setAddInitialFloor] = useState<number | null>(null);
   const [endTarget, setEndTarget] = useState<{
@@ -39,6 +46,9 @@ export default function Home() {
   const floorGroups = useMemo<FloorGroup[]>(() => {
     if (!data) return [];
     const floorMap = new Map<number | string, { id: number; name: string }>();
+    const floorRows = floorId !== undefined
+      ? data.filter(r => r.machine.floorId === floorId)
+      : data;
     for (const f of floors ?? []) floorMap.set(f.id, { id: f.id, name: f.name });
 
     const groups = new Map<number | string, FloorGroup>();
@@ -47,10 +57,14 @@ export default function Home() {
     const orderedFloors = [...(floors ?? [])].sort(
       (a, b) => a.sortOrder - b.sortOrder || a.id - b.id
     );
+    if (floorId !== undefined && orderedFloors.length === 0 && floors) {
+      const match = floors.find(f => f.id === floorId);
+      if (match) orderedFloors.push(match);
+    }
     for (const f of orderedFloors) groups.set(f.id, { id: f.id, name: f.name, machines: [] });
     groups.set("unassigned", { id: null, name: "Unassigned Machines", machines: [] });
 
-    for (const row of data) {
+    for (const row of floorRows) {
       const key =
         row.machine.floorId && floorMap.has(row.machine.floorId)
           ? row.machine.floorId
@@ -62,12 +76,15 @@ export default function Home() {
   }, [data, floors]);
 
   const stats = useMemo(() => {
-    if (!data) return { vacant: 0, occupied: 0, urgent: 0, dirty: 0 };
+    const rows = floorId !== undefined
+      ? (data ?? []).filter(r => r.machine.floorId === floorId)
+      : data;
+    if (!rows) return { vacant: 0, occupied: 0, urgent: 0, dirty: 0 };
     let vacant = 0;
     let occupied = 0;
     let urgent = 0;
     let dirty = 0;
-    for (const row of data) {
+    for (const row of rows) {
       if (row.session) {
         occupied++;
         if (row.session.urgent) urgent++;
@@ -77,11 +94,11 @@ export default function Home() {
       }
     }
     return { vacant, occupied, urgent, dirty };
-  }, [data]);
+  }, [data, floorId]);
 
-  const assignMachine = data?.find(r => r.machine.id === assignTarget);
+  const assignMachine = (data ?? []).find(r => r.machine.id === assignTarget);
   const endMachine = endTarget
-    ? data?.find(
+    ? (data ?? []).find(
         r =>
           r.session !== null &&
           r.session.id === (endTarget as { sessionId: number }).sessionId
@@ -89,6 +106,10 @@ export default function Home() {
     : null;
 
   const handleAssign = (machineId: number) => setAssignTarget(machineId);
+
+  const floorNameForScope = floorId !== undefined
+    ? floors?.find(f => f.id === floorId)?.name
+    : undefined;
 
   const floorStats = (group: FloorGroup) => {
     let occupied = 0;
@@ -126,13 +147,26 @@ export default function Home() {
           <div className="flex flex-wrap items-end justify-between gap-6 pt-5">
             <div>
               <h1 className="font-display text-4xl text-[#1F2A52] sm:text-5xl lg:text-6xl">
-                The Occupancy Board
+                {floorNameForScope ? floorNameForScope : "The Occupancy Board"}
               </h1>
               <p className="font-serif-light mt-2 max-w-xl text-base italic text-[#556680] sm:text-lg">
-                A live register of every hemodialysis machine, arranged by
-                floor — which are in treatment, which stand vacant, and which
-                cases demand immediate attention.
+                {floorNameForScope
+                  ? "A live register of the hemodialysis machines on this floor — which are in treatment, which stand vacant, and which cases demand immediate attention."
+                  : "A live register of every hemodialysis machine, arranged by floor — which are in treatment, which stand vacant, and which cases demand immediate attention."}
               </p>
+              {!scoped && floors && floors.length > 1 && (
+                <p className="font-serif-light mt-3 flex flex-wrap gap-x-5 gap-y-1 text-sm text-[#556680]">
+                  {floors.map(f => (
+                    <Link
+                      key={f.id}
+                      href={`/floor/${f.id}`}
+                      className="underline decoration-[#2E9A9B]/60 underline-offset-4 hover:text-[#1F2A52]"
+                    >
+                      {f.name} board →
+                    </Link>
+                  ))}
+                </p>
+              )}
             </div>
             <div className="flex flex-col items-stretch gap-3 sm:flex-row">
               <div className="flex items-baseline gap-3 border-l border-[#D4DFE5] pl-4">
@@ -250,8 +284,8 @@ export default function Home() {
           <div className="mt-6 flex items-center justify-between border-t border-[#D4DFE5] pt-4">
             <p className="font-serif-light italic text-[#556680]">
               {stats.vacant} machine{stats.vacant === 1 ? "" : "s"} vacant ·{" "}
-              {data?.length ?? 0} machine
-              {data?.length === 1 ? "" : "s"} on the board
+              {data?.filter(r => floorId !== undefined ? r.machine.floorId === floorId : true).length ?? 0} machine
+              {data?.filter(r => floorId !== undefined ? r.machine.floorId === floorId : true).length === 1 ? "" : "s"} on the board
             </p>
             <div className="flex gap-2">
               <Button
@@ -304,4 +338,8 @@ export default function Home() {
       />
     </DashboardLayout>
   );
+}
+
+export default function Home() {
+  return <OccupancyBoard />;
 }
