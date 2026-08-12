@@ -9,15 +9,21 @@ import { OccupancyBoard } from "@/pages/Home";
  */
 export default function FloorBoard() {
   const params = useParams<{ id: string }>();
-  const floorId = Number(params.id);
-  const invalid = Number.isNaN(floorId) || floorId <= 0;
+  const raw = params.id ?? "";
 
-  const { data: floors } = trpc.machines.listFloors.useQuery(undefined, {
+  const { data: floors, isLoading } = trpc.machines.listFloors.useQuery(undefined, {
     refetchInterval: 30_000,
   });
 
-  if (invalid) return <NotFound />;
-  if (floors && !floors.some(f => f.id === floorId)) return <NotFound />;
+  // Resolve by floor code (F1/F2/F3), raw DB id, or 1-based sort order.
+  const floor = floors?.find(
+    f =>
+      f.code === raw.toUpperCase() ||
+      String(f.id) === raw ||
+      String(f.sortOrder) === raw
+  );
 
-  return <OccupancyBoard floorId={floorId} />;
+  if (!floor && !isLoading) return <NotFound />;
+
+  return <OccupancyBoard floorId={floor ? floor.id : -1} />;
 }

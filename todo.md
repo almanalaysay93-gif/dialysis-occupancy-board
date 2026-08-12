@@ -77,3 +77,8 @@
 - [x] Priority popover to escalate/de-escalate + Remove button per waiting patient
 - [x] Header stat WaitingCount per board with very-urgent count in crimson
 - [x] Vitest coverage (14 waiting tests incl. admit/vacantCount, 45 passing total), screenshots verified with seeded patients, board delivered clean, checkpoint
+
+## Admit custom duration (new request)
+- [ ] Waiting List admit draft form: add "Custom" duration option with hours/minutes inputs (15 min – 24 h)
+- [ ] Verify form state, wire custom minutes into waiting.admit mutation
+- [ ] Test, checkpoint, deliver

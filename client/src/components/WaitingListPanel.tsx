@@ -27,9 +27,21 @@ export type WaitingEntry = {
 type AdmitDraft = {
   entry: WaitingEntry;
   durationMinutes: number;
+  durationMode: "preset" | "custom";
+  customHours: string;
+  customMinutes: string;
   isolationTag: "clean" | "dirty";
   urgent: boolean;
 };
+
+type DurationValue = 180 | 360 | 480 | "custom";
+
+function draftEffectiveMinutes(d: AdmitDraft): number {
+  if (d.durationMode === "custom") {
+    return (Number(d.customHours) || 0) * 60 + (Number(d.customMinutes) || 0);
+  }
+  return d.durationMinutes;
+}
 
 const priorityLabel: Record<WaitingPriority, string> = {
   normal: "Normal",
@@ -55,6 +67,13 @@ export default function WaitingListPanel({ floorId }: { floorId: number }) {
   const { isAuthenticated, user } = useAuth();
 
   const [admitDraft, setAdmitDraft] = useState<AdmitDraft | null>(null);
+
+  const effectiveDurationMinutes = admitDraft
+    ? draftEffectiveMinutes(admitDraft)
+    : 0;
+  const customInvalid =
+    admitDraft?.durationMode === "custom" &&
+    (effectiveDurationMinutes < 15 || effectiveDurationMinutes > 1440);
 
   const [addOpen, setAddOpen] = useState(false);
   const [patientId, setPatientId] = useState("");
@@ -244,14 +263,15 @@ export default function WaitingListPanel({ floorId }: { floorId: number }) {
           <form
             onSubmit={e => {
               e.preventDefault();
-              if (admitDraft.durationMinutes < 15 || admitDraft.durationMinutes > 1440) {
+              const minutes = draftEffectiveMinutes(admitDraft);
+              if (minutes < 15 || minutes > 1440) {
                 toast.error("Duration must be between 15 minutes and 24 hours");
                 return;
               }
               admitMut.mutate({
                 entryId: admitDraft.entry.id,
                 floorId,
-                durationMinutes: admitDraft.durationMinutes,
+                durationMinutes: minutes,
                 isolationTag: admitDraft.isolationTag,
                 urgent: admitDraft.urgent,
               });
@@ -261,27 +281,106 @@ export default function WaitingListPanel({ floorId }: { floorId: number }) {
             <div className="flex flex-col gap-1.5">
               <span className="smallcaps-detail text-[#7684A0]">Duration</span>
               <div className="flex gap-1">
-                {[
+                {([
                   [180, "3 h"],
                   [360, "6 h"],
                   [480, "8 h"],
-                ].map(([mins, label]) => (
-                  <Button
-                    key={mins}
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setAdmitDraft({ ...admitDraft, durationMinutes: mins as 180 | 360 | 480 })}
-                    className={`h-9 border-[#D4DFE5] bg-[#F4F7F8] ${
-                      admitDraft.durationMinutes === mins
-                        ? "border-[#1F2A52] text-[#1F2A52]"
-                        : "text-[#7684A0]"
+                  ["custom", "Custom"],
+                ] as const).map(([value, label]) => {
+                  const isActive =
+                    value === "custom"
+                      ? admitDraft.durationMode === "custom"
+                      : admitDraft.durationMode === "preset" &&
+                        admitDraft.durationMinutes === value;
+                  return (
+                    <Button
+                      key={value}
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() =>
+                        setAdmitDraft(
+                          value === "custom"
+                            ? { ...admitDraft, durationMode: "custom" }
+                            : {
+                                ...admitDraft,
+                                durationMode: "preset",
+                                durationMinutes: value,
+                              }
+                        )
+                      }
+                      className={`h-9 border-[#D4DFE5] bg-[#F4F7F8] ${
+                        isActive
+                          ? "border-[#1F2A52] text-[#1F2A52]"
+                          : "text-[#7684A0]"
+                      }`}
+                    >
+                      {label}
+                    </Button>
+                  );
+                })}
+              </div>
+              {admitDraft.durationMode === "custom" && (
+                <div className="mt-1.5 flex items-end gap-2">
+                  <div className="flex flex-col gap-1">
+                    <Label
+                      htmlFor="admit-custom-hours"
+                      className="smallcaps-detail text-[#7684A0]"
+                    >
+                      Hours
+                    </Label>
+                    <Input
+                      id="admit-custom-hours"
+                      type="number"
+                      min={0}
+                      max={24}
+                      inputMode="numeric"
+                      value={admitDraft.customHours}
+                      onChange={e =>
+                        setAdmitDraft({
+                          ...admitDraft,
+                          customHours: e.target.value,
+                        })
+                      }
+                      className="h-9 w-20 border-[#D4DFE5] bg-[#FBFCFD] text-[#1F2A52]"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <Label
+                      htmlFor="admit-custom-minutes"
+                      className="smallcaps-detail text-[#7684A0]"
+                    >
+                      Minutes
+                    </Label>
+                    <Input
+                      id="admit-custom-minutes"
+                      type="number"
+                      min={0}
+                      max={59}
+                      inputMode="numeric"
+                      value={admitDraft.customMinutes}
+                      onChange={e =>
+                        setAdmitDraft({
+                          ...admitDraft,
+                          customMinutes: e.target.value,
+                        })
+                      }
+                      className="h-9 w-24 border-[#D4DFE5] bg-[#FBFCFD] text-[#1F2A52]"
+                    />
+                  </div>
+                  <span
+                    className={`smallcaps-detail ${
+                      customInvalid ? "text-[#9E1F2B]" : "text-[#7684A0]"
                     }`}
                   >
-                    {label}
-                  </Button>
-                ))}
-              </div>
+                    {customInvalid
+                      ? "15 min – 24 h required"
+                      : effectiveDurationMinutes > 0
+                        ? `${Math.floor(effectiveDurationMinutes / 60)} h ${effectiveDurationMinutes % 60} m`
+                        : "enter hours or minutes"}
+                  </span>
+                </div>
+              )}
             </div>
             <div className="flex flex-col gap-1.5">
               <span className="smallcaps-detail text-[#7684A0]">Isolation tag</span>
@@ -312,7 +411,8 @@ export default function WaitingListPanel({ floorId }: { floorId: number }) {
             <Button
               type="submit"
               size="sm"
-              disabled={admitMut.isPending}
+              disabled={admitMut.isPending || customInvalid}
+              title={customInvalid ? "Set a duration between 15 minutes and 24 hours" : undefined}
               className="bg-[#9E1F2B] text-[#F4F7F8] hover:bg-[#7E1620]"
             >
               <ArrowRightCircle className="mr-1.5 h-4 w-4" />
@@ -484,6 +584,9 @@ function WaitingRow({
             setAdmitDraft({
               entry,
               durationMinutes: 240,
+              durationMode: "preset",
+              customHours: "4",
+              customMinutes: "0",
               isolationTag: "clean",
               urgent: entry.priority === "veryUrgent",
             })
