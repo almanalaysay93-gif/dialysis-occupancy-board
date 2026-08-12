@@ -32,3 +32,10 @@
 - [x] UI: Add Machine dialog/control for staff
 - [x] Per-floor stats in each floor heading (vacant/in-use/urgent)
 - [x] Update tests (pnpm test 9 passing), verify screenshots, checkpoint
+
+## Rooms management page (new request)
+- [x] Backend: rooms.add (protected), rooms.remove (protected, blocks if machines/sessions exist)
+- [x] New /rooms page: editorial list of rooms with machine counts and occupancy stats
+- [x] Add Room dialog and Remove Room confirmation with safety guards (must be empty of machines)
+- [x] Wire Rooms into sidebar navigation (DashboardLayout)
+- [x] Vitest coverage for room add/remove guards (8 new tests, 17 passing); screenshots verified; checkpoint

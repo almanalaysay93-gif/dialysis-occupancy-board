@@ -73,6 +73,54 @@ export const appRouter = router({
       }),
   }),
 
+  rooms: router({
+    /** All rooms (floors) visible on the board. Public so every staff device sees them. */
+    list: publicProcedure.query(() => machineDb.listFloors()),
+
+    /** Add a new room (staff only). */
+    add: protectedProcedure
+      .input(z.object({ name: z.string().trim().min(1, "Room name is required").max(64) }))
+      .mutation(async ({ input }) => {
+        try {
+          const result = await machineDb.addRoom(input);
+          return { success: true, roomId: result.id } as const;
+        } catch (error) {
+          if ((error as Error)?.message === "ROOM_EXISTS") {
+            throw new TRPCError({
+              code: "CONFLICT",
+              message: "A room with this name already exists.",
+            });
+          }
+          throw error;
+        }
+      }),
+
+    /** Remove a room (staff only). Blocks if the room has machines or active sessions. */
+    remove: protectedProcedure
+      .input(z.object({ roomId: z.number().int().positive() }))
+      .mutation(async ({ input }) => {
+        try {
+          await machineDb.removeRoom({ roomId: input.roomId });
+          return { success: true } as const;
+        } catch (error) {
+          const msg = (error as Error)?.message;
+          if (msg === "ROOM_HAS_ACTIVE_SESSIONS") {
+            throw new TRPCError({
+              code: "CONFLICT",
+              message: "Cannot remove a room with machines currently in treatment. End those sessions first.",
+            });
+          }
+          if (msg === "ROOM_HAS_MACHINES") {
+            throw new TRPCError({
+              code: "CONFLICT",
+              message: "Cannot remove a room that still has machines. Remove its machines first.",
+            });
+          }
+          throw error;
+        }
+      }),
+  }),
+
   sessions: router({
     assign: protectedProcedure
       .input(

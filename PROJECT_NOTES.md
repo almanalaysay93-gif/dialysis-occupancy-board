@@ -23,6 +23,12 @@
 - pnpm test passes (9 tests), pnpm check passes. Demo sessions seeded in machines 60005/60110 (urgent) + 60145 (dirty) — MUST remove before checkpoint delivery (webdev_execute_sql DELETE FROM sessions).
 - Old MachineTile.tsx still exists but is now UNUSED (replaced by FloorMachineRow.tsx chips); safe to delete.
 
+## Rooms management page (current request, nearly done)
+- DONE: server/machines.ts addRoom (ROOM_EXISTS guard), removeRoom (ROOM_HAS_ACTIVE_SESSIONS / ROOM_HAS_MACHINES guards). routers.ts has rooms.list (public), rooms.add + rooms.remove (protected, TRPCError CONFLICT msgs). server/rooms.test.ts 8 new tests, 17 tests total passing.
+- DONE: client/src/components/AddRoomDialog.tsx (name input), RemoveRoomDialog.tsx (confirm, disabled if machines>0), Rooms.tsx page (editorial: header + Add Room btn, room rows w/ badge machine count + occupancy bar + Remove btn, footer note), sidebar nav entry "Rooms" -> /rooms (LayoutGrid icon).
+- REMAINING: register <Route path="/rooms" component={Rooms}/> in App.tsx; screenshot verify /rooms; update todo.md; checkpoint; deliver. Published domain: dialysisdash-dn9aztnn.manus.space (auto-publish on checkpoint). Current checkpoint: d392d7d1.
+- Note: rooms.remove throws errors only from DB side; if room removal fails w/ machines, dialog disabled btn. rooms.list returns floors rows: {id, code, name, sortOrder, createdAt}.
+
 ## TODO for new request
 - [ ] Add `floors` table (id, name, label, sortOrder); add floorId FK (nullable ok) to machines
 - [ ] Seed: Floor 1 = 100 machines (HD-001..HD-100), Floor 2 = 36 (HD-101..HD-136), Floor 3 = 24 (HD-137..HD-160); keep existing HD-01..HD-16 rows — migrate to floors or drop. Better: replace old 16 machines with 160 floor-grouped ones (drop old rows first).

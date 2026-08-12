@@ -192,3 +192,62 @@ export async function removeMachine(input: { machineId: number }) {
   await db.delete(sessions).where(eq(sessions.machineId, input.machineId));
   await db.delete(machines).where(eq(machines.id, input.machineId));
 }
+
+export async function addRoom(input: { name: string }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const existing = await db
+    .select({ id: floors.id })
+    .from(floors)
+    .where(eq(floors.name, input.name.trim()))
+    .limit(1);
+  if (existing.length > 0) {
+    throw new Error("ROOM_EXISTS");
+  }
+
+  const maxOrder = await db
+    .select({ sortOrder: floors.sortOrder })
+    .from(floors)
+    .orderBy(desc(floors.sortOrder))
+    .limit(1);
+
+  const code = `F${(maxOrder[0]?.sortOrder ?? 0) + 1}`;
+
+  const result = await db
+    .insert(floors)
+    .values({
+      code,
+      name: input.name.trim(),
+      sortOrder: (maxOrder[0]?.sortOrder ?? 0) + 1,
+    })
+    .$returningId();
+
+  return result[0];
+}
+
+export async function removeRoom(input: { roomId: number }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const active = await db
+    .select({ id: sessions.id })
+    .from(sessions)
+    .innerJoin(machines, eq(machines.id, sessions.machineId))
+    .where(and(eq(machines.floorId, input.roomId), eq(sessions.status, "active")))
+    .limit(1);
+  if (active.length > 0) {
+    throw new Error("ROOM_HAS_ACTIVE_SESSIONS");
+  }
+
+  const machineCount = await db
+    .select({ id: machines.id })
+    .from(machines)
+    .where(eq(machines.floorId, input.roomId))
+    .limit(1);
+  if (machineCount.length > 0) {
+    throw new Error("ROOM_HAS_MACHINES");
+  }
+
+  await db.delete(floors).where(eq(floors.id, input.roomId));
+}

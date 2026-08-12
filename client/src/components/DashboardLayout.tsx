@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/sidebar";
 import { startLogin } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { Activity, BellRing, LogOut, PanelLeft } from "lucide-react";
+import { Activity, BellRing, LogOut, PanelLeft, LayoutGrid } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
@@ -30,6 +30,7 @@ import { Button } from "./ui/button";
 const menuItems = [
   { icon: Activity, label: "Occupancy Board", path: "/" },
   { icon: BellRing, label: "Urgent Cases", path: "/urgent" },
+  { icon: LayoutGrid, label: "Rooms", path: "/rooms" },
 ];
 
 export default function DashboardLayout({
