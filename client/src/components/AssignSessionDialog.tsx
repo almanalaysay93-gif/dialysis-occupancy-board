@@ -11,12 +11,19 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Switch } from "@/components/ui/switch";
 import { trpc } from "@/lib/trpc";
-import { BellRing, Droplets } from "lucide-react";
+import { BellRing, Clock, Droplets } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
 type IsolationTag = "clean" | "dirty";
-type Duration = 180 | 360 | 480;
+type DurationValue = 180 | 360 | 480 | "custom";
+
+function formatDurationSummary(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  if (m === 0) return `${h} h`;
+  return `${h} h ${m} m`;
+}
 
 export default function AssignSessionDialog({
   open,
@@ -33,14 +40,20 @@ export default function AssignSessionDialog({
 }) {
   const utils = trpc.useUtils();
   const [patientId, setPatientId] = useState("");
-  const [duration, setDuration] = useState<Duration>(180);
+  const [duration, setDuration] = useState<DurationValue>(180);
+  const [customHours, setCustomHours] = useState("4");
+  const [customMinutes, setCustomMinutes] = useState("0");
   const [tag, setTag] = useState<IsolationTag>("clean");
   const [urgent, setUrgent] = useState(false);
 
   const assign = trpc.sessions.assign.useMutation({
     onSuccess: () => {
+      const minutes =
+        duration === "custom"
+          ? (Number(customHours) || 0) * 60 + (Number(customMinutes) || 0)
+          : duration;
       toast.success(`Session started on ${machineLabel}`, {
-        description: `Patient ${patientId} · ${duration / 60} h · ${tag}`,
+        description: `Patient ${patientId} · ${formatDurationSummary(minutes)} · ${tag}`,
       });
       setPatientId("");
       setUrgent(false);
@@ -52,17 +65,28 @@ export default function AssignSessionDialog({
 
   const submitting = assign.isPending;
 
+  const effectiveMinutes =
+    duration === "custom"
+      ? (Number(customHours) || 0) * 60 + (Number(customMinutes) || 0)
+      : duration;
+
+  const customInvalid =
+    duration === "custom" && (effectiveMinutes < 15 || effectiveMinutes > 1440);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!machineId) return;
     assign.mutate({
       machineId,
       patientId: patientId.trim(),
-      durationMinutes: String(duration) as "180" | "360" | "480",
+      durationMinutes: duration === "custom" ? effectiveMinutes : (String(duration) as "180" | "360" | "480"),
+      customMinutes: duration === "custom" ? effectiveMinutes : null,
       isolationTag: tag,
       urgent,
     });
   };
+
+  const isCustom = duration === "custom";
 
   return (
     <Dialog open={open} onOpenChange={v => !v && onClose()}>
@@ -102,25 +126,30 @@ export default function AssignSessionDialog({
             </Label>
             <RadioGroup
               value={String(duration)}
-              onValueChange={v => setDuration(Number(v) as Duration)}
-              className="grid grid-cols-3 gap-2"
+              onValueChange={v => setDuration(v as DurationValue)}
+              className="grid grid-cols-4 gap-2"
             >
               {[
                 { v: 180, label: "3", sub: "hours" },
                 { v: 360, label: "6", sub: "hours" },
                 { v: 480, label: "8", sub: "hours" },
+                { v: "custom", label: "Custom", sub: "any length" },
               ].map(opt => (
                 <label
-                  key={opt.v}
-                  htmlFor={`duration-${opt.v}`}
+                  key={String(opt.v)}
+                  htmlFor={`duration-${String(opt.v)}`}
                   className="flex cursor-pointer flex-col items-center gap-0.5 border border-[#D4DFE5] bg-[#F4F7F8] p-3 transition-colors has-[[data-state=checked]]:border-[#1F2A52] has-[[data-state=checked]]:bg-[#E8EFF1]"
                 >
                   <RadioGroupItem
-                    id={`duration-${opt.v}`}
+                    id={`duration-${String(opt.v)}`}
                     value={String(opt.v)}
                     className="sr-only"
                   />
-                  <span className="font-display text-2xl text-[#1F2A52]">
+                  <span
+                    className={`font-display text-[#1F2A52] ${
+                      opt.v === "custom" ? "text-lg" : "text-2xl"
+                    }`}
+                  >
                     {opt.label}
                   </span>
                   <span className="smallcaps-detail text-[#7684A0]">
@@ -129,6 +158,54 @@ export default function AssignSessionDialog({
                 </label>
               ))}
             </RadioGroup>
+
+            {isCustom && (
+              <div className="flex items-center gap-3 border border-[#2E9A9B]/50 bg-[#2E9A9B]/5 p-3">
+                <Clock className="h-4 w-4 shrink-0 text-[#2E9A9B]" />
+                <div className="flex flex-1 items-baseline gap-2">
+                  <Input
+                    id="custom-hours"
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    max={24}
+                    value={customHours}
+                    onChange={e => setCustomHours(e.target.value)}
+                    className="h-10 w-20 border-[#D4DFE5] bg-[#FBFCFD] font-serif-light text-lg"
+                    aria-label="Hours"
+                  />
+                  <span className="smallcaps-detail text-[#556680]">hours</span>
+                  <Input
+                    id="custom-minutes"
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    max={59}
+                    step={5}
+                    value={customMinutes}
+                    onChange={e => setCustomMinutes(e.target.value)}
+                    className="h-10 w-20 border-[#D4DFE5] bg-[#FBFCFD] font-serif-light text-lg"
+                    aria-label="Minutes"
+                  />
+                  <span className="smallcaps-detail text-[#556680]">
+                    minutes
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {isCustom && customInvalid && (
+              <p className="text-[11px] leading-relaxed text-[#9E1F2B]">
+                Duration must be between 15 minutes and 24 hours.
+              </p>
+            )}
+
+            {!isCustom && (
+              <p className="text-[11px] leading-relaxed text-[#7684A0]">
+                Select “Custom” to set any treatment length between 15 minutes
+                and 24 hours.
+              </p>
+            )}
           </div>
 
           <div className="flex flex-col gap-2">
@@ -197,7 +274,12 @@ export default function AssignSessionDialog({
             </Button>
             <Button
               type="submit"
-              disabled={submitting || !patientId.trim()}
+              disabled={
+                submitting ||
+                !patientId.trim() ||
+                effectiveMinutes < 15 ||
+                effectiveMinutes > 1440
+              }
               className="h-11 flex-[2] bg-[#1F2A52] text-[#F4F7F8] hover:bg-[#151D3A] font-serif-light text-base"
             >
               {submitting ? "Starting session…" : "Start Session"}

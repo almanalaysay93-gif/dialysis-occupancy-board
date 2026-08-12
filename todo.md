@@ -46,3 +46,9 @@
 - [x] Sidebar branding: SKTI logo + updated wordmark ("Dialysis." + "SPMC Kidney & Transplant") + sign-in page logo
 - [x] Page headers/boards updated to SPMCKTI identity and palette (all legacy hex replaced; index.html title updated)
 - [x] Verify colors and logo rendering on all pages (/ /rooms /urgent), checkpoint, deliver
+
+## Machine rename & custom duration (new request)
+- [x] Backend: machines.updateLabel (protected, rename machine label) + sessions.assign accepts custom duration (numeric minutes, 15–1440, not just 3/6/8)
+- [x] UI: rename machine from vacant tile hover menu (RenameMachineDialog)
+- [x] UI: "Custom" duration option in assign dialog with hours/minutes inputs
+- [x] Vitest coverage for rename and custom duration (8 new tests, 25 passing); verify; checkpoint

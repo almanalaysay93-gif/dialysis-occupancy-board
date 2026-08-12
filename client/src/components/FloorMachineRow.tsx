@@ -13,8 +13,9 @@ import {
 } from "@/components/ui/tooltip";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
+import RenameMachineDialog from "@/components/RenameMachineDialog";
 import { cn } from "@/lib/utils";
-import { Activity, AlertTriangle, BellRing, Clock, Droplets, MoreVertical, Plus, Power } from "lucide-react";
+import { Activity, AlertTriangle, BellRing, Clock, Droplets, MoreVertical, Pencil, Plus, Power } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import type { MachineWithSession } from "../../../server/machines";
@@ -64,6 +65,7 @@ export function FloorMachineChip({
   const totalMs = (row.session?.durationMinutes ?? 0) * 60 * 1000;
   const isStaff = !!user;
   const done = countdownMs === 0;
+  const [renameOpen, setRenameOpen] = useState(false);
 
   const toggleUrgent = trpc.sessions.toggleUrgent.useMutation({
     onSuccess: () => void utils.machines.list.invalidate(),
@@ -81,7 +83,7 @@ export function FloorMachineChip({
   });
 
   if (!occupied) {
-    const content = (
+    const chipContent = (
       <button
         onClick={() => isStaff && onAssign(row.machine.id)}
         disabled={!isStaff}
@@ -97,18 +99,44 @@ export function FloorMachineChip({
         <span className="smallcaps-detail text-[9px] tracking-[0.15em] text-[#7684A0]">
           Vacant
         </span>
-        {isStaff && (
-          <Plus className="absolute right-1 top-1 h-3 w-3 text-[#7684A0] opacity-0 transition-opacity group-hover:opacity-100" />
-        )}
       </button>
     );
     return (
-      <Tooltip>
-        <TooltipTrigger asChild>{content}</TooltipTrigger>
-        <TooltipContent side="bottom">
-          {row.machine.label} · {row.machine.location}
-        </TooltipContent>
-      </Tooltip>
+      <div className="group relative h-14">
+        <Tooltip>
+          <TooltipTrigger asChild>{chipContent}</TooltipTrigger>
+          <TooltipContent side="bottom">
+            {row.machine.label} · {row.machine.location}
+          </TooltipContent>
+        </Tooltip>
+        {isStaff && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                aria-label={`Actions for machine ${row.machine.label}`}
+                className="absolute -right-1 -top-1 z-10 flex h-5 w-5 items-center justify-center rounded-sm border border-[#D4DFE5]/70 bg-[#FBFCFD] opacity-0 transition-opacity hover:bg-[#E8EFF1] group-hover:opacity-100"
+              >
+                <MoreVertical className="h-2.5 w-2.5 text-[#7684A0]" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-44">
+              <DropdownMenuLabel className="smallcaps-detail text-muted-foreground">
+                {row.machine.label}
+              </DropdownMenuLabel>
+              <DropdownMenuItem onClick={() => setRenameOpen(true)} className="text-[13px]">
+                <Pencil className="mr-2 h-4 w-4" />
+                Edit machine number
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+        <RenameMachineDialog
+          open={renameOpen}
+          machineId={row.machine.id}
+          machineLabel={row.machine.label}
+          onClose={() => setRenameOpen(false)}
+        />
+      </div>
     );
   }
 
@@ -142,20 +170,21 @@ export function FloorMachineChip({
       </span>
 
       {isStaff && (
-        <div className="absolute right-0.5 top-0.5">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                aria-label={`Actions for machine ${row.machine.label}`}
-                className="rounded-sm p-0.5 text-[#F4F7F8]/70 hover:bg-[#F4F7F8]/20"
-              >
-                <MoreVertical className="h-3 w-3" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-52">
-              <DropdownMenuLabel className="smallcaps-detail text-muted-foreground">
-                {row.machine.label} · {row.machine.location}
-              </DropdownMenuLabel>
+        <>
+          <div className="absolute right-0.5 top-0.5">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  aria-label={`Actions for machine ${row.machine.label}`}
+                  className="rounded-sm p-0.5 text-[#F4F7F8]/70 hover:bg-[#F4F7F8]/20"
+                >
+                  <MoreVertical className="h-3 w-3" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-52">
+                <DropdownMenuLabel className="smallcaps-detail text-muted-foreground">
+                  {row.machine.label} · {row.machine.location}
+                </DropdownMenuLabel>
               <DropdownMenuItem className="text-[13px]">
                 <Activity className="mr-2 h-4 w-4" />
                 Patient {session.patientId} · {durationLabel(session.durationMinutes)} · started{" "}
@@ -196,6 +225,7 @@ export function FloorMachineChip({
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
+        </>
       )}
     </div>
   );

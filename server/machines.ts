@@ -54,7 +54,7 @@ export async function listMachines(): Promise<MachineWithSession[]> {
 export async function assignSession(input: {
   machineId: number;
   patientId: string;
-  durationMinutes: 180 | 360 | 480;
+  durationMinutes: number;
   isolationTag: "clean" | "dirty";
   urgent: boolean;
   startedBy: string;
@@ -173,6 +173,29 @@ export async function addMachine(input: {
     .$returningId();
 
   return result[0];
+}
+
+export async function updateMachineLabel(input: { machineId: number; label: string }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const newLabel = input.label.trim();
+  if (!newLabel) throw new Error("LABEL_REQUIRED");
+
+  // Prevent duplicate labels (excluding the machine being renamed)
+  const existing = await db
+    .select({ id: machines.id })
+    .from(machines)
+    .where(and(eq(machines.label, newLabel), sql`${machines.id} <> ${input.machineId}`))
+    .limit(1);
+  if (existing.length > 0) {
+    throw new Error("MACHINE_LABEL_EXISTS");
+  }
+
+  await db
+    .update(machines)
+    .set({ label: newLabel })
+    .where(eq(machines.id, input.machineId));
 }
 
 export async function removeMachine(input: { machineId: number }) {

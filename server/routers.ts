@@ -6,7 +6,10 @@ import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import * as machineDb from "./machines";
 
-const durationMinutesSchema = z.enum(["180", "360", "480"]).transform(v => Number(v) as 180 | 360 | 480);
+/** Preset durations (minutes) for quick selection; "custom" passes user-supplied minutes. */
+const durationMinutesSchema = z
+  .union([z.enum(["180", "360", "480", "custom"]), z.number().int().min(15).max(1440)])
+  .transform(v => (typeof v === "string" ? (v === "custom" ? null : Number(v)) : v));
 const isolationTagSchema = z.enum(["clean", "dirty"]);
 
 export const appRouter = router({
@@ -22,10 +25,37 @@ export const appRouter = router({
     }),
   }),
 
-  machines: router({
+    machines: router({
     /** All machines with their active session (if any). Auto-polling on the
      *  client provides cross-device real-time sync. */
     list: publicProcedure.query(() => machineDb.listMachines()),
+
+    /** Rename a machine (staff only). */
+    updateLabel: protectedProcedure
+      .input(
+        z.object({
+          machineId: z.number().int().positive(),
+          label: z.string().trim().min(1, "Machine label is required").max(32),
+        })
+      )
+      .mutation(async ({ input }) => {
+        try {
+          await machineDb.updateMachineLabel({ machineId: input.machineId, label: input.label });
+          return { success: true } as const;
+        } catch (error) {
+          if ((error as Error)?.message === "MACHINE_LABEL_EXISTS") {
+            throw new TRPCError({
+              code: "CONFLICT",
+              message: "A machine with this label already exists on the board.",
+            });
+          }
+          if ((error as Error)?.message === "LABEL_REQUIRED") {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "Machine label cannot be empty." });
+          }
+          throw error;
+        }
+      }),
+
 
     /** Floors machines are grouped into on the board. */
     listFloors: publicProcedure.query(() => machineDb.listFloors()),
@@ -128,14 +158,33 @@ export const appRouter = router({
           machineId: z.number().int().positive(),
           patientId: z.string().trim().min(1, "Patient identifier is required").max(64),
           durationMinutes: durationMinutesSchema,
+          customMinutes: z
+            .number()
+            .int()
+            .min(15, "Minimum duration is 15 minutes")
+            .max(1440, "Maximum duration is 24 hours")
+            .nullable()
+            .default(null),
           isolationTag: isolationTagSchema,
           urgent: z.boolean().default(false),
+        })
+        .superRefine((data, ctxx) => {
+          if (data.durationMinutes === null && (data.customMinutes === null || data.customMinutes < 15)) {
+            ctxx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: "Please enter a custom duration (15 minutes to 24 hours)",
+              path: ["customMinutes"],
+            });
+          }
         })
       )
       .mutation(async ({ ctx, input }) => {
         try {
+          const { customMinutes, ...rest } = input;
+          const durationMinutes = rest.durationMinutes ?? (customMinutes as number);
           const result = await machineDb.assignSession({
-            ...input,
+            ...rest,
+            durationMinutes,
             startedBy: ctx.user.name ?? ctx.user.email ?? "staff",
           });
           return { success: true, sessionId: result.id };
