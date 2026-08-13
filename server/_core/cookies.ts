@@ -39,10 +39,17 @@ export function getSessionCookieOptions(
   //       ? hostname
   //       : undefined;
 
+  // SameSite=None is only accepted by browsers when the cookie is also
+  // marked Secure. Production (manus.space) is always HTTPS, so fall back to
+  // secure=true when the host is a known production domain — this protects
+  // against proxies that strip x-forwarded-proto on the live site.
+  const host = (req.headers.host ?? "").toLowerCase();
+  const isKnownProductionHost = host.endsWith(".manus.space") || host.endsWith(".manus.im");
+  const isHttpsSite = isSecureRequest(req) || isKnownProductionHost;
   return {
     httpOnly: true,
     path: "/",
     sameSite: "none",
-    secure: isSecureRequest(req),
+    secure: isHttpsSite,
   };
 }
