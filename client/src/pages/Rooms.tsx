@@ -18,7 +18,11 @@ export default function Rooms() {
     refetchInterval: 30_000,
   });
   // Write permissions: OAuth admin/staff OR nurse/supervisor staff session.
-  const canWrite = isAuthenticated || Boolean(staffMe?.role && staffMe.role !== "guest");
+  // A guest staff session locks out writing even when an OAuth user is signed in.
+  const canWrite =
+    staffMe?.role === "guest"
+      ? false
+      : isAuthenticated || Boolean(staffMe?.role);
   const { data: rooms, isLoading } = trpc.rooms.list.useQuery(undefined, {
     refetchInterval: 5_000,
   });

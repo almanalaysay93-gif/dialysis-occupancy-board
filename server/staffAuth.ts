@@ -20,6 +20,10 @@ export interface StaffSession {
   role: StaffRole;
   /** Floor this nurse may access; null for supervisors and guests. */
   assignedFloorId: number | null;
+  /** True only when the guest/nurse/supervisor role came from an actual
+   *  staff cookie. When false the request simply has no staff session —
+   *  OAuth users keep full access in that case. */
+  fromCookie?: boolean;
 }
 
 /**
@@ -148,8 +152,8 @@ export async function resolveStaffSession(req: Request): Promise<StaffSession> {
   const cookies = parseCookieHeader(req.headers.cookie ?? "");
   const token = cookies[STAFF_COOKIE_NAME] ?? null;
   const staff = await verifyStaffSession(token);
-  if (staff) return staff;
-  return GUEST_SESSION;
+  if (staff) return { ...staff, fromCookie: true };
+  return { ...GUEST_SESSION, fromCookie: token !== null };
 }
 
 /** Set the staff session cookie on a response (or clear it when staff is null). */

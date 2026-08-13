@@ -311,6 +311,66 @@ describe("floor scoping on write procedures", () => {
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 
+  it("guest staff session blocks writes even when an OAuth admin is signed in", async () => {
+    mockResolve.mockResolvedValue({
+      accountId: 0,
+      username: "guest",
+      displayName: "Guest",
+      role: "guest" as const,
+      assignedFloorId: null,
+      fromCookie: true,
+    });
+    // An owner signed in with Manus OAuth (admin-level user) who is also in
+    // Guest mode must NOT be able to write — the guest staff session wins.
+    const ctx: TrpcContext = {
+      ...makeCtx(),
+      user: {
+        ...makeCtx().user!,
+        role: "admin",
+        name: "Owner",
+        email: "owner@clinic.example",
+      },
+    } as TrpcContext;
+    await expect(
+      caller(ctx).sessions.assign({
+        machineId: 3,
+        patientId: "P-1",
+        durationMinutes: 180,
+        isolationTag: "clean",
+      })
+    ).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+    expect(machineDb.assignSession).not.toHaveBeenCalled();
+  });
+
+  it("visitor without any staff cookie may write when signed in via OAuth", async () => {
+    // No staff cookie at all (fromCookie false): not guest mode, so the
+    // OAuth user keeps full access through staffOrAdminProcedure.
+    mockResolve.mockResolvedValue({
+      accountId: 0,
+      username: "guest",
+      displayName: "Guest",
+      role: "guest" as const,
+      assignedFloorId: null,
+      fromCookie: false,
+    });
+    const ctx: TrpcContext = {
+      ...makeCtx(),
+      user: {
+        ...makeCtx().user!,
+        role: "admin",
+        name: "Owner",
+        email: "owner@clinic.example",
+      },
+    } as TrpcContext;
+    await caller(ctx).sessions.assign({
+      machineId: 3,
+      patientId: "P-1",
+      durationMinutes: 180,
+      isolationTag: "clean",
+    });
+    expect(machineDb.assignSession).toHaveBeenCalled();
+  });
+
   it("guest cannot perform write procedures", async () => {
     mockResolve.mockResolvedValue({
       accountId: 0,

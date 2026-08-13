@@ -132,3 +132,9 @@
 - [x] Verify no add-patient/add-machine/admit-to-vacant/end-session/urgent-toggle/tag/edit buttons render for guest on Home, FloorBoard, Urgent, Rooms (code audit: canWrite/isStaff gates everywhere; Rooms page stays viewable but all write controls hidden)
 - [x] Fixed ERR_HTTP_HEADERS_SENT crash in setStaffSessionCookie (headersSent guard) that was killing the dev server
 - [x] Screenshot guest session end-to-end (/report blocked, /floor/30001 clean grid with "Viewing as guest"), 73 tests passing, tsc clean, checkpoint, deliver
+
+## Guest buttons still visible (user report)
+- [x] Root cause: guest staff cookie did not override the OAuth admin session — `canWrite = isAuthenticated || role != "guest"` let a signed-in owner in Guest mode see every write control
+- [x] Master fix in Home, Rooms, Urgent, WaitingListPanel (row Admit/Priority/Remove), FloorMachineRow: guest staff role forces canWrite/isStaff false regardless of OAuth login
+- [x] Waiting-row action buttons hidden entirely for guests instead of merely disabled
+- [x] Verified clean guest view on /floor/30001, /urgent, /rooms (sign-in prompts only, no action icons on tiles); 73 tests passing, tsc clean, checkpoint, deliver

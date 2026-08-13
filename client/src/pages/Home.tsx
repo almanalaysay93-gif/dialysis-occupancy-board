@@ -141,7 +141,11 @@ export function OccupancyBoard({ floorId }: { floorId?: number }) {
   // Write permissions: OAuth admin/staff OR nurse/supervisor staff session.
   // Guests (staff role "guest" without OAuth login) are read-only.
   const [, navigate] = useLocation();
-  const canWrite = isAuthenticated || Boolean(staffMe?.role && staffMe.role !== "guest");
+  // A guest staff session locks out writing even when an OAuth user is signed in.
+  const canWrite =
+    staffMe?.role === "guest"
+      ? false
+      : isAuthenticated || Boolean(staffMe?.role);
 
   // Waiting list scope: only show on a scoped (per-floor) board page
   const waitingFloorId = floorId !== undefined ? floorId : undefined;

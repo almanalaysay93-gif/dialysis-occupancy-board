@@ -72,8 +72,11 @@ export default function WaitingListPanel({ floorId }: { floorId: number }) {
     refetchInterval: 30_000,
   });
   // Write permissions: OAuth admin/staff OR nurse/supervisor staff session.
-  // Guests (staff role "guest" without OAuth login) are read-only.
-  const canWrite = isAuthenticated || Boolean(staffMe?.role && staffMe.role !== "guest");
+  // A guest staff session locks out writing even when an OAuth user is signed in.
+  const canWrite =
+    staffMe?.role === "guest"
+      ? false
+      : isAuthenticated || Boolean(staffMe?.role);
 
   const [admitDraft, setAdmitDraft] = useState<AdmitDraft | null>(null);
   const [admitNurse, setAdmitNurse] = useState("");
@@ -476,7 +479,7 @@ export default function WaitingListPanel({ floorId }: { floorId: number }) {
                 setAdmitDraft={setAdmitDraft}
                 isAdmitDisabled={isAdmitDisabled}
                 admitDisabledReason={admitDisabledReason}
-                isAuthenticated={canWrite}
+                canWrite={canWrite}
               />
             ))}
             {tiers.urgent.map(entry => (
@@ -490,7 +493,7 @@ export default function WaitingListPanel({ floorId }: { floorId: number }) {
                 setAdmitDraft={setAdmitDraft}
                 isAdmitDisabled={isAdmitDisabled}
                 admitDisabledReason={admitDisabledReason}
-                isAuthenticated={canWrite}
+                canWrite={canWrite}
               />
             ))}
             {tiers.normal.map(entry => (
@@ -504,7 +507,7 @@ export default function WaitingListPanel({ floorId }: { floorId: number }) {
                 setAdmitDraft={setAdmitDraft}
                 isAdmitDisabled={isAdmitDisabled}
                 admitDisabledReason={admitDisabledReason}
-                isAuthenticated={canWrite}
+                canWrite={canWrite}
               />
             ))}
           </>
@@ -523,7 +526,7 @@ type RowProps = {
   setAdmitDraft: React.Dispatch<React.SetStateAction<AdmitDraft | null>>;
   isAdmitDisabled: boolean;
   admitDisabledReason: string | null;
-  isAuthenticated: boolean;
+  canWrite: boolean;
 };
 
 function WaitingRow({
@@ -535,7 +538,7 @@ function WaitingRow({
   setAdmitDraft,
   isAdmitDisabled,
   admitDisabledReason,
-  isAuthenticated,
+  canWrite,
 }: RowProps) {
   const isVeryUrgent = tier === "veryUrgent";
   const isUrgent = tier === "urgent";
@@ -597,10 +600,12 @@ function WaitingRow({
           {isVeryUrgent && <Siren className="mr-1 inline h-3 w-3" />}
           {priorityLabel[entry.priority]}
         </span>
-        <Button
+        {!canWrite ? null : (
+          <>
+          <Button
           size="sm"
           variant="outline"
-          disabled={!isAuthenticated || isAdmitDisabled || admitDraft !== null}
+          disabled={isAdmitDisabled || admitDraft !== null}
           title={admitDisabledReason ?? undefined}
           onClick={() =>
             setAdmitDraft({
@@ -660,7 +665,7 @@ function WaitingRow({
         <Button
           size="sm"
           variant="outline"
-          disabled={!isAuthenticated || removeEntry.isPending}
+          disabled={!canWrite || removeEntry.isPending}
           onClick={() =>
             removeEntry.mutate({ entryId: entry.id, floorId: entry.floorId })
           }
@@ -668,6 +673,8 @@ function WaitingRow({
         >
           Remove
         </Button>
+          </>
+        )}
       </div>
     </div>
   );

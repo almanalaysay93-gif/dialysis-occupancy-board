@@ -53,9 +53,15 @@ export const adminProcedure = t.procedure.use(
 export const staffOrAdminProcedure = t.procedure.use(
   t.middleware(async opts => {
     const { ctx, next } = opts;
-    const staff: StaffSession = await resolveStaffSession(ctx.req);
+        const staff: StaffSession = await resolveStaffSession(ctx.req);
     const oauthUser = ctx.user;
-
+    // A guest staff session (opted in via the staff guest mode, i.e. a guest
+    // cookie) locks out all writing even when an OAuth user is also signed in
+    // — the UI enforces the same rule. A request with no staff cookie at all
+    // is not "guest mode" and OAuth users keep access.
+    if (staff.role === "guest" && staff.fromCookie) {
+      throw new TRPCError({ code: "UNAUTHORIZED", message: UNAUTHED_ERR_MSG });
+    }
     // OAuth admin/user users (e.g. the owner's Google login) keep full access.
     if (oauthUser) {
       return next({

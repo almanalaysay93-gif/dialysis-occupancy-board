@@ -66,7 +66,8 @@ export function FloorMachineChip({
     refetchInterval: 30_000,
   });
   // Staff actions: OAuth session OR nurse/supervisor staff session (guest read-only).
-  const isStaff = !!user || Boolean(staffMe?.role && staffMe.role !== "guest");
+  const isStaff =
+    staffMe?.role === "guest" ? false : !!user || Boolean(staffMe?.role);
   const occupied = row.session !== null;
   const urgent = row.session?.urgent ?? false;
   const countdownMs = useCountdown(row.session?.endsAt ?? null);
