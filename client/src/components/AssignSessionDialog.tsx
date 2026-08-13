@@ -47,6 +47,7 @@ export default function AssignSessionDialog({
   const [urgent, setUrgent] = useState(false);
   const [editLabelOpen, setEditLabelOpen] = useState(false);
   const [displayLabel, setDisplayLabel] = useState("");
+  const [nurse, setNurse] = useState("");
 
 
   const assign = trpc.sessions.assign.useMutation({
@@ -60,6 +61,7 @@ export default function AssignSessionDialog({
       });
       setPatientId("");
       setUrgent(false);
+      setNurse("");
       void utils.machines.list.invalidate();
       onAssigned();
     },
@@ -87,6 +89,7 @@ export default function AssignSessionDialog({
       isolationTag: tag,
       urgent,
       displayLabel: displayLabel.trim() || null,
+      assignedNurse: nurse.trim() || null,
     });
   };
 
@@ -260,6 +263,20 @@ export default function AssignSessionDialog({
                 and 24 hours.
               </p>
             )}
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <Label className="smallcaps-detail text-[#556680]" htmlFor="nurse-input">
+              Nurse — optional
+            </Label>
+            <Input
+              id="nurse-input"
+              value={nurse}
+              onChange={e => setNurse(e.target.value)}
+              maxLength={64}
+              placeholder="e.g. Nurse Ana"
+              className="h-10 border-[#D4DFE5] bg-[#F4F7F8] text-sm"
+            />
           </div>
 
           <div className="flex flex-col gap-2">

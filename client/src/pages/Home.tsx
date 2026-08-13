@@ -4,6 +4,7 @@ import EndSessionDialog from "@/components/EndSessionDialog";
 import { FloorRow } from "@/components/FloorMachineRow";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
+import NurseAssignmentsPanel from "@/components/NurseAssignmentsPanel";
 import WaitingListPanel from "@/components/WaitingListPanel";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -307,6 +308,10 @@ export function OccupancyBoard({ floorId }: { floorId?: number }) {
         {/* Per-board waiting list (visible on each floor's board) */}
         {waitingFloorId !== undefined && (
           <WaitingListPanel floorId={waitingFloorId} />
+        )}
+        {/* Per-floor nurse patient assignments roster */}
+        {waitingFloorId !== undefined && (
+          <NurseAssignmentsPanel floorId={waitingFloorId} />
         )}
 
         {/* Footer controls for authenticated staff */}

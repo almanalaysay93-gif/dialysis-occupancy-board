@@ -1,0 +1,1 @@
+ALTER TABLE `sessions` ADD `assignedNurse` varchar(64);

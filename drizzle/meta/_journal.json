@@ -36,6 +36,13 @@
       "when": 1786582495477,
       "tag": "0004_right_goblin_queen",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "5",
+      "when": 1786593798885,
+      "tag": "0005_clumsy_boomerang",
+      "breakpoints": true
     }
   ]
 }

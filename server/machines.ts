@@ -15,6 +15,7 @@ export type MachineWithSession = {
     urgent: boolean;
     startedBy: string | null;
     displayLabel: string | null;
+    assignedNurse: string | null;
   } | null;
 };
 
@@ -48,6 +49,7 @@ export async function listMachines(): Promise<MachineWithSession[]> {
         urgent: s.urgent,
         startedBy: s.startedBy,
         displayLabel: s.displayLabel,
+        assignedNurse: s.assignedNurse,
       };
     })(),
   }));
@@ -61,6 +63,7 @@ export async function assignSession(input: {
   urgent: boolean;
   startedBy: string;
   displayLabel?: string | null;
+  assignedNurse?: string | null;
 }) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
@@ -90,6 +93,7 @@ export async function assignSession(input: {
       urgent: input.urgent,
       startedBy: input.startedBy,
       displayLabel: input.displayLabel ? input.displayLabel.trim() || null : null,
+      assignedNurse: input.assignedNurse ? input.assignedNurse.trim() || null : null,
     })
     .$returningId();
 
@@ -456,6 +460,8 @@ export async function admitWaiting(input: {
   isolationTag: "clean" | "dirty";
   urgent: boolean;
   startedBy: string;
+  displayLabel?: string | null;
+  assignedNurse?: string | null;
 }) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
@@ -501,10 +507,76 @@ export async function admitWaiting(input: {
     isolationTag: input.isolationTag,
     urgent: input.urgent || entry[0].priority === "veryUrgent",
     startedBy: input.startedBy,
+    displayLabel: input.displayLabel ? input.displayLabel.trim() || null : null,
+    assignedNurse: input.assignedNurse ? input.assignedNurse.trim() || null : null,
   });
 
   await db
     .update(waitingList)
     .set({ status: "admitted", admittedAt: now })
     .where(eq(waitingList.id, input.entryId));
+}
+
+/**
+ * Active sessions on a floor with nurse assignment info, for the floor's
+ * "Nurse Patient Assignments" list. Nurses with multiple patients appear once
+ * per patient row; rows with no nurse are grouped under the label "Unassigned".
+ */
+export type NurseAssignmentRow = {
+  nurse: string;
+  machineId: number;
+  machineLabel: string;
+  patientId: string;
+  displayLabel: string | null;
+  endsAt: Date;
+  durationMinutes: number;
+  startedAt: Date;
+  urgent: boolean;
+  isolationTag: "clean" | "dirty";
+};
+
+export async function listNurseAssignments(input: { floorId: number }): Promise<NurseAssignmentRow[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  const rows = await db
+    .select({
+      sessionId: sessions.id,
+      machineId: sessions.machineId,
+      patientId: sessions.patientId,
+      durationMinutes: sessions.durationMinutes,
+      startedAt: sessions.startedAt,
+      endsAt: sessions.endsAt,
+      urgent: sessions.urgent,
+      isolationTag: sessions.isolationTag,
+      displayLabel: sessions.displayLabel,
+      assignedNurse: sessions.assignedNurse,
+    })
+    .from(sessions)
+    .innerJoin(machines, eq(sessions.machineId, machines.id))
+    .where(and(eq(sessions.status, "active"), eq(machines.floorId, input.floorId)));
+
+  const machineLabels = await db.select({ id: machines.id, label: machines.label }).from(machines);
+  const labelById = new Map<number, string>();
+  for (const m of machineLabels) labelById.set(m.id, m.label);
+
+  const UNASSIGNED = "Unassigned";
+  return rows
+    .map(r => ({
+      nurse: r.assignedNurse ? r.assignedNurse.trim() || UNASSIGNED : UNASSIGNED,
+      machineId: r.machineId,
+      machineLabel: labelById.get(r.machineId) ?? `M${r.machineId}`,
+      patientId: r.patientId,
+      displayLabel: r.displayLabel,
+      endsAt: r.endsAt,
+      durationMinutes: r.durationMinutes,
+      startedAt: r.startedAt,
+      urgent: r.urgent,
+      isolationTag: r.isolationTag,
+    }))
+    .sort((a, b) => {
+      const nurseOrder = a.nurse === UNASSIGNED ? 1 : b.nurse === UNASSIGNED ? -1 : a.nurse.localeCompare(b.nurse);
+      if (nurseOrder !== 0) return nurseOrder;
+      return a.endsAt.getTime() - b.endsAt.getTime();
+    });
 }

@@ -102,3 +102,10 @@
 - [x] FloorMachineRow: occupied chip shows displayLabel (truncated 14 chars) with machine number as a small sub-label when set; "Edit highlighted title" in dropdown opens RenameSessionLabelDialog
 - [x] RenameSessionLabelDialog: standalone dialog for editing the session title from the chip dropdown
 - [x] Tests: 4 new displayLabel tests (persist/trim, clear null/blank, reject >64 chars, assign stores label); 56 tests passing, tsc clean; screenshot verified tile shows BED 4 — P-4821 label correctly
+
+## Per-floor Nurse Patient Assignments list (user request)
+- [x] Schema: assignedNurse varchar(64) column added to sessions; migration 0005 applied
+- [x] Backend: assignedNurse accepted in sessions.assign + waiting.admit + WaitingListPanel admit; listMachines returns it; waiting.nurseAssignments(floorId) publicProcedure (listNurseAssignments joins sessions+machines, nurses grouped, "Unassigned" group last)
+- [x] AssignSessionDialog: optional "Nurse — optional" input, persisted on assign, cleared on success
+- [x] NurseAssignmentsPanel: per-floor section on each board listing nurses with patient/machine and live remaining time (green >15m, amber ≤15m, crimson overdue); 5s poll + 30s local countdown; screenshot verified with seeded data
+- [x] Tests: 5 new (2 assignedNurse in sessions.test.ts, 3 nurseAssignments in waiting.test.ts); 61 tests passing, tsc clean; checkpoint saved and auto-published

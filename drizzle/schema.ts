@@ -80,6 +80,8 @@ export const sessions = mysqlTable("sessions", {
   urgent: boolean("urgent").notNull().default(false),
   /** Optional staff-set display alias shown on the machine tile instead of the patient id. */
   displayLabel: varchar("displayLabel", { length: 64 }),
+  /** Nurse assigned to this patient during the session, shown in the floor's nurse roster. */
+  assignedNurse: varchar("assignedNurse", { length: 64 }),
   status: mysqlEnum("status", ["active", "ended"]).notNull().default("active"),
   endedAt: timestamp("endedAt"),
   endedBy: text("endedBy"),

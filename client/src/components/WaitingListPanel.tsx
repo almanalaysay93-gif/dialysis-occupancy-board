@@ -67,6 +67,7 @@ export default function WaitingListPanel({ floorId }: { floorId: number }) {
   const { isAuthenticated, user } = useAuth();
 
   const [admitDraft, setAdmitDraft] = useState<AdmitDraft | null>(null);
+  const [admitNurse, setAdmitNurse] = useState("");
 
   const effectiveDurationMinutes = admitDraft
     ? draftEffectiveMinutes(admitDraft)
@@ -274,6 +275,7 @@ export default function WaitingListPanel({ floorId }: { floorId: number }) {
                 durationMinutes: minutes,
                 isolationTag: admitDraft.isolationTag,
                 urgent: admitDraft.urgent,
+                assignedNurse: admitNurse.trim() || null,
               });
             }}
             className="mt-3 flex flex-wrap items-end gap-3"
@@ -382,6 +384,16 @@ export default function WaitingListPanel({ floorId }: { floorId: number }) {
                   </span>
                 </div>
               )}
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <span className="smallcaps-detail text-[#7684A0]">Nurse (optional)</span>
+              <input
+                value={admitNurse}
+                onChange={e => setAdmitNurse(e.target.value)}
+                maxLength={64}
+                placeholder="e.g. Nurse Ana"
+                className="h-9 w-40 rounded-sm border border-[#D4DFE5] bg-[#F4F7F8] px-3 text-sm text-[#1F2A52] outline-none transition-colors focus:border-[#2E9A9B] focus:bg-[#FBFCFD]"
+              />
             </div>
             <div className="flex flex-col gap-1.5">
               <span className="smallcaps-detail text-[#7684A0]">Isolation tag</span>

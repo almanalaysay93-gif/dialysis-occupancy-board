@@ -21,6 +21,7 @@ vi.mock("./machines", () => ({
   markWaitingUrgent: vi.fn(async () => undefined),
   countVacantMachines: vi.fn(async () => 3),
   admitWaiting: vi.fn(async () => undefined),
+  listNurseAssignments: vi.fn(async () => []),
 }));
 import * as machineDb from "./machines";
 
@@ -449,5 +450,52 @@ describe("waiting.urgentRegister", () => {
 
     expect(result.urgentSessions).toHaveLength(1);
     expect(result.urgentSessions[0]?.floorName).toBeNull();
+  });
+});
+
+describe("waiting.nurseAssignments", () => {
+  it("delegates to listNurseAssignments for the requested floor", async () => {
+    const rows = [
+      {
+        nurse: "Nurse Ana",
+        machineId: 1,
+        machineLabel: "HD-001",
+        patientId: "P-1",
+        displayLabel: null,
+        endsAt: new Date(Date.now() + 60 * 60_000),
+        durationMinutes: 180,
+        startedAt: new Date(),
+        urgent: false,
+        isolationTag: "clean" as const,
+      },
+    ];
+    vi.mocked(machineDb.listNurseAssignments).mockResolvedValueOnce(rows);
+
+    const caller = appRouter.createCaller(createStaffContext().ctx);
+    const result = await caller.waiting.nurseAssignments({ floorId: 30001 });
+    expect(result).toHaveLength(1);
+    expect(result[0]?.nurse).toBe("Nurse Ana");
+    expect(machineDb.listNurseAssignments).toHaveBeenCalledWith({ floorId: 30001 });
+  });
+
+  it("returns an empty roster when no sessions are active on the floor", async () => {
+    vi.mocked(machineDb.listNurseAssignments).mockResolvedValueOnce([]);
+
+    const caller = appRouter.createCaller(createStaffContext().ctx);
+    const result = await caller.waiting.nurseAssignments({ floorId: 30002 });
+    expect(result).toHaveLength(0);
+  });
+
+  it("is a public procedure callable without authentication", async () => {
+    const unauthenticatedCtx: TrpcContext = {
+      user: null,
+      req: { protocol: "https", headers: {} } as TrpcContext["req"],
+      res: {} as TrpcContext["res"],
+    };
+    vi.mocked(machineDb.listNurseAssignments).mockResolvedValueOnce([]);
+
+    const caller = appRouter.createCaller(unauthenticatedCtx);
+    const result = await caller.waiting.nurseAssignments({ floorId: 30003 });
+    expect(result).toHaveLength(0);
   });
 });

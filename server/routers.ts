@@ -195,6 +195,8 @@ export const appRouter = router({
           urgent: z.boolean().default(false),
           /** Optional staff-set alias shown on the machine tile instead of the patient id. */
           displayLabel: z.string().trim().max(64).nullable().default(null),
+          /** Nurse responsible for this patient during the session, shown in the floor nurse roster. */
+          assignedNurse: z.string().trim().max(64).nullable().default(null),
         })
         .superRefine((data, ctxx) => {
           if (data.durationMinutes === null && (data.customMinutes === null || data.customMinutes < 15)) {
@@ -414,6 +416,8 @@ export const appRouter = router({
           durationMinutes: z.number().int().min(15).max(1440),
           isolationTag: isolationTagSchema,
           urgent: z.boolean().default(false),
+          displayLabel: z.string().trim().max(64).nullable().default(null),
+          assignedNurse: z.string().trim().max(64).nullable().default(null),
         })
       )
       .mutation(async ({ ctx, input }) => {
@@ -427,6 +431,8 @@ export const appRouter = router({
             isolationTag: input.isolationTag,
             urgent: input.urgent,
             startedBy: ctx.user.name ?? ctx.user.email ?? "staff",
+            displayLabel: input.displayLabel,
+            assignedNurse: input.assignedNurse,
           });
           return { success: true, patientId: patient?.patientId ?? "" } as const;
         } catch (error) {
@@ -439,6 +445,13 @@ export const appRouter = router({
           }
           throw error;
         }
+      }),
+
+    /** Active sessions on a floor grouped for the "Nurse Patient Assignments" list. */
+    nurseAssignments: publicProcedure
+      .input(z.object({ floorId: z.number().int().positive() }))
+      .query(async ({ input }) => {
+        return machineDb.listNurseAssignments({ floorId: input.floorId });
       }),
   }),
 });

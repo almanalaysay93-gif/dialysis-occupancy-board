@@ -267,6 +267,44 @@ describe("sessions.updateLabel (editable highlighted title)", () => {
     const vals = ((insertChain.values as ReturnType<typeof vi.fn>).mock.calls[0][0]) as Record<string, unknown>;
     expect(vals.displayLabel).toBe("Alias 1");
   });
+
+  it("assign stores an optional nurse and trims whitespace", async () => {
+    const db = mockDbWith([]);
+    (getDb as ReturnType<typeof vi.fn>).mockResolvedValue(db);
+
+    const caller = appRouter.createCaller(createAuthContext());
+    await caller.sessions.assign({
+      machineId: 2,
+      patientId: "P-103",
+      durationMinutes: "180",
+      isolationTag: "clean",
+      urgent: false,
+      assignedNurse: "  Nurse Ana  ",
+    });
+
+    const insertChain = (db.insert as ReturnType<typeof vi.fn>).mock.results[0].value as Record<string, unknown>;
+    const vals = ((insertChain.values as ReturnType<typeof vi.fn>).mock.calls[0][0]) as Record<string, unknown>;
+    expect(vals.assignedNurse).toBe("Nurse Ana");
+  });
+
+  it("assign clears the nurse when blank", async () => {
+    const db = mockDbWith([]);
+    (getDb as ReturnType<typeof vi.fn>).mockResolvedValue(db);
+
+    const caller = appRouter.createCaller(createAuthContext());
+    await caller.sessions.assign({
+      machineId: 2,
+      patientId: "P-103",
+      durationMinutes: "180",
+      isolationTag: "clean",
+      urgent: false,
+      assignedNurse: "   ",
+    });
+
+    const insertChain = (db.insert as ReturnType<typeof vi.fn>).mock.results[0].value as Record<string, unknown>;
+    const vals = ((insertChain.values as ReturnType<typeof vi.fn>).mock.calls[0][0]) as Record<string, unknown>;
+    expect(vals.assignedNurse).toBeNull();
+  });
 });
 
 describe("input validation", () => {
