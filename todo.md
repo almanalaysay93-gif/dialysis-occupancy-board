@@ -82,3 +82,9 @@
 - [x] Waiting List admit draft form: add "Custom" duration option with hours/minutes inputs (15 min – 24 h)
 - [x] Verify form state, wire custom minutes into waiting.admit mutation (draftEffectiveMinutes helper, disabled submit on invalid range)
 - [x] Test (tsc + 45 vitest passing), screenshots verified, checkpoint saved and auto-published
+
+## Cross-board urgent aggregation (new request)
+- [x] Backend: waiting.urgentRegister publicProcedure + machines.listWaitingAll() helper (urgent-flagged active sessions per floor + very-urgent waiting patients, with floor name and board link)
+- [x] Urgent Cases page: all boards' urgent sessions grouped by board (SKTI Main / RDU Annex / RDU Main) with links + very-urgent waiting patients with pulsing cards and Remove action
+- [x] Vitest coverage: 3 urgentRegister tests (multi-floor aggregation, very-urgent waiting filter, null floorId); 51 tests passing, tsc clean
+- [x] Checkpoint saved and auto-published (live site verify requires staff sign-in; DB transiently unavailable during screenshot seeding)

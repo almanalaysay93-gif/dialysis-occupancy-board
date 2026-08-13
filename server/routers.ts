@@ -260,6 +260,57 @@ export const appRouter = router({
     list: publicProcedure
       .input(z.object({ floorId: z.number().int().positive() }))
       .query(({ input }) => machineDb.listWaiting({ floorId: input.floorId })),
+    /**
+     * Cross-board urgent register: urgent-flagged active sessions from every
+     * floor plus very-urgent patients still waiting anywhere. Public so all
+     * staff devices see the same consolidated register.
+     */
+    urgentRegister: publicProcedure.query(async () => {
+      const [sessions, waiting, floors] = await Promise.all([
+        machineDb.listMachines(),
+        machineDb.listWaitingAll(),
+        machineDb.listFloors(),
+      ]);
+
+      const floorNames = new Map<number, string>(
+        floors.map(f => [f.id, f.name]),
+      );
+
+      const urgentSessions = sessions
+        .filter(r => r.session?.urgent)
+        .map(r => {
+          const s = r.session!;
+          return {
+            kind: "session" as const,
+            machineId: r.machine.id,
+            sessionId: s.id,
+            machineLabel: r.machine.label,
+            location: r.machine.location,
+            floorId: r.machine.floorId,
+            floorName: r.machine.floorId ? (floorNames.get(r.machine.floorId) ?? null) : null,
+            patientId: s.patientId,
+            durationMinutes: s.durationMinutes,
+            endsAt: s.endsAt,
+            isolationTag: s.isolationTag,
+          };
+        })
+        .sort((a, b) => b.endsAt.getTime() - a.endsAt.getTime());
+
+      const veryUrgentWaiting = waiting
+        .filter((e: { priority: string }) => e.priority === "veryUrgent")
+        .map((e: { id: number; patientId: string; floorId: number; priority: string; joinedAt: Date }) => ({
+          kind: "waiting" as const,
+          waitingId: e.id,
+          patientId: e.patientId,
+          floorId: e.floorId,
+          floorName: floorNames.get(e.floorId) ?? null,
+          priority: e.priority,
+          joinedAt: e.joinedAt,
+        }))
+        .sort((a, b) => b.joinedAt.getTime() - a.joinedAt.getTime());
+
+      return { urgentSessions, veryUrgentWaiting };
+    }),
 
     /** Add a patient to the waiting list (staff only). */
     add: protectedProcedure

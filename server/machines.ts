@@ -312,6 +312,27 @@ export type WaitingEntryView = {
   joinedAt: Date;
 };
 
+/** Every still-waiting patient across all floors (for the cross-board urgent register). */
+export async function listWaitingAll(): Promise<WaitingEntryView[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  const rows = await db
+    .select()
+    .from(waitingList)
+    .where(eq(waitingList.status, "waiting"))
+    .orderBy(desc(waitingList.priority), waitingList.joinedAt, waitingList.id);
+
+  return rows.map(r => ({
+    id: r.id,
+    patientId: r.patientId,
+    floorId: r.floorId,
+    priority: r.priority,
+    addedBy: r.addedBy,
+    joinedAt: r.joinedAt,
+  }));
+}
+
 export async function listWaiting(input: { floorId: number }): Promise<WaitingEntryView[]> {
   const db = await getDb();
   if (!db) return [];

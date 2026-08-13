@@ -229,3 +229,7 @@
     box-shadow: 0 0 0 6px oklch(0.42 0.19 20 / 0);
   }
 }
+/* Urgent Cases page — very-urgent waiting card */
+.urgent-waiting {
+  animation: waitpulse 1.6s ease-in-out infinite;
+}

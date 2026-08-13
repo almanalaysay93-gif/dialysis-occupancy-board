@@ -15,6 +15,7 @@ vi.mock("./machines", () => ({
   toggleUrgent: vi.fn(async () => undefined),
   updateIsolationTag: vi.fn(async () => undefined),
   listWaiting: vi.fn(async () => []),
+  listWaitingAll: vi.fn(async () => []),
   addWaiting: vi.fn(async () => ({ id: 42 })),
   removeWaiting: vi.fn(async () => undefined),
   markWaitingUrgent: vi.fn(async () => undefined),
@@ -301,5 +302,136 @@ describe("waiting.admit", () => {
       })
     ).rejects.toThrow(TRPCError);
     expect(vi.mocked(machineDb.admitWaiting)).not.toHaveBeenCalled();
+  });
+});
+
+describe("waiting.urgentRegister", () => {
+  const floors = [
+    { id: 30001, code: "F1", name: "SKTI Main", sortOrder: 1 },
+    { id: 30002, code: "F2", name: "RDU Annex", sortOrder: 2 },
+  ];
+
+  function machineRow(opts: {
+    machineId: number;
+    label: string;
+    floorId: number | null;
+    urgent?: boolean;
+  }): {
+    machine: {
+      id: number;
+      label: string;
+      location: string;
+      floorId: number | null;
+      sortOrder: number;
+    };
+    session: {
+      id: number;
+      machineId: number;
+      patientId: string;
+      durationMinutes: number;
+      startedAt: Date;
+      endsAt: Date;
+      isolationTag: "clean" | "dirty";
+      urgent: boolean;
+      startedBy: string | null;
+    } | null;
+  } {
+    const now = new Date();
+    const endsAt = new Date(now.getTime() + 4 * 60 * 60 * 1000);
+    return {
+      machine: {
+        id: opts.machineId,
+        label: opts.label,
+        location: "Row 2 · Pos 5",
+        floorId: opts.floorId,
+        sortOrder: 1,
+      },
+      session: opts.urgent
+        ? {
+            id: opts.machineId * 10,
+            machineId: opts.machineId,
+            patientId: `P-${opts.machineId}`,
+            durationMinutes: 240,
+            startedAt: now,
+            endsAt,
+            isolationTag: "clean",
+            urgent: true,
+            startedBy: "staff",
+          }
+        : null,
+    };
+  }
+
+  it("aggregates urgent sessions from every board with floor names", async () => {
+    vi.mocked(machineDb.listFloors).mockResolvedValueOnce(floors);
+    vi.mocked(machineDb.listMachines).mockResolvedValueOnce([
+      machineRow({ machineId: 1, label: "HD-001", floorId: 30001, urgent: true }),
+      machineRow({ machineId: 2, label: "HD-002", floorId: 30002, urgent: true }),
+      machineRow({ machineId: 3, label: "HD-003", floorId: 30001, urgent: false }),
+    ]);
+    vi.mocked(machineDb.listWaitingAll).mockResolvedValueOnce([]);
+
+    const caller = appRouter.createCaller(createStaffContext().ctx);
+    const result = await caller.waiting.urgentRegister();
+
+    expect(result.urgentSessions).toHaveLength(2);
+    expect(result.urgentSessions.map(s => s.floorName)).toEqual([
+      "SKTI Main",
+      "RDU Annex",
+    ]);
+    expect(result.veryUrgentWaiting).toHaveLength(0);
+  });
+
+  it("includes very-urgent waiting patients from every board", async () => {
+    vi.mocked(machineDb.listFloors).mockResolvedValueOnce(floors);
+    vi.mocked(machineDb.listMachines).mockResolvedValueOnce([]);
+    vi.mocked(machineDb.listWaitingAll).mockResolvedValueOnce([
+      {
+        id: 9,
+        patientId: "P-9001",
+        floorId: 30001,
+        priority: "veryUrgent" as const,
+        addedBy: "staff",
+        joinedAt: new Date(),
+      },
+      {
+        id: 10,
+        patientId: "P-9002",
+        floorId: 30002,
+        priority: "normal" as const,
+        addedBy: null,
+        joinedAt: new Date(),
+      },
+      {
+        id: 11,
+        patientId: "P-9003",
+        floorId: 30001,
+        priority: "urgent" as const,
+        addedBy: null,
+        joinedAt: new Date(),
+      },
+    ]);
+
+    const caller = appRouter.createCaller(createStaffContext().ctx);
+    const result = await caller.waiting.urgentRegister();
+
+    expect(result.veryUrgentWaiting).toHaveLength(1);
+    expect(result.veryUrgentWaiting[0]?.patientId).toBe("P-9001");
+    expect(result.veryUrgentWaiting[0]?.floorName).toBe("SKTI Main");
+    expect(result.urgentSessions).toHaveLength(0);
+  });
+
+  it("handles machines without a floor gracefully", async () => {
+    vi.mocked(machineDb.listFloors).mockResolvedValueOnce([]);
+    vi.mocked(machineDb.listMachines).mockResolvedValueOnce([
+      machineRow({ machineId: 4, label: "HD-004", floorId: null, urgent: true }),
+    ]);
+    vi.mocked(machineDb.listWaitingAll).mockResolvedValueOnce([]);
+
+    const caller = appRouter.createCaller(createStaffContext().ctx);
+    const result = await caller.waiting.urgentRegister();
+
+    expect(result.urgentSessions).toHaveLength(1);
+    expect(result.urgentSessions[0]?.floorName).toBeNull();
   });
 });
