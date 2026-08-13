@@ -159,8 +159,9 @@ export function setStaffSessionCookie(
   staff: StaffSession | null
 ) {
   const cookieOptions = getSessionCookieOptions(req);
+  const headersSent = "headersSent" in res && res.headersSent;
   if (!staff || staff.role === "guest") {
-    res.cookie(STAFF_COOKIE_NAME, "", { ...cookieOptions, maxAge: -1 });
+    if (!headersSent) res.cookie(STAFF_COOKIE_NAME, "", { ...cookieOptions, maxAge: -1 });
     return;
   }
   if (staff.role !== "nurse" && staff.role !== "supervisor") return;
@@ -171,6 +172,9 @@ export function setStaffSessionCookie(
     role: staff.role,
     assignedFloorId: staff.assignedFloorId,
   }).then(token => {
+    // If the response headers have already been flushed, the cookie cannot
+    // be set for this request — guard against ERR_HTTP_HEADERS_SENT.
+    if ("headersSent" in res && res.headersSent) return;
     res.cookie(STAFF_COOKIE_NAME, token, {
       ...cookieOptions,
       maxAge: ONE_YEAR_MS,

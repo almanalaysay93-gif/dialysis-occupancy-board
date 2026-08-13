@@ -156,7 +156,7 @@ function DashboardLayoutContent({
   // Read-only viewers (guest, logged-out staff page) don't manage rooms.
   const visibleMenuItems =
     staffRole === "guest"
-      ? menuItems.filter(item => item.path !== "/rooms")
+      ? menuItems.filter(item => item.path !== "/rooms" && item.path !== "/report")
       : menuItems;
   const activeMenuItem = menuItems.find(item => item.path === location) ??
     floorBoardItems.find(item => location.startsWith("/floor/"));

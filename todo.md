@@ -125,3 +125,10 @@
 - [x] End of Day Report page (/report): date picker, per-board cards (supervisor) or single board (nurse/guest), priority breakdown, printable layout; /report route registered
 - [x] Vitest: 10 new staff-rbac tests (guest me, invalid/empty login, logout cookie clear, supervisor unscoped summary, nurse auto-scoped + FORBIDDEN on other floor, guest read report, nurse assign FORBIDDEN other-floor machine, guest write UNAUTHORIZED); 71 tests passing, tsc clean
 - [x] Screenshots verify login page, staff-gated board, report page; checkpoint, deliver
+
+## Guest hard view-only pass (follow-up request)
+- [x] canWrite must be false for role === "guest" (staffCanWrite returns true only for nurse/supervisor; Home/WaitingListPanel/Urgent/Rooms canWrite + FloorMachineRow isStaff all exclude guests)
+- [x] Hide End of Day Report nav item and block /report for guests (DashboardLayout filters /report; EndOfDayReport renders staff-only prompt for guests)
+- [x] Verify no add-patient/add-machine/admit-to-vacant/end-session/urgent-toggle/tag/edit buttons render for guest on Home, FloorBoard, Urgent, Rooms (code audit: canWrite/isStaff gates everywhere; Rooms page stays viewable but all write controls hidden)
+- [x] Fixed ERR_HTTP_HEADERS_SENT crash in setStaffSessionCookie (headersSent guard) that was killing the dev server
+- [x] Screenshot guest session end-to-end (/report blocked, /floor/30001 clean grid with "Viewing as guest"), 73 tests passing, tsc clean, checkpoint, deliver

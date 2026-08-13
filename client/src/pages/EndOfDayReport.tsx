@@ -104,6 +104,7 @@ export default function EndOfDayReport() {
   const utils = trpc.useUtils();
 
   const isMulti = staff?.role === "supervisor";
+  const isGuest = staff?.role === "guest";
   const isLoading = isMulti
     ? (floors ?? []).length === 0 || floors === undefined
     : singleQuery.isLoading;
@@ -119,7 +120,22 @@ export default function EndOfDayReport() {
 
   return (
     <DashboardLayout>
-      <div className="mx-auto w-full max-w-6xl px-6 py-8">
+      {isGuest ? (
+        <div className="mx-auto flex max-w-6xl flex-col items-center gap-3 border border-dashed border-[#D4DFE5] bg-[#F4F7F8] px-6 py-16 text-center">
+          <ClipboardList className="h-8 w-8 text-[#7684A0]" />
+          <p className="font-serif-light text-lg text-[#556680]">
+            End of Day reports are reserved for clinical staff.
+          </p>
+          <Link
+            href="/staff-login"
+            className="text-sm font-medium text-[#2E9A9B] underline underline-offset-4"
+          >
+            Sign in as staff to view reports
+          </Link>
+        </div>
+      ) : (
+        <>
+        <div className="mx-auto w-full max-w-6xl px-6 py-8">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.22em] text-[#7684A0]">
@@ -217,6 +233,8 @@ export default function EndOfDayReport() {
           </div>
         )}
       </div>
+        </>
+      )}
     </DashboardLayout>
   );
 }
