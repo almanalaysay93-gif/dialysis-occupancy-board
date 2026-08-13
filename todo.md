@@ -143,4 +143,6 @@
 - [x] Reproduce on live site: supervisor login succeeds but staff.me resolves Guest (fromCookie:false)
 - [x] Root cause: staff_session_id cookie not persisted on production — SameSite/Secure handling behind the proxy meant the cookie was never retained by the browser (direct fetch on live showed no Set-Cookie carried by a Secure attribute)
 - [x] Robust fix in server/_core/cookies.ts: secure=true forced for known production hosts (manus.space/manus.im) regardless of x-forwarded-proto, with sameSite none on production and lax fallback for plain-http dev previews
-- [ ] Verify supervisor identity renders on live site after login, tests pass, checkpoint, deliver
+- [x] Verified supervisor identity on live site after login, tests pass, checkpoint, deliver (root cause was async cookie race: JWT was set after headers flushed — fixed with awaitable setStaffSessionCookieSync; production raw-TLS probes confirm Secure Set-Cookie + staff.me fromCookie:true for supervisor and nurse; demo data cleanup pending)
+- [ ] Clean up demo data (DEMO SESSION on HD-001, DEMO-WAIT-001 waiting entry) after verification
+- [ ] Final delivery: update staff-credentials.md (confirm usernames/passwords), deliver report to user
