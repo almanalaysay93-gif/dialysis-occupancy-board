@@ -68,11 +68,14 @@ export default function DashboardLayout({
   const staff = staffMe.data ?? null;
   const staffRole = staff?.role ?? null;
 
-  if (loading) {
+  if (loading || staffMe.isLoading) {
     return <DashboardLayoutSkeleton />;
   }
 
-  if (!user) {
+  // A staff session (nurse / supervisor / guest) is a fully valid identity on
+  // its own — it must not be pushed to the Manus OAuth wall just because no
+  // OAuth account is signed in.
+  if (!user && !staff) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-8 p-8 max-w-md w-full">
