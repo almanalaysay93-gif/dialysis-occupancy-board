@@ -138,6 +138,7 @@ export const staffAccounts = mysqlTable("staff_accounts", {
   active: boolean("active").notNull().default(true),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn"),
+  tokenVersion: int("tokenVersion").default(1).notNull(),
 });
 
 export type StaffAccount = typeof staffAccounts.$inferSelect;

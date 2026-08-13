@@ -13,6 +13,7 @@ import {
   verifyPassword,
   staffAccessedFloors,
   staffCanWrite,
+  bumpTokenVersion,
   type StaffSession,
 } from "./staffAuth";
 import { staffAccounts } from "../drizzle/schema";
@@ -582,15 +583,28 @@ export const appRouter = router({
           throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid username or password." });
         }
         await db.update(staffAccounts).set({ lastSignedIn: new Date() }).where(eq(staffAccounts.id, account.id));
+        // Bump the token version so any previously issued token (another
+        // device, a leaked cookie) is revoked — one active session at a time.
+        await bumpTokenVersion(account.id);
+        const accountNow = await db
+          .select({ tokenVersion: staffAccounts.tokenVersion })
+          .from(staffAccounts)
+          .where(eq(staffAccounts.id, account.id))
+          .limit(1);
         // Await the JWT + cookie write before responding — the cookie must be
         // on the response headers before the tRPC response is flushed.
-        await setStaffSessionCookieSync(ctx.req, ctx.res, {
-          accountId: account.id,
-          username: account.username,
-          displayName: account.displayName,
-          role: account.role,
-          assignedFloorId: account.assignedFloorId,
-        });
+        await setStaffSessionCookieSync(
+          ctx.req,
+          ctx.res,
+          {
+            accountId: account.id,
+            username: account.username,
+            displayName: account.displayName,
+            role: account.role,
+            assignedFloorId: account.assignedFloorId,
+          },
+          accountNow[0]?.tokenVersion
+        );
         return {
           success: true,
           displayName: account.displayName,
@@ -598,8 +612,14 @@ export const appRouter = router({
           assignedFloorId: account.assignedFloorId,
         } as const;
       }),
-    logout: publicProcedure.mutation(({ ctx }) => {
-      setStaffSessionCookie(ctx.req, ctx.res, null);
+    logout: publicProcedure.mutation(async ({ ctx }) => {
+      // Resolve who is logging out before clearing the cookie so the stored
+      // tokenVersion can be bumped — revoking the current token.
+      const current = await resolveStaffSession(ctx.req);
+      if (current.role === "nurse" || current.role === "supervisor") {
+        await bumpTokenVersion(current.accountId);
+      }
+      await setStaffSessionCookieSync(ctx.req, ctx.res, null);
       return { success: true } as const;
     }),
   }),

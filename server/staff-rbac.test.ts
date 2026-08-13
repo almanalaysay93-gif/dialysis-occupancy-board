@@ -61,7 +61,13 @@ vi.mock("./db", async importOriginal => {
   };
 });
 import type { Db } from "./db";
-import { hashWithSalt } from "./staffAuth";
+import { hashWithSalt, verifyStaffSession } from "./staffAuth";
+
+async function resolveStaffSessionFor(token: string) {
+  const staff = await verifyStaffSession(token);
+  if (staff) return staff;
+  return { role: "guest", fromCookie: false } as const;
+}
 
 const { mockResolve } = vi.hoisted(() => ({ mockResolve: vi.fn() }));
 vi.mock("./staffAuth", async importOriginal => {
@@ -214,7 +220,72 @@ describe("staff authentication", () => {
     ).rejects.toThrow();
   });
 
-  it("logout clears the staff cookie and reports success", async () => {
+  it("login bumps the token version so old tokens are revoked", async () => {
+    const { hash, salt } = hashWithSalt("correct");
+    // Simulate the DB tracking the tokenVersion: every bump (login/logout)
+    // increments the version returned by subsequent reads.
+    let storedVersion = 1;
+    const db = {
+      select: vi.fn(() => ({
+        from: vi.fn(() => ({
+          where: vi.fn(() => ({
+            limit: vi.fn(async () =>
+              [
+                {
+                  id: 11,
+                  username: "nurse.sk",
+                  displayName: "SKTI Nurse",
+                  role: "nurse",
+                  assignedFloorId: 1,
+                  active: true,
+                  passwordHash: hash,
+                  passwordSalt: salt,
+                  tokenVersion: storedVersion,
+                  lastSignedIn: new Date(),
+                },
+              ] as never[]
+            ),
+          })),
+        })),
+      })),
+      update: vi.fn(() => ({
+        set: vi.fn(() => ({
+          where: vi.fn(async () => {
+            storedVersion += 1;
+            return undefined;
+          }) as never,
+        })),
+      })),
+    } as unknown as Db;
+    mockDb.mockResolvedValue(db);
+    // First login signs tokenVersion 1→2 into the cookie-bearing token.
+    const ctx = makeCtx();
+    const first = await caller(ctx).staff.login({ username: "nurse.sk", password: "correct" });
+    expect(first.success).toBe(true);
+    const tokenCall = (ctx.res.cookie as ReturnType<typeof vi.fn>).mock.calls.find(
+      c => c[0] === "staff_session_id" && c[1] !== ""
+    );
+    expect(tokenCall).toBeTruthy();
+    const firstToken = tokenCall![1] as string;
+    // A second login bumps to version 3 — the first token must stop working.
+    const ctx2 = makeCtx();
+    await caller(ctx2).staff.login({ username: "nurse.sk", password: "correct" });
+    const resolved = await resolveStaffSessionFor(firstToken);
+    expect(resolved.role).toBe("guest");
+  });
+
+  it("logout revokes the current token", async () => {
+    // bumpTokenVersion needs db.update().set().where() in the logout path.
+    mockDb.mockResolvedValue({
+      select: vi.fn(() => ({
+        from: vi.fn(() => ({
+          where: vi.fn(() => ({ limit: vi.fn(async () => [{ id: 1, tokenVersion: 1 }] as never[]) })),
+        })),
+      })),
+      update: vi.fn(() => ({
+        set: vi.fn(() => ({ where: vi.fn(async () => undefined) as never })),
+      })),
+    } as unknown as Db);
     const ctx = makeCtx();
     const result = await caller(ctx).staff.logout();
     expect(result.success).toBe(true);

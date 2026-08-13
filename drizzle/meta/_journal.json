@@ -50,6 +50,13 @@
       "when": 1786598051854,
       "tag": "0006_abnormal_gamora",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "5",
+      "when": 1786654487713,
+      "tag": "0007_wealthy_jubilee",
+      "breakpoints": true
     }
   ]
 }

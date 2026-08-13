@@ -68,6 +68,9 @@ interface StaffJwtPayload {
     role: StaffRole;
     assignedFloorId: number | null;
   };
+  /** Server-side revocation: logout bumps the account's tokenVersion, so
+   *  any previously issued token (carrying the old version) is rejected. */
+  tokenVersion: number;
   appId: string;
 }
 
@@ -80,7 +83,7 @@ export async function createStaffSessionToken(
     role: "nurse" | "supervisor";
     assignedFloorId: number | null;
   },
-  options: { expiresInMs?: number } = {}
+  options: { expiresInMs?: number; tokenVersion?: number } = {}
 ): Promise<string> {
   const issuedAt = Date.now();
   const expiresInMs = options.expiresInMs ?? ONE_YEAR_MS;
@@ -93,6 +96,7 @@ export async function createStaffSessionToken(
       role: staff.role,
       assignedFloorId: staff.assignedFloorId,
     },
+    tokenVersion: options.tokenVersion ?? 1,
     appId: ENV.appId,
   };
   return new SignJWT(payload)
@@ -111,6 +115,7 @@ export async function verifyStaffSession(
     });
     const rec = payload as Record<string, unknown>;
     const staff = rec.staff as Record<string, unknown> | undefined;
+    const tokenVersion = rec.tokenVersion;
     if (
       !staff ||
       typeof staff.accountId !== "number" ||
@@ -130,6 +135,11 @@ export async function verifyStaffSession(
       .limit(1);
     const account = rows[0];
     if (!account || !account.active) return null;
+    // Revocation gate: a logout (or a re-login on another device) bumps the
+    // stored tokenVersion; any token carrying an older version is stale.
+    if (typeof tokenVersion !== "number" || tokenVersion !== account.tokenVersion) {
+      return null;
+    }
     return {
       accountId: account.id,
       username: account.username,
@@ -188,6 +198,26 @@ export function setStaffSessionCookie(
 }
 
 /**
+ * Bump the account's tokenVersion so every previously issued token becomes
+ * stale. Called on login (defense in depth: single active session per
+ * account) and on logout (explicit revocation).
+ */
+export async function bumpTokenVersion(accountId: number): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  const rows = await db
+    .select({ tokenVersion: staffAccounts.tokenVersion })
+    .from(staffAccounts)
+    .where(eq(staffAccounts.id, accountId))
+    .limit(1);
+  const next = (rows[0]?.tokenVersion ?? 0) + 1;
+  await db
+    .update(staffAccounts)
+    .set({ tokenVersion: next })
+    .where(eq(staffAccounts.id, accountId));
+}
+
+/**
  * Synchronous (awaitable) variant: builds the JWT first, then sets the
  * cookie BEFORE the tRPC response is written. Use this inside mutation
  * handlers where the cookie must be present on the same response — the
@@ -196,7 +226,8 @@ export function setStaffSessionCookie(
 export async function setStaffSessionCookieSync(
   req: Request,
   res: { cookie: (name: string, value: string, opts?: Record<string, unknown>) => unknown },
-  staff: StaffSession | null
+  staff: StaffSession | null,
+  tokenVersion?: number
 ) {
   const cookieOptions = getSessionCookieOptions(req);
   if (!staff || staff.role === "guest") {
@@ -204,13 +235,16 @@ export async function setStaffSessionCookieSync(
     return;
   }
   if (staff.role !== "nurse" && staff.role !== "supervisor") return;
-  const token = await createStaffSessionToken({
-    accountId: staff.accountId,
-    username: staff.username,
-    displayName: staff.displayName,
-    role: staff.role,
-    assignedFloorId: staff.assignedFloorId,
-  });
+  const token = await createStaffSessionToken(
+    {
+      accountId: staff.accountId,
+      username: staff.username,
+      displayName: staff.displayName,
+      role: staff.role,
+      assignedFloorId: staff.assignedFloorId,
+    },
+    { tokenVersion }
+  );
   res.cookie(STAFF_COOKIE_NAME, token, {
     ...cookieOptions,
     maxAge: ONE_YEAR_MS,
