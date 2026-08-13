@@ -5,6 +5,7 @@ import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
 import { registerStorageProxy } from "./storageProxy";
+import { getSessionCookieOptions } from "./cookies";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
@@ -36,6 +37,14 @@ async function startServer() {
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   registerStorageProxy(app);
   registerOAuthRoutes(app);
+  // Temporary diagnostic: verifies whether Set-Cookie headers survive the
+  // production response path. Remove after verification.
+  app.post("/api/debug/cookie", (req, res) => {
+    const opts = { ...getSessionCookieOptions(req), maxAge: 3600, expires: new Date(Date.now() + 3600000) };
+    res.cookie("diag_test_cookie", "diag-ok-123", opts);
+    res.setHeader("x-diag-debug", "cookie-set-1");
+    res.json({ ok: true, options: opts });
+  });
   // tRPC API
   app.use(
     "/api/trpc",
