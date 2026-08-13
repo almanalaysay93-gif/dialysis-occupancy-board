@@ -245,6 +245,46 @@ describe("waiting.admit", () => {
     expect(vi.mocked(machineDb.admitWaiting)).not.toHaveBeenCalled();
   });
 
+  it("accepts custom durations that are not preset multiples (e.g. 4h15m = 255 min)", async () => {
+    vi.mocked(machineDb.admitWaiting).mockResolvedValueOnce(undefined);
+    const caller = appRouter.createCaller(createStaffContext().ctx);
+
+    await caller.waiting.admit({
+      entryId: 5,
+      floorId: 30001,
+      durationMinutes: 255,
+      isolationTag: "clean",
+      urgent: false,
+    });
+
+    expect(vi.mocked(machineDb.admitWaiting)).toHaveBeenCalledWith(
+      expect.objectContaining({ durationMinutes: 255 }),
+    );
+  });
+
+  it("accepts boundary custom durations (15 min and 24 h)", async () => {
+    vi.mocked(machineDb.admitWaiting).mockResolvedValue(undefined);
+    const caller = appRouter.createCaller(createStaffContext().ctx);
+
+    await caller.waiting.admit({ entryId: 5, floorId: 30001, durationMinutes: 15, isolationTag: "clean" });
+    await caller.waiting.admit({ entryId: 5, floorId: 30001, durationMinutes: 1440, isolationTag: "dirty" });
+
+    expect(vi.mocked(machineDb.admitWaiting)).toHaveBeenCalledTimes(2);
+  });
+
+  it("rejects durations above the 24 h cap (e.g. 25 h = 1500 min)", async () => {
+    const caller = appRouter.createCaller(createStaffContext().ctx);
+    await expect(
+      caller.waiting.admit({
+        entryId: 5,
+        floorId: 30001,
+        durationMinutes: 1500,
+        isolationTag: "clean",
+      }),
+    ).rejects.toThrow(TRPCError);
+    expect(vi.mocked(machineDb.admitWaiting)).not.toHaveBeenCalled();
+  });
+
   it("rejects anonymous users", async () => {
     const userlessCtx: TrpcContext = {
       user: null,

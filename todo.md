@@ -79,6 +79,6 @@
 - [x] Vitest coverage (14 waiting tests incl. admit/vacantCount, 45 passing total), screenshots verified with seeded patients, board delivered clean, checkpoint
 
 ## Admit custom duration (new request)
-- [ ] Waiting List admit draft form: add "Custom" duration option with hours/minutes inputs (15 min – 24 h)
-- [ ] Verify form state, wire custom minutes into waiting.admit mutation
-- [ ] Test, checkpoint, deliver
+- [x] Waiting List admit draft form: add "Custom" duration option with hours/minutes inputs (15 min – 24 h)
+- [x] Verify form state, wire custom minutes into waiting.admit mutation (draftEffectiveMinutes helper, disabled submit on invalid range)
+- [x] Test (tsc + 45 vitest passing), screenshots verified, checkpoint saved and auto-published
