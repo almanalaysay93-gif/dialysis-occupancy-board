@@ -24,7 +24,13 @@ import { eq } from "drizzle-orm";
  * member's assignment; supervisors and OAuth users pass freely.
  * Call at the top of each floor-scoped procedure body.
  */
-function requireFloorAccess(staff: StaffSession, floorId: number) {
+function requireFloorAccess(
+  staff: StaffSession,
+  floorId: number,
+  oauthUser?: { role: string } | null
+) {
+  // OAuth admin/users (the owner's Google login) keep full access to every floor.
+  if (oauthUser) return;
   const allowed = staffAccessedFloors(staff);
   if (allowed !== null && !allowed.includes(floorId)) {
     throw new TRPCError({ code: "FORBIDDEN", message: "You do not have access to this board" });
@@ -96,7 +102,7 @@ export const appRouter = router({
         })
       )
       .mutation(async ({ ctx, input }) => {
-        if (input.floorId !== null) requireFloorAccess(ctx.staff, input.floorId);
+        if (input.floorId !== null) requireFloorAccess(ctx.staff, input.floorId, ctx.user);
         try {
           const result = await machineDb.addMachine(input);
           return { success: true, machineId: result.id } as const;
@@ -114,8 +120,12 @@ export const appRouter = router({
     /** Remove a machine from the inventory (staff only). Vacant machines only. */
     remove: staffOrAdminProcedure
       .input(z.object({ machineId: z.number().int().positive() }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
         try {
+          // Floor-scope: nurses may only remove machines on their assigned floor;
+          // OAuth admin users (owner) keep full access.
+          const machine = await machineDb.getMachineById(input.machineId);
+          if (machine?.floorId) requireFloorAccess(ctx.staff, machine.floorId, ctx.user);
           await machineDb.removeMachine({ machineId: input.machineId });
           return { success: true } as const;
         } catch (error) {
@@ -134,10 +144,13 @@ export const appRouter = router({
     /** All rooms (floors) visible on the board. Public so every staff device sees them. */
     list: publicProcedure.query(() => machineDb.listFloors()),
 
-    /** Add a new room (staff only). */
+    /** Add a new room (supervisor/admin only — global resource, not floor-scoped). */
     add: staffOrAdminProcedure
       .input(z.object({ name: z.string().trim().min(1, "Room name is required").max(64) }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.user && ctx.staff.role !== "supervisor") {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Only the supervisor may manage rooms." });
+        }
         try {
           const result = await machineDb.addRoom(input);
           return { success: true, roomId: result.id } as const;
@@ -152,10 +165,13 @@ export const appRouter = router({
         }
       }),
 
-    /** Rename a room (staff only). */
+    /** Rename a room (supervisor/admin only — global resource, not floor-scoped). */
     rename: staffOrAdminProcedure
       .input(z.object({ roomId: z.number().int().positive(), name: z.string().trim().min(1, "Room name is required").max(64) }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.user && ctx.staff.role !== "supervisor") {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Only the supervisor may manage rooms." });
+        }
         try {
           await machineDb.renameRoom({ roomId: input.roomId, name: input.name });
           return { success: true } as const;
@@ -177,10 +193,13 @@ export const appRouter = router({
         }
       }),
 
-    /** Remove a room (staff only). Blocks if the room has machines or active sessions. */
+    /** Remove a room (supervisor/admin only — global resource, not floor-scoped). */
     remove: staffOrAdminProcedure
       .input(z.object({ roomId: z.number().int().positive() }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.user && ctx.staff.role !== "supervisor") {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Only the supervisor may manage rooms." });
+        }
         try {
           await machineDb.removeRoom({ roomId: input.roomId });
           return { success: true } as const;
@@ -238,7 +257,7 @@ export const appRouter = router({
         try {
           if (ctx.staff && ctx.staff.role === "nurse") {
             const machine = await machineDb.getMachineById(input.machineId);
-            if (machine?.floorId) requireFloorAccess(ctx.staff, machine.floorId);
+            if (machine?.floorId) requireFloorAccess(ctx.staff, machine.floorId, ctx.user);
           }
           const { customMinutes, ...rest } = input;
           const durationMinutes = rest.durationMinutes ?? (customMinutes as number);
@@ -261,7 +280,7 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         if (ctx.staff && ctx.staff.role === "nurse") {
           const floorId = await machineDb.getSessionFloorId(input.sessionId);
-          if (floorId) requireFloorAccess(ctx.staff, floorId);
+          if (floorId) requireFloorAccess(ctx.staff, floorId, ctx.user);
         }
         await machineDb.endSession({
           sessionId: input.sessionId,
@@ -275,7 +294,7 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         if (ctx.staff && ctx.staff.role === "nurse") {
           const floorId = await machineDb.getSessionFloorId(input.sessionId);
-          if (floorId) requireFloorAccess(ctx.staff, floorId);
+          if (floorId) requireFloorAccess(ctx.staff, floorId, ctx.user);
         }
         await machineDb.toggleUrgent({ sessionId: input.sessionId });
         return { success: true } as const;
@@ -291,7 +310,7 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         if (ctx.staff && ctx.staff.role === "nurse") {
           const floorId = await machineDb.getSessionFloorId(input.sessionId);
-          if (floorId) requireFloorAccess(ctx.staff, floorId);
+          if (floorId) requireFloorAccess(ctx.staff, floorId, ctx.user);
         }
         await machineDb.updateIsolationTag({
           sessionId: input.sessionId,
@@ -311,7 +330,7 @@ export const appRouter = router({
         try {
           if (ctx.staff && ctx.staff.role === "nurse") {
             const floorId = await machineDb.getSessionFloorId(input.sessionId);
-            if (floorId) requireFloorAccess(ctx.staff, floorId);
+            if (floorId) requireFloorAccess(ctx.staff, floorId, ctx.user);
           }
           await machineDb.updateDisplayLabel({
             sessionId: input.sessionId,
@@ -394,7 +413,7 @@ export const appRouter = router({
         })
       )
       .mutation(async ({ ctx, input }) => {
-        requireFloorAccess(ctx.staff, input.floorId);
+        requireFloorAccess(ctx.staff, input.floorId, ctx.user);
         try {
           const result = await machineDb.addWaiting({
             floorId: input.floorId,
@@ -424,7 +443,7 @@ export const appRouter = router({
         })
       )
       .mutation(async ({ ctx, input }) => {
-        requireFloorAccess(ctx.staff, input.floorId);
+        requireFloorAccess(ctx.staff, input.floorId, ctx.user);
         await machineDb.removeWaiting({ entryId: input.entryId, floorId: input.floorId });
         return { success: true } as const;
       }),
@@ -439,7 +458,7 @@ export const appRouter = router({
         })
       )
       .mutation(async ({ ctx, input }) => {
-        requireFloorAccess(ctx.staff, input.floorId);
+        requireFloorAccess(ctx.staff, input.floorId, ctx.user);
         await machineDb.markWaitingUrgent({
           entryId: input.entryId,
           floorId: input.floorId,
@@ -470,7 +489,7 @@ export const appRouter = router({
         })
       )
       .mutation(async ({ ctx, input }) => {
-        requireFloorAccess(ctx.staff, input.floorId);
+        requireFloorAccess(ctx.staff, input.floorId, ctx.user);
         const entry = await machineDb.listWaiting({ floorId: input.floorId });
         const patient = entry.find(e => e.id === input.entryId);
         try {
@@ -511,7 +530,7 @@ export const appRouter = router({
    * waiting-list adds of that day grouped by priority.
    */
   endOfDay: router({
-    summary: publicProcedure
+    summary: staffOrAdminProcedure
       .input(
         z.object({
           floorId: z.number().int().positive().optional(),
@@ -520,15 +539,16 @@ export const appRouter = router({
         }).optional()
       )
       .query(async ({ ctx, input }) => {
-        const staff = await resolveStaffSession(ctx.req);
-        // Read-only view: guests may still see the report (they can't write).
+        const staff = ctx.staff;
+        // Guests are blocked server-side (guest cookie → UNAUTHORIZED via the
+        // staffOrAdminProcedure middleware) — the report is staff-only.
         // Nurses see only their board; supervisors/OAuth users see all.
         let floorId: number | undefined = input?.floorId;
         if (floorId === undefined && staff.role === "nurse") {
           floorId = staff.assignedFloorId ?? undefined;
         }
         if (floorId !== undefined) {
-          requireFloorAccess(staff, floorId);
+          requireFloorAccess(staff, floorId, ctx.user);
         }
         return machineDb.endOfDayReport({ floorId, date: input?.date });
       }),

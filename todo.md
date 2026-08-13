@@ -144,5 +144,15 @@
 - [x] Root cause: staff_session_id cookie not persisted on production — SameSite/Secure handling behind the proxy meant the cookie was never retained by the browser (direct fetch on live showed no Set-Cookie carried by a Secure attribute)
 - [x] Robust fix in server/_core/cookies.ts: secure=true forced for known production hosts (manus.space/manus.im) regardless of x-forwarded-proto, with sameSite none on production and lax fallback for plain-http dev previews
 - [x] Verified supervisor identity on live site after login, tests pass, checkpoint, deliver (root cause was async cookie race: JWT was set after headers flushed — fixed with awaitable setStaffSessionCookieSync; production raw-TLS probes confirm Secure Set-Cookie + staff.me fromCookie:true for supervisor and nurse; demo data cleanup pending)
-- [ ] Clean up demo data (DEMO SESSION on HD-001, DEMO-WAIT-001 waiting entry) after verification
-- [ ] Final delivery: update staff-credentials.md (confirm usernames/passwords), deliver report to user
+- [x] Clean up demo data (DEMO SESSION on HD-001, DEMO-WAIT-001 waiting entry removed from production DB — verified 0 remaining)
+- [x] Final delivery: staff-credentials.md updated with confirmed logins and persistence note, final report delivered to user
+
+## User audit: every login entry must follow the rules (user request)
+- [ ] Audit code: staffAuth.ts + routers.ts RBAC guards for supervisor, nurse (each floor), guest
+- [ ] Live production verification: supervisor login + scoping + write gates
+- [ ] Live production verification: nurse.skti-main scoped to 30001 only (write FORBIDDEN on other floors)
+- [ ] Live production verification: nurse.rdu-annex scoped to 30002 only
+- [ ] Live production verification: nurse.rdu-main scoped to 30003 only
+- [ ] Live production verification: guest mode stays pure view-only (no report, no writes, no hidden APIs)
+- [ ] Fix any bugs found and publish
+- [ ] Deliver audit report

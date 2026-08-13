@@ -17,6 +17,7 @@ vi.mock("./machines", () => ({
   listMachines: vi.fn(async () => []),
   addRoom: vi.fn(async () => ({ id: 42 })),
   removeRoom: vi.fn(async () => undefined),
+  renameRoom: vi.fn(async () => undefined),
   addMachine: vi.fn(async () => ({ id: 7 })),
   removeMachine: vi.fn(async () => undefined),
   assignSession: vi.fn(async () => ({ id: 11 })),
@@ -232,7 +233,7 @@ describe("end of day report scoping", () => {
       role: "supervisor" as const,
       assignedFloorId: null,
     });
-    const ctx = makeCtx();
+    const ctx = { ...makeCtx(), user: null } as TrpcContext;
     const report = await caller(ctx).endOfDay.summary({});
     expect(report.reportDate).toBeTruthy();
     // Nurse floor scope should not have been applied.
@@ -264,23 +265,164 @@ describe("end of day report scoping", () => {
       role: "nurse" as const,
       assignedFloorId: 2,
     });
-    const ctx = makeCtx();
+    const ctx = { ...makeCtx(), user: null } as TrpcContext;
     await expect(
       caller(ctx).endOfDay.summary({ floorId: 1 })
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 
-  it("guest may read the report without write access", async () => {
+  it("guest cannot read the report (staff-only)", async () => {
     mockResolve.mockResolvedValue({
       accountId: 0,
       username: "guest",
       displayName: "Guest",
       role: "guest" as const,
       assignedFloorId: null,
+      fromCookie: true,
     });
     const ctx = makeCtx();
-    const report = await caller(ctx).endOfDay.summary({});
-    expect(report.reportDate).toBeTruthy();
+    await expect(caller(ctx).endOfDay.summary({})).rejects.toMatchObject({
+      code: "UNAUTHORIZED",
+    });
+    expect(machineDb.endOfDayReport).not.toHaveBeenCalled();
+  });
+});
+
+describe("room management scoping (supervisor-only)", () => {
+  it("nurse cannot add a room", async () => {
+    mockResolve.mockResolvedValue({
+      accountId: 7,
+      username: "nurse.rdu",
+      displayName: "RDU Nurse",
+      role: "nurse" as const,
+      assignedFloorId: 2,
+    });
+    const ctx = { ...makeCtx(), user: null } as TrpcContext;
+    await expect(
+      caller(ctx).rooms.add({ name: "New Room" })
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(machineDb.addRoom).not.toHaveBeenCalled();
+  });
+
+  it("nurse cannot rename a room", async () => {
+    mockResolve.mockResolvedValue({
+      accountId: 7,
+      username: "nurse.rdu",
+      displayName: "RDU Nurse",
+      role: "nurse" as const,
+      assignedFloorId: 2,
+    });
+    const ctx = { ...makeCtx(), user: null } as TrpcContext;
+    await expect(
+      caller(ctx).rooms.rename({ roomId: 1, name: "Renamed" })
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(machineDb.renameRoom).not.toHaveBeenCalled();
+  });
+
+  it("nurse cannot remove a room", async () => {
+    mockResolve.mockResolvedValue({
+      accountId: 7,
+      username: "nurse.rdu",
+      displayName: "RDU Nurse",
+      role: "nurse" as const,
+      assignedFloorId: 2,
+    });
+    const ctx = { ...makeCtx(), user: null } as TrpcContext;
+    await expect(
+      caller(ctx).rooms.remove({ roomId: 1 })
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(machineDb.removeRoom).not.toHaveBeenCalled();
+  });
+
+  it("supervisor may manage rooms", async () => {
+    mockResolve.mockResolvedValue({
+      accountId: 5,
+      username: "supervisor",
+      displayName: "SKTI Supervisor",
+      role: "supervisor" as const,
+      assignedFloorId: null,
+    });
+    const ctx = makeCtx();
+    const result = await caller(ctx).rooms.add({ name: "New Room" });
+    expect(result.success).toBe(true);
+  });
+
+  it("OAuth admin (owner) may manage rooms", async () => {
+    mockResolve.mockResolvedValue({
+      accountId: 0,
+      username: "guest",
+      displayName: "Guest",
+      role: "guest" as const,
+      assignedFloorId: null,
+      fromCookie: false,
+    });
+    const ctx: TrpcContext = {
+      ...makeCtx(),
+      user: { ...makeCtx().user!, role: "admin", name: "Owner" },
+    } as TrpcContext;
+    const result = await caller(ctx).rooms.add({ name: "Owner Room" });
+    expect(result.success).toBe(true);
+  });
+});
+
+describe("machine removal scoping", () => {
+  it("nurse cannot remove a machine on another floor", async () => {
+    mockResolve.mockResolvedValue({
+      accountId: 7,
+      username: "nurse.rdu",
+      displayName: "RDU Nurse",
+      role: "nurse" as const,
+      assignedFloorId: 2,
+    });
+    // HD-003 lives on floor 1; nurse is assigned to floor 2.
+    const ctx = { ...makeCtx(), user: null } as TrpcContext;
+    await expect(
+      caller(ctx).machines.remove({ machineId: 3 })
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(machineDb.removeMachine).not.toHaveBeenCalled();
+  });
+
+  it("nurse can remove a machine on their own floor", async () => {
+    mockResolve.mockResolvedValue({
+      accountId: 7,
+      username: "nurse.rdu",
+      displayName: "RDU Nurse",
+      role: "nurse" as const,
+      assignedFloorId: 1,
+    });
+    const ctx = { ...makeCtx(), user: null } as TrpcContext;
+    const result = await caller(ctx).machines.remove({ machineId: 3 });
+    expect(result.success).toBe(true);
+  });
+
+  it("OAuth admin (owner) can remove any machine", async () => {
+    mockResolve.mockResolvedValue({
+      accountId: 0,
+      username: "guest",
+      displayName: "Guest",
+      role: "guest" as const,
+      assignedFloorId: null,
+      fromCookie: false,
+    });
+    const ctx: TrpcContext = {
+      ...makeCtx(),
+      user: { ...makeCtx().user!, role: "admin", name: "Owner" },
+    } as TrpcContext;
+    const result = await caller(ctx).machines.remove({ machineId: 3 });
+    expect(result.success).toBe(true);
+  });
+
+  it("supervisor can remove any machine", async () => {
+    mockResolve.mockResolvedValue({
+      accountId: 5,
+      username: "supervisor",
+      displayName: "SKTI Supervisor",
+      role: "supervisor" as const,
+      assignedFloorId: null,
+    });
+    const ctx = makeCtx();
+    const result = await caller(ctx).machines.remove({ machineId: 3 });
+    expect(result.success).toBe(true);
   });
 });
 
@@ -300,7 +442,7 @@ describe("floor scoping on write procedures", () => {
     // floor 1 while the nurse is assigned to floor 2) and must reject the
     // write with FORBIDDEN — confirming the guard path runs before any
     // write happens.
-    const ctx = makeCtx();
+    const ctx = { ...makeCtx(), user: null } as TrpcContext;
     await expect(
       caller(ctx).sessions.assign({
         machineId: 3,
