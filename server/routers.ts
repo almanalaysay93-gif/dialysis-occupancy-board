@@ -9,6 +9,7 @@ import {
   hashWithSalt,
   resolveStaffSession,
   setStaffSessionCookie,
+  setStaffSessionCookieSync,
   verifyPassword,
   staffAccessedFloors,
   staffCanWrite,
@@ -561,7 +562,9 @@ export const appRouter = router({
           throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid username or password." });
         }
         await db.update(staffAccounts).set({ lastSignedIn: new Date() }).where(eq(staffAccounts.id, account.id));
-        setStaffSessionCookie(ctx.req, ctx.res, {
+        // Await the JWT + cookie write before responding — the cookie must be
+        // on the response headers before the tRPC response is flushed.
+        await setStaffSessionCookieSync(ctx.req, ctx.res, {
           accountId: account.id,
           username: account.username,
           displayName: account.displayName,

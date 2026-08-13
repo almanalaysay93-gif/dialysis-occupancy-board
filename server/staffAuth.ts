@@ -169,6 +169,7 @@ export function setStaffSessionCookie(
     return;
   }
   if (staff.role !== "nurse" && staff.role !== "supervisor") return;
+  if ("headersSent" in res && res.headersSent) return;
   void createStaffSessionToken({
     accountId: staff.accountId,
     username: staff.username,
@@ -183,6 +184,36 @@ export function setStaffSessionCookie(
       ...cookieOptions,
       maxAge: ONE_YEAR_MS,
     });
+  });
+}
+
+/**
+ * Synchronous (awaitable) variant: builds the JWT first, then sets the
+ * cookie BEFORE the tRPC response is written. Use this inside mutation
+ * handlers where the cookie must be present on the same response — the
+ * fire-and-forget variant above can race the header flush.
+ */
+export async function setStaffSessionCookieSync(
+  req: Request,
+  res: { cookie: (name: string, value: string, opts?: Record<string, unknown>) => unknown },
+  staff: StaffSession | null
+) {
+  const cookieOptions = getSessionCookieOptions(req);
+  if (!staff || staff.role === "guest") {
+    res.cookie(STAFF_COOKIE_NAME, "", { ...cookieOptions, maxAge: -1 });
+    return;
+  }
+  if (staff.role !== "nurse" && staff.role !== "supervisor") return;
+  const token = await createStaffSessionToken({
+    accountId: staff.accountId,
+    username: staff.username,
+    displayName: staff.displayName,
+    role: staff.role,
+    assignedFloorId: staff.assignedFloorId,
+  });
+  res.cookie(STAFF_COOKIE_NAME, token, {
+    ...cookieOptions,
+    maxAge: ONE_YEAR_MS,
   });
 }
 
