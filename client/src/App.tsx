@@ -8,6 +8,8 @@ import Home from "./pages/Home";
 import FloorBoard from "./pages/FloorBoard";
 import Rooms from "./pages/Rooms";
 import Urgent from "./pages/Urgent";
+import StaffLogin from "./pages/StaffLogin";
+import EndOfDayReport from "./pages/EndOfDayReport";
 
 function Router() {
   // make sure to consider if you need authentication for certain routes
@@ -16,6 +18,8 @@ function Router() {
       <Route path={"/"} component={Home} />
       <Route path={"/rooms"} component={Rooms} />
       <Route path={"/urgent"} component={Urgent} />
+      <Route path={"/staff-login"} component={StaffLogin} />
+      <Route path={"/report"} component={EndOfDayReport} />
       <Route path={"/floor/:id"} component={FloorBoard} />
       <Route path={"/404"} component={NotFound} />
       {/* Final fallback route */}

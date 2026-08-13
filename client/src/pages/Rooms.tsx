@@ -13,6 +13,12 @@ import { useMemo, useState } from "react";
 export default function Rooms() {
   const { isAuthenticated } = useAuth();
   const utils = trpc.useUtils();
+  const { data: staffMe } = trpc.staff.me.useQuery(undefined, {
+    retry: false,
+    refetchInterval: 30_000,
+  });
+  // Write permissions: OAuth admin/staff OR nurse/supervisor staff session.
+  const canWrite = isAuthenticated || Boolean(staffMe?.role && staffMe.role !== "guest");
   const { data: rooms, isLoading } = trpc.rooms.list.useQuery(undefined, {
     refetchInterval: 5_000,
   });
@@ -81,7 +87,7 @@ export default function Rooms() {
             </p>
           </div>
 
-          {isAuthenticated && (
+          {canWrite && (
             <Button
               onClick={() => setAddOpen(true)}
               className="bg-[#1F2A52] text-[#F4F7F8] hover:bg-[#151D3A]"
@@ -92,7 +98,7 @@ export default function Rooms() {
           )}
         </header>
 
-        {!isAuthenticated && (
+        {!canWrite && (
           <div className="mt-6 flex items-center justify-between border border-[#D4DFE5] bg-[#E8EFF1] px-5 py-4">
             <p className="text-sm text-[#556680]">
               Sign in as clinical staff to add or remove rooms.
@@ -118,7 +124,7 @@ export default function Rooms() {
               <p className="font-serif-light text-xl italic text-[#556680]">
                 No rooms have been defined yet.
               </p>
-              {isAuthenticated && (
+              {canWrite && (
                 <Button
                   variant="outline"
                   onClick={() => setAddOpen(true)}
@@ -181,7 +187,7 @@ export default function Rooms() {
                       </div>
                     )}
                   </div>
-                  {isAuthenticated && (
+                  {canWrite && (
                     <>
                     <Button
                       size="sm"

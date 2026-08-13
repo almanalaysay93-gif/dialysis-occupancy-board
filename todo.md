@@ -114,3 +114,14 @@
 - [x] Diagnose: root cause found — FloorBoard passed floorId=-1 to OccupancyBoard while the floors query was still loading, firing waiting.list/vacantCount/nurseAssignments with an invalid id that failed zod positive() validation ("Too small: expected number to be >0")
 - [x] Fix: FloorBoard now passes floor?.id (undefined while loading), so OccupancyBoard renders unscoped with its skeleton until the floor resolves
 - [x] Verify: tsc clean, 61 tests passing, screenshots of /floor/1-3 all render correctly; checkpoint saved and auto-published
+
+## Role-based access + End of Day report
+- [x] Schema: staff_accounts table (username, name, role: nurse|supervisor, assignedFloorId nullable, password hash, active flag); sessions already tracked for report data
+- [x] Backend: staff.login procedure (password hashed with SHA-256 + salt), staff.me, scoped procedures respecting role + assignedFloorId; supervisor skips scoping (staffOrAdminProcedure + requireFloorAccess in all write procedures incl. sessions.assign/end/toggleUrgent/updateTag/updateLabel via machine/session floor lookup)
+- [x] Backend: End of Day report aggregation (endOfDay.summary query + endOfDayReport()) — per board: machines utilized, patients catered, priority counts, isolation, waiting adds, treatment hours; nurse/guest see own board, supervisor sees all
+- [x] Frontend: StaffLogin page with Guest mode + username/password nurse/supervisor login; StaffBar mounted in Home masthead and board headers; canWrite gating replaces isAuthenticated across write controls
+- [x] Sidebar/navigation scoping: nurses see only their assigned board; supervisors see all; guests see all boards but Rooms hidden and write actions disabled
+- [x] Initial staff accounts seeded (supervisor + 3 floor nurses, floor ids 30001/30002/30003)
+- [x] End of Day Report page (/report): date picker, per-board cards (supervisor) or single board (nurse/guest), priority breakdown, printable layout; /report route registered
+- [x] Vitest: 10 new staff-rbac tests (guest me, invalid/empty login, logout cookie clear, supervisor unscoped summary, nurse auto-scoped + FORBIDDEN on other floor, guest read report, nurse assign FORBIDDEN other-floor machine, guest write UNAUTHORIZED); 71 tests passing, tsc clean
+- [x] Screenshots verify login page, staff-gated board, report page; checkpoint, deliver

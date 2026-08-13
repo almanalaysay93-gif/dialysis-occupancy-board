@@ -5,6 +5,7 @@ import { FloorRow } from "@/components/FloorMachineRow";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import NurseAssignmentsPanel from "@/components/NurseAssignmentsPanel";
+import StaffBar from "@/components/StaffBar";
 import WaitingListPanel from "@/components/WaitingListPanel";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -12,7 +13,7 @@ import { startLogin } from "@/const";
 import { trpc } from "@/lib/trpc";
 import { Activity, Plus } from "lucide-react";
 import { useMemo, useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import type { MachineWithSession } from "../../../server/machines";
 
 type FloorGroup = {
@@ -48,6 +49,10 @@ function WaitingCount({ floorId }: { floorId: number }) {
  */
 export function OccupancyBoard({ floorId }: { floorId?: number }) {
   const { isAuthenticated } = useAuth();
+  const { data: staffMe } = trpc.staff.me.useQuery(undefined, {
+    retry: false,
+    refetchInterval: 30_000,
+  });
   const { data, isLoading } = trpc.machines.list.useQuery(undefined, {
     // Cross-device real-time sync: re-sync board state every 5 seconds
     refetchInterval: 5_000,
@@ -133,6 +138,11 @@ export function OccupancyBoard({ floorId }: { floorId?: number }) {
     ? floors?.find(f => f.id === floorId)?.name
     : undefined;
 
+  // Write permissions: OAuth admin/staff OR nurse/supervisor staff session.
+  // Guests (staff role "guest" without OAuth login) are read-only.
+  const [, navigate] = useLocation();
+  const canWrite = isAuthenticated || Boolean(staffMe?.role && staffMe.role !== "guest");
+
   // Waiting list scope: only show on a scoped (per-floor) board page
   const waitingFloorId = floorId !== undefined ? floorId : undefined;
 
@@ -159,14 +169,17 @@ export function OccupancyBoard({ floorId }: { floorId?: number }) {
             <p className="smallcaps-detail text-[#7684A0]">
               SPMC Kidney & Transplant Institute · Live Board
             </p>
-            <p className="smallcaps-detail text-[#7684A0]">
-              {new Date().toLocaleDateString([], {
-                weekday: "long",
-                month: "long",
-                day: "numeric",
-                year: "numeric",
-              })}
-            </p>
+            <div className="flex items-center gap-3">
+              <StaffBar />
+              <p className="smallcaps-detail text-[#7684A0]">
+                {new Date().toLocaleDateString([], {
+                  weekday: "long",
+                  month: "long",
+                  day: "numeric",
+                  year: "numeric",
+                })}
+              </p>
+            </div>
           </div>
 
           <div className="flex flex-wrap items-end justify-between gap-6 pt-5">
@@ -248,7 +261,7 @@ export function OccupancyBoard({ floorId }: { floorId?: number }) {
         </div>
 
         {/* Auth gate for actions */}
-        {!isAuthenticated && (
+        {!canWrite && (
           <div className="mt-5 flex items-center justify-between border border-[#D4DFE5] bg-[#E8EFF1] px-4 py-3 sm:px-5">
             <div className="flex items-center gap-3">
               <Activity className="h-5 w-5 text-[#7684A0]" />
@@ -259,7 +272,7 @@ export function OccupancyBoard({ floorId }: { floorId?: number }) {
             </div>
             <Button
               size="sm"
-              onClick={() => startLogin()}
+              onClick={() => navigate("/staff-login")}
               className="bg-[#1F2A52] text-[#F4F7F8] hover:bg-[#151D3A]"
             >
               Sign in
@@ -281,7 +294,7 @@ export function OccupancyBoard({ floorId }: { floorId?: number }) {
               <p className="font-serif-light text-xl italic text-[#556680]">
                 No machines registered yet.
               </p>
-              {isAuthenticated && (
+              {canWrite && (
                 <Button
                   size="sm"
                   onClick={() => setAddOpen(true)}
@@ -315,7 +328,7 @@ export function OccupancyBoard({ floorId }: { floorId?: number }) {
         )}
 
         {/* Footer controls for authenticated staff */}
-        {isAuthenticated && !isLoading && (
+        {canWrite && !isLoading && (
           <div className="mt-6 flex items-center justify-between border-t border-[#D4DFE5] pt-4">
             <p className="font-serif-light italic text-[#556680]">
               {stats.vacant} machine{stats.vacant === 1 ? "" : "s"} vacant ·{" "}

@@ -116,3 +116,29 @@ export const waitingList = mysqlTable("waiting_list", {
 
 export type WaitingEntry = typeof waitingList.$inferSelect;
 export type InsertWaitingEntry = typeof waitingList.$inferInsert;
+
+/**
+ * Staff accounts for role-based access on the board:
+ *  - role "nurse": RDU nurse assigned to a single board (assignedFloorId)
+ *  - role "supervisor": SKTI Supervisor with access to all boards
+ * Guest users browse without a staff account (no session cookie).
+ * Local auth is independent of the Manus OAuth user table.
+ */
+export const staffAccounts = mysqlTable("staff_accounts", {
+  id: int("id").autoincrement().primaryKey(),
+  /** Login username, unique. */
+  username: varchar("username", { length: 64 }).notNull().unique(),
+  displayName: varchar("displayName", { length: 64 }).notNull(),
+  role: mysqlEnum("role", ["nurse", "supervisor"]).notNull(),
+  /** Board this nurse works on (NULL for supervisors). */
+  assignedFloorId: int("assignedFloorId"),
+  /** Hex-encoded SHA-256(password + salt) + salt stored alongside. */
+  passwordHash: varchar("passwordHash", { length: 128 }).notNull(),
+  passwordSalt: varchar("passwordSalt", { length: 32 }).notNull(),
+  active: boolean("active").notNull().default(true),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  lastSignedIn: timestamp("lastSignedIn"),
+});
+
+export type StaffAccount = typeof staffAccounts.$inferSelect;
+export type InsertStaffAccount = typeof staffAccounts.$inferInsert;

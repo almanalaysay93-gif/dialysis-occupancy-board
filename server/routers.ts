@@ -3,8 +3,32 @@ import { z } from "zod";
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
-import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
+import { protectedProcedure, publicProcedure, router, staffOrAdminProcedure } from "./_core/trpc";
 import * as machineDb from "./machines";
+import {
+  hashWithSalt,
+  resolveStaffSession,
+  setStaffSessionCookie,
+  verifyPassword,
+  staffAccessedFloors,
+  staffCanWrite,
+  type StaffSession,
+} from "./staffAuth";
+import { staffAccounts } from "../drizzle/schema";
+import { getDb } from "./db";
+import { eq } from "drizzle-orm";
+
+/**
+ * Floor scoping for nurses: rejects access to floors outside the staff
+ * member's assignment; supervisors and OAuth users pass freely.
+ * Call at the top of each floor-scoped procedure body.
+ */
+function requireFloorAccess(staff: StaffSession, floorId: number) {
+  const allowed = staffAccessedFloors(staff);
+  if (allowed !== null && !allowed.includes(floorId)) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "You do not have access to this board" });
+  }
+}
 
 /** Preset durations (minutes) for quick selection; "custom" passes user-supplied minutes. */
 const durationMinutesSchema = z
@@ -32,7 +56,7 @@ export const appRouter = router({
     list: publicProcedure.query(() => machineDb.listMachines()),
 
     /** Rename a machine (staff only). */
-    updateLabel: protectedProcedure
+    updateLabel: staffOrAdminProcedure
       .input(
         z.object({
           machineId: z.number().int().positive(),
@@ -62,7 +86,7 @@ export const appRouter = router({
     listFloors: publicProcedure.query(() => machineDb.listFloors()),
 
     /** Add a new machine to the inventory (staff only). */
-    add: protectedProcedure
+    add: staffOrAdminProcedure
       .input(
         z.object({
           label: z.string().trim().min(1, "Machine label is required").max(32),
@@ -70,7 +94,8 @@ export const appRouter = router({
           location: z.string().trim().max(64).default("—"),
         })
       )
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
+        if (input.floorId !== null) requireFloorAccess(ctx.staff, input.floorId);
         try {
           const result = await machineDb.addMachine(input);
           return { success: true, machineId: result.id } as const;
@@ -86,7 +111,7 @@ export const appRouter = router({
       }),
 
     /** Remove a machine from the inventory (staff only). Vacant machines only. */
-    remove: protectedProcedure
+    remove: staffOrAdminProcedure
       .input(z.object({ machineId: z.number().int().positive() }))
       .mutation(async ({ input }) => {
         try {
@@ -109,7 +134,7 @@ export const appRouter = router({
     list: publicProcedure.query(() => machineDb.listFloors()),
 
     /** Add a new room (staff only). */
-    add: protectedProcedure
+    add: staffOrAdminProcedure
       .input(z.object({ name: z.string().trim().min(1, "Room name is required").max(64) }))
       .mutation(async ({ input }) => {
         try {
@@ -127,7 +152,7 @@ export const appRouter = router({
       }),
 
     /** Rename a room (staff only). */
-    rename: protectedProcedure
+    rename: staffOrAdminProcedure
       .input(z.object({ roomId: z.number().int().positive(), name: z.string().trim().min(1, "Room name is required").max(64) }))
       .mutation(async ({ input }) => {
         try {
@@ -152,7 +177,7 @@ export const appRouter = router({
       }),
 
     /** Remove a room (staff only). Blocks if the room has machines or active sessions. */
-    remove: protectedProcedure
+    remove: staffOrAdminProcedure
       .input(z.object({ roomId: z.number().int().positive() }))
       .mutation(async ({ input }) => {
         try {
@@ -178,7 +203,7 @@ export const appRouter = router({
   }),
 
   sessions: router({
-    assign: protectedProcedure
+    assign: staffOrAdminProcedure
       .input(
         z.object({
           machineId: z.number().int().positive(),
@@ -210,12 +235,16 @@ export const appRouter = router({
       )
       .mutation(async ({ ctx, input }) => {
         try {
+          if (ctx.staff && ctx.staff.role === "nurse") {
+            const machine = await machineDb.getMachineById(input.machineId);
+            if (machine?.floorId) requireFloorAccess(ctx.staff, machine.floorId);
+          }
           const { customMinutes, ...rest } = input;
           const durationMinutes = rest.durationMinutes ?? (customMinutes as number);
           const result = await machineDb.assignSession({
             ...rest,
             durationMinutes,
-            startedBy: ctx.user.name ?? ctx.user.email ?? "staff",
+            startedBy: ctx.user?.name ?? ctx.user?.email ?? ctx.staff?.displayName ?? "staff",
           });
           return { success: true, sessionId: result.id };
         } catch (error) {
@@ -226,31 +255,43 @@ export const appRouter = router({
         }
       }),
 
-    end: protectedProcedure
+    end: staffOrAdminProcedure
       .input(z.object({ sessionId: z.number().int().positive() }))
       .mutation(async ({ ctx, input }) => {
+        if (ctx.staff && ctx.staff.role === "nurse") {
+          const floorId = await machineDb.getSessionFloorId(input.sessionId);
+          if (floorId) requireFloorAccess(ctx.staff, floorId);
+        }
         await machineDb.endSession({
           sessionId: input.sessionId,
-          endedBy: ctx.user.name ?? ctx.user.email ?? "staff",
+          endedBy: ctx.user?.name ?? ctx.user?.email ?? ctx.staff?.displayName ?? "staff",
         });
         return { success: true } as const;
       }),
 
-    toggleUrgent: protectedProcedure
+    toggleUrgent: staffOrAdminProcedure
       .input(z.object({ sessionId: z.number().int().positive() }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.staff && ctx.staff.role === "nurse") {
+          const floorId = await machineDb.getSessionFloorId(input.sessionId);
+          if (floorId) requireFloorAccess(ctx.staff, floorId);
+        }
         await machineDb.toggleUrgent({ sessionId: input.sessionId });
         return { success: true } as const;
       }),
 
-    updateTag: protectedProcedure
+    updateTag: staffOrAdminProcedure
       .input(
         z.object({
           sessionId: z.number().int().positive(),
           isolationTag: isolationTagSchema,
         })
       )
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.staff && ctx.staff.role === "nurse") {
+          const floorId = await machineDb.getSessionFloorId(input.sessionId);
+          if (floorId) requireFloorAccess(ctx.staff, floorId);
+        }
         await machineDb.updateIsolationTag({
           sessionId: input.sessionId,
           isolationTag: input.isolationTag,
@@ -258,15 +299,19 @@ export const appRouter = router({
         return { success: true } as const;
       }),
 
-    updateLabel: protectedProcedure
+    updateLabel: staffOrAdminProcedure
       .input(
         z.object({
           sessionId: z.number().int().positive(),
           displayLabel: z.string().trim().max(64).nullable(),
         })
       )
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
         try {
+          if (ctx.staff && ctx.staff.role === "nurse") {
+            const floorId = await machineDb.getSessionFloorId(input.sessionId);
+            if (floorId) requireFloorAccess(ctx.staff, floorId);
+          }
           await machineDb.updateDisplayLabel({
             sessionId: input.sessionId,
             displayLabel: input.displayLabel,
@@ -339,7 +384,7 @@ export const appRouter = router({
     }),
 
     /** Add a patient to the waiting list (staff only). */
-    add: protectedProcedure
+    add: staffOrAdminProcedure
       .input(
         z.object({
           floorId: z.number().int().positive(),
@@ -348,12 +393,13 @@ export const appRouter = router({
         })
       )
       .mutation(async ({ ctx, input }) => {
+        requireFloorAccess(ctx.staff, input.floorId);
         try {
           const result = await machineDb.addWaiting({
             floorId: input.floorId,
             patientId: input.patientId,
             priority: input.priority,
-            addedBy: ctx.user.name ?? ctx.user.email ?? "staff",
+            addedBy: ctx.user?.name ?? ctx.user?.email ?? ctx.staff?.displayName ?? "staff",
           });
           return { success: true, entryId: result.id } as const;
         } catch (error) {
@@ -369,20 +415,21 @@ export const appRouter = router({
       }),
 
     /** Remove a patient from the waiting list (staff only). */
-    remove: protectedProcedure
+    remove: staffOrAdminProcedure
       .input(
         z.object({
           entryId: z.number().int().positive(),
           floorId: z.number().int().positive(),
         })
       )
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
+        requireFloorAccess(ctx.staff, input.floorId);
         await machineDb.removeWaiting({ entryId: input.entryId, floorId: input.floorId });
         return { success: true } as const;
       }),
 
     /** Change a waiting patient's priority (staff only), e.g. escalate to very urgent. */
-    setPriority: protectedProcedure
+    setPriority: staffOrAdminProcedure
       .input(
         z.object({
           entryId: z.number().int().positive(),
@@ -390,7 +437,8 @@ export const appRouter = router({
           priority: waitingPrioritySchema,
         })
       )
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
+        requireFloorAccess(ctx.staff, input.floorId);
         await machineDb.markWaitingUrgent({
           entryId: input.entryId,
           floorId: input.floorId,
@@ -408,7 +456,7 @@ export const appRouter = router({
      * Admit a waiting patient onto the first vacant machine of the floor.
      * Starts the treatment session and marks the waiting entry as admitted.
      */
-    admit: protectedProcedure
+    admit: staffOrAdminProcedure
       .input(
         z.object({
           entryId: z.number().int().positive(),
@@ -421,6 +469,7 @@ export const appRouter = router({
         })
       )
       .mutation(async ({ ctx, input }) => {
+        requireFloorAccess(ctx.staff, input.floorId);
         const entry = await machineDb.listWaiting({ floorId: input.floorId });
         const patient = entry.find(e => e.id === input.entryId);
         try {
@@ -430,7 +479,7 @@ export const appRouter = router({
             durationMinutes: input.durationMinutes,
             isolationTag: input.isolationTag,
             urgent: input.urgent,
-            startedBy: ctx.user.name ?? ctx.user.email ?? "staff",
+            startedBy: ctx.user?.name ?? ctx.user?.email ?? ctx.staff?.displayName ?? "staff",
             displayLabel: input.displayLabel,
             assignedNurse: input.assignedNurse,
           });
@@ -453,6 +502,83 @@ export const appRouter = router({
       .query(async ({ input }) => {
         return machineDb.listNurseAssignments({ floorId: input.floorId });
       }),
+  }),
+
+  /**
+   * End of Day report: machines utilized, patients catered, priority and
+   * isolation breakdowns for completed sessions on the chosen day, plus the
+   * waiting-list adds of that day grouped by priority.
+   */
+  endOfDay: router({
+    summary: publicProcedure
+      .input(
+        z.object({
+          floorId: z.number().int().positive().optional(),
+          /** Report date in ISO format (YYYY-MM-DD); defaults to today in Asia/Manila time. */
+          date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+        }).optional()
+      )
+      .query(async ({ ctx, input }) => {
+        const staff = await resolveStaffSession(ctx.req);
+        // Read-only view: guests may still see the report (they can't write).
+        // Nurses see only their board; supervisors/OAuth users see all.
+        let floorId: number | undefined = input?.floorId;
+        if (floorId === undefined && staff.role === "nurse") {
+          floorId = staff.assignedFloorId ?? undefined;
+        }
+        if (floorId !== undefined) {
+          requireFloorAccess(staff, floorId);
+        }
+        return machineDb.endOfDayReport({ floorId, date: input?.date });
+      }),
+  }),
+
+  /**
+   * Local board staff authentication (RDU nurses + SKTI supervisor).
+   * Independent of the Manus OAuth login used by the owner/admin.
+   */
+  staff: router({
+    me: publicProcedure.query(async ({ ctx }) => {
+      return resolveStaffSession(ctx.req);
+    }),
+    login: publicProcedure
+      .input(
+        z.object({
+          username: z.string().trim().min(1).max(64),
+          password: z.string().min(1),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable." });
+        const rows = await db
+          .select()
+          .from(staffAccounts)
+          .where(eq(staffAccounts.username, input.username))
+          .limit(1);
+        const account = rows[0];
+        if (!account || !account.active || !verifyPassword(input.password, account.passwordSalt, account.passwordHash)) {
+          throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid username or password." });
+        }
+        await db.update(staffAccounts).set({ lastSignedIn: new Date() }).where(eq(staffAccounts.id, account.id));
+        setStaffSessionCookie(ctx.req, ctx.res, {
+          accountId: account.id,
+          username: account.username,
+          displayName: account.displayName,
+          role: account.role,
+          assignedFloorId: account.assignedFloorId,
+        });
+        return {
+          success: true,
+          displayName: account.displayName,
+          role: account.role,
+          assignedFloorId: account.assignedFloorId,
+        } as const;
+      }),
+    logout: publicProcedure.mutation(({ ctx }) => {
+      setStaffSessionCookie(ctx.req, ctx.res, null);
+      return { success: true } as const;
+    }),
   }),
 });
 

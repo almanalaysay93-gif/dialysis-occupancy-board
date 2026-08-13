@@ -11,6 +11,7 @@ import {
 import { trpc } from "@/lib/trpc";
 import { AlarmClock, ArrowRightCircle, Plus, Siren, UserPlus, Users } from "lucide-react";
 import { useMemo, useState } from "react";
+import { useLocation } from "wouter";
 import { toast } from "sonner";
 
 export type WaitingPriority = "normal" | "urgent" | "veryUrgent";
@@ -55,6 +56,7 @@ const priorityLabel: Record<WaitingPriority, string> = {
  * patients last (first-come order within each tier).
  */
 export default function WaitingListPanel({ floorId }: { floorId: number }) {
+  const [, navigate] = useLocation();
   const utils = trpc.useUtils();
   const { data: entries, isLoading } = trpc.waiting.list.useQuery(
     { floorId },
@@ -65,6 +67,13 @@ export default function WaitingListPanel({ floorId }: { floorId: number }) {
     { refetchInterval: 5_000 }
   );
   const { isAuthenticated, user } = useAuth();
+  const { data: staffMe } = trpc.staff.me.useQuery(undefined, {
+    retry: false,
+    refetchInterval: 30_000,
+  });
+  // Write permissions: OAuth admin/staff OR nurse/supervisor staff session.
+  // Guests (staff role "guest" without OAuth login) are read-only.
+  const canWrite = isAuthenticated || Boolean(staffMe?.role && staffMe.role !== "guest");
 
   const [admitDraft, setAdmitDraft] = useState<AdmitDraft | null>(null);
   const [admitNurse, setAdmitNurse] = useState("");
@@ -131,8 +140,8 @@ export default function WaitingListPanel({ floorId }: { floorId: number }) {
     return { veryUrgent, urgent, normal };
   }, [entries]);
 
-  const isAdmitDisabled = !isAuthenticated || (vacantCount ?? 0) <= 0;
-  const admitDisabledReason = isAuthenticated && (vacantCount ?? 0) <= 0
+  const isAdmitDisabled = !canWrite || (vacantCount ?? 0) <= 0;
+  const admitDisabledReason = canWrite && (vacantCount ?? 0) <= 0
     ? "Every machine on this floor is in treatment — no vacant machine to admit onto"
     : null;
 
@@ -150,7 +159,7 @@ export default function WaitingListPanel({ floorId }: { floorId: number }) {
             {total} patient{total === 1 ? "" : "s"}
           </span>
         </div>
-        {isAuthenticated ? (
+        {canWrite ? (
           <Button
             size="sm"
             onClick={() => setAddOpen(true)}
@@ -163,7 +172,7 @@ export default function WaitingListPanel({ floorId }: { floorId: number }) {
           <Button
             size="sm"
             variant="outline"
-            onClick={() => startLogin()}
+            onClick={() => navigate("/staff-login")}
             className="h-9 border-[#D4DFE5] text-[#1F2A52]"
           >
             Sign in to manage the list
@@ -467,7 +476,7 @@ export default function WaitingListPanel({ floorId }: { floorId: number }) {
                 setAdmitDraft={setAdmitDraft}
                 isAdmitDisabled={isAdmitDisabled}
                 admitDisabledReason={admitDisabledReason}
-                isAuthenticated={isAuthenticated}
+                isAuthenticated={canWrite}
               />
             ))}
             {tiers.urgent.map(entry => (
@@ -481,7 +490,7 @@ export default function WaitingListPanel({ floorId }: { floorId: number }) {
                 setAdmitDraft={setAdmitDraft}
                 isAdmitDisabled={isAdmitDisabled}
                 admitDisabledReason={admitDisabledReason}
-                isAuthenticated={isAuthenticated}
+                isAuthenticated={canWrite}
               />
             ))}
             {tiers.normal.map(entry => (
@@ -495,7 +504,7 @@ export default function WaitingListPanel({ floorId }: { floorId: number }) {
                 setAdmitDraft={setAdmitDraft}
                 isAdmitDisabled={isAdmitDisabled}
                 admitDisabledReason={admitDisabledReason}
-                isAuthenticated={isAuthenticated}
+                isAuthenticated={canWrite}
               />
             ))}
           </>

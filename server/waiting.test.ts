@@ -25,6 +25,21 @@ vi.mock("./machines", () => ({
 }));
 import * as machineDb from "./machines";
 
+vi.mock("./staffAuth", async importOriginal => {
+  const mod = await importOriginal<typeof import("./staffAuth")>();
+  return {
+    ...mod,
+    resolveStaffSession: vi.fn().mockResolvedValue({
+      accountId: 0,
+      username: "",
+      displayName: "",
+      role: "supervisor" as const,
+      assignedFloorId: null,
+    }),
+    staffAccessedFloors: vi.fn().mockReturnValue(null),
+  };
+});
+
 type AuthenticatedUser = NonNullable<TrpcContext["user"]>;
 
 function createStaffContext(): { ctx: TrpcContext; mocked: typeof machineDb } {
@@ -303,7 +318,15 @@ describe("waiting.admit", () => {
     expect(vi.mocked(machineDb.admitWaiting)).not.toHaveBeenCalled();
   });
 
-  it("rejects anonymous users", async () => {
+  it("rejects guest-only staff sessions", async () => {
+    const { resolveStaffSession } = await import("./staffAuth");
+    vi.mocked(resolveStaffSession).mockResolvedValueOnce({
+      accountId: 0,
+      username: "",
+      displayName: "Guest",
+      role: "guest" as never,
+      assignedFloorId: null,
+    });
     const userlessCtx: TrpcContext = {
       user: null,
       req: { protocol: "https", headers: {} } as TrpcContext["req"],

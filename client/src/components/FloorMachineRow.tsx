@@ -61,11 +61,16 @@ export function FloorMachineChip({
 }) {
   const { user } = useAuth();
   const utils = trpc.useUtils();
+  const { data: staffMe } = trpc.staff.me.useQuery(undefined, {
+    retry: false,
+    refetchInterval: 30_000,
+  });
+  // Staff actions: OAuth session OR nurse/supervisor staff session (guest read-only).
+  const isStaff = !!user || Boolean(staffMe?.role && staffMe.role !== "guest");
   const occupied = row.session !== null;
   const urgent = row.session?.urgent ?? false;
   const countdownMs = useCountdown(row.session?.endsAt ?? null);
   const totalMs = (row.session?.durationMinutes ?? 0) * 60 * 1000;
-  const isStaff = !!user;
   const done = countdownMs === 0;
   const [renameOpen, setRenameOpen] = useState(false);
   const [sessionLabelOpen, setSessionLabelOpen] = useState(false);

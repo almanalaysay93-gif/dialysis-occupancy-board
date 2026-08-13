@@ -153,6 +153,30 @@ export async function updateDisplayLabel(input: {
     .where(eq(sessions.id, input.sessionId));
 }
 
+export async function getSessionFloorId(sessionId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const rows = await db
+    .select({ machineId: sessions.machineId })
+    .from(sessions)
+    .where(eq(sessions.id, sessionId))
+    .limit(1);
+  if (!rows[0]) return undefined;
+  const machine = await getMachineById(rows[0].machineId);
+  return machine?.floorId ?? null;
+}
+
+export async function getMachineById(machineId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const rows = await db
+    .select()
+    .from(machines)
+    .where(eq(machines.id, machineId))
+    .limit(1);
+  return rows[0];
+}
+
 export async function listFloors() {
   const db = await getDb();
   if (!db) return [];
@@ -579,4 +603,164 @@ export async function listNurseAssignments(input: { floorId: number }): Promise<
       if (nurseOrder !== 0) return nurseOrder;
       return a.endsAt.getTime() - b.endsAt.getTime();
     });
+}
+
+// ---------------------------------------------------------------------------
+// End of Day report
+// ---------------------------------------------------------------------------
+
+export type EndOfDayReport = {
+  reportDate: string;
+  floorName: string | null;
+  totalMachinesOnFloor: number;
+  sessionsEnded: number;
+  machinesUtilized: { used: number; total: number };
+  patientsCatered: number;
+  urgency: { normal: number; urgent: number; veryUrgent: number };
+  isolation: { clean: number; dirty: number };
+  totalTreatmentHours: number;
+  waitingAdds: { normal: number; urgent: number; veryUrgent: number; total: number };
+  sessions: {
+    patientId: string;
+    machineLabel: string;
+    durationMinutes: number;
+    startedAt: Date;
+    endedAt: Date;
+    urgent: boolean;
+    isolationTag: string;
+    nurse: string | null;
+  }[];
+};
+
+/**
+ * End of Day report. `date` is ISO YYYY-MM-DD; when omitted, today in
+ * Asia/Manila time is used. Aggregates sessions ENDED within the day window:
+ * machines utilized, patients catered, urgency and isolation breakdowns.
+ */
+export async function endOfDayReport(opts?: {
+  floorId?: number;
+  date?: string;
+}): Promise<EndOfDayReport> {
+  const db = await getDb();
+  if (!db) return baseEmptyReport(opts?.floorId, opts?.date);
+
+  const reportDate = opts?.date ?? manilaToday();
+  const range = dayRangeUtc(reportDate);
+
+  const floorName = opts?.floorId ? await floorNameFor(db, opts.floorId) : null;
+
+  // Machines belonging to the selected floor (or all).
+  const floorMachines = await db
+    .select()
+    .from(machines)
+    .where(opts?.floorId ? eq(machines.floorId, opts.floorId) : undefined);
+  const totalMachinesOnFloor = floorMachines.length;
+  const floorMachineIds = new Set(floorMachines.map(m => m.id));
+  const machineLabels = new Map<number, string>(floorMachines.map(m => [m.id, m.label]));
+
+  // Sessions that ENDED during the report day (UTC window, +08:00 anchored).
+  const rows = await db
+    .select()
+    .from(sessions)
+    .where(
+      and(
+        eq(sessions.status, "ended"),
+        sql`${sessions.endedAt} >= ${range.from} AND ${sessions.endedAt} < ${range.to}`,
+      ),
+    );
+
+  const filtered = floorMachineIds.size > 0 ? rows.filter(r => floorMachineIds.has(r.machineId)) : rows;
+
+  const urgency = { normal: 0, urgent: 0, veryUrgent: 0 };
+  const isolation = { clean: 0, dirty: 0 };
+  const patients = new Set<string>();
+  const usedMachines = new Set<number>();
+  let totalMinutes = 0;
+
+  for (const s of filtered) {
+    if (s.urgent) urgency.urgent++;
+    else urgency.normal++;
+    if (s.isolationTag === "dirty") isolation.dirty++;
+    else isolation.clean++;
+    patients.add(s.patientId);
+    usedMachines.add(s.machineId);
+    totalMinutes += s.durationMinutes;
+  }
+
+  // Waiting-list additions during the same day, for the full picture.
+  const waitingRows = await db
+    .select()
+    .from(waitingList)
+    .where(
+      opts?.floorId
+        ? and(
+            eq(waitingList.floorId, opts.floorId),
+            sql`${waitingList.joinedAt} >= ${range.from} AND ${waitingList.joinedAt} < ${range.to}`,
+          )
+        : sql`${waitingList.joinedAt} >= ${range.from} AND ${waitingList.joinedAt} < ${range.to}`,
+    );
+  const waitingAdds = { normal: 0, urgent: 0, veryUrgent: 0, total: waitingRows.length };
+  for (const w of waitingRows) {
+    if (w.priority === "veryUrgent") waitingAdds.veryUrgent++;
+    else if (w.priority === "urgent") waitingAdds.urgent++;
+    else waitingAdds.normal++;
+  }
+
+  return {
+    reportDate,
+    floorName,
+    totalMachinesOnFloor,
+    sessionsEnded: filtered.length,
+    machinesUtilized: { used: usedMachines.size, total: totalMachinesOnFloor },
+    patientsCatered: patients.size,
+    urgency,
+    isolation,
+    totalTreatmentHours: Math.round((totalMinutes / 60) * 10) / 10,
+    waitingAdds,
+    sessions: filtered.map(s => ({
+      patientId: s.patientId,
+      machineLabel: machineLabels.get(s.machineId) ?? String(s.machineId),
+      durationMinutes: s.durationMinutes,
+      startedAt: s.startedAt,
+      endedAt: s.endedAt!,
+      urgent: s.urgent,
+      isolationTag: s.isolationTag,
+      nurse: s.assignedNurse,
+    })),
+  };
+}
+
+/** ISO date (YYYY-MM-DD) of today in Asia/Manila timezone. */
+function manilaToday(): string {
+  return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Manila" });
+}
+
+/** UTC day window (00:00–24:00) for an ISO date, anchored to +08:00. */
+function dayRangeUtc(isoDate: string): { from: Date; to: Date } {
+  const from = new Date(`${isoDate}T00:00:00.000+08:00`);
+  return { from, to: new Date(from.getTime() + 24 * 60 * 60 * 1000) };
+}
+
+/** Resolve a floor name by id, or null. */
+async function floorNameFor(db: Awaited<ReturnType<typeof getDb>>, floorId: number): Promise<string | null> {
+  if (!db) return null;
+  const rows = await db.select().from(floors).where(eq(floors.id, floorId)).limit(1);
+  return rows[0]?.name ?? null;
+}
+
+function baseEmptyReport(floorId?: number, date?: string): EndOfDayReport {
+  void floorId;
+  return {
+    reportDate: date ?? manilaToday(),
+    floorName: null,
+    totalMachinesOnFloor: 0,
+    sessionsEnded: 0,
+    machinesUtilized: { used: 0, total: 0 },
+    patientsCatered: 0,
+    urgency: { normal: 0, urgent: 0, veryUrgent: 0 },
+    isolation: { clean: 0, dirty: 0 },
+    totalTreatmentHours: 0,
+    waitingAdds: { normal: 0, urgent: 0, veryUrgent: 0, total: 0 },
+    sessions: [],
+  };
 }

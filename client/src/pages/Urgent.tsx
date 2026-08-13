@@ -57,6 +57,13 @@ function boardLink(floorId: number | null): string {
 export default function Urgent() {
   const { isAuthenticated } = useAuth();
   const utils = trpc.useUtils();
+  const { data: staffMe } = trpc.staff.me.useQuery(undefined, {
+    retry: false,
+    refetchInterval: 30_000,
+  });
+  // Write permissions: OAuth admin/staff OR nurse/supervisor staff session.
+  // Guests (staff role "guest" without OAuth login) are read-only.
+  const canWrite = isAuthenticated || Boolean(staffMe?.role && staffMe.role !== "guest");
 
   const { data, isLoading, error } = trpc.waiting.urgentRegister.useQuery(undefined, {
     refetchInterval: 5_000,
@@ -124,18 +131,28 @@ export default function Urgent() {
           </p>
         </header>
 
-        {!isAuthenticated && (
+        {!canWrite && (
           <div className="mt-6 flex items-center justify-between border border-[#D4DFE5] bg-[#E8EFF1] px-5 py-4">
             <p className="text-sm text-[#556680]">
               Sign in as clinical staff to manage urgent flags.
             </p>
-            <Button
-              size="sm"
-              onClick={() => startLogin()}
-              className="bg-[#1F2A52] text-[#F4F7F8] hover:bg-[#151D3A]"
-            >
-              Sign in
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-9 border-[#D4DFE5] text-[#1F2A52]"
+                asChild
+              >
+                <a href="/staff-login">Staff sign in</a>
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => startLogin()}
+                className="bg-[#1F2A52] text-[#F4F7F8] hover:bg-[#151D3A]"
+              >
+                Sign in
+              </Button>
+            </div>
           </div>
         )}
 
@@ -192,7 +209,7 @@ export default function Urgent() {
                           <UrgentSessionRow
                             key={session.sessionId}
                             session={session}
-                            isAuthenticated={isAuthenticated}
+                            isAuthenticated={canWrite}
                             onClearFlag={() =>
                               toggleUrgent.mutate({ sessionId: session.sessionId })
                             }
@@ -260,7 +277,7 @@ export default function Urgent() {
                             waiting
                           </span>
                         </div>
-                        {isAuthenticated && (
+                        {canWrite && (
                           <Button
                             size="sm"
                             variant="outline"

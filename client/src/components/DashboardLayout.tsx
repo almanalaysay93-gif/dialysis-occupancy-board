@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/sidebar";
 import { startLogin } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { Activity, BellRing, LogOut, PanelLeft, LayoutGrid, Layers } from "lucide-react";
+import { Activity, BellRing, ClipboardList, LogOut, PanelLeft, LayoutGrid, Layers } from "lucide-react";
 import { CSSProperties, useRef } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
@@ -32,6 +32,7 @@ const menuItems: { icon: typeof Activity; label: string; path: string }[] = [
   { icon: Activity, label: "Occupancy Board", path: "/" },
   { icon: BellRing, label: "Urgent Cases", path: "/urgent" },
   { icon: LayoutGrid, label: "Rooms", path: "/rooms" },
+  { icon: ClipboardList, label: "End of Day Report", path: "/report" },
 ];
 
 /** Per-floor board entries loaded from the floors table at runtime. */
@@ -56,6 +57,16 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const { loading, user } = useAuth();
+  const [, navigate] = useLocation();
+
+  // Staff session (nurse / supervisor / guest) is independent of the OAuth
+  // login used by the owner. The sidebar is scoped by the staff role.
+  const staffMe = trpc.staff.me.useQuery(undefined, {
+    retry: false,
+    staleTime: 15_000,
+  });
+  const staff = staffMe.data ?? null;
+  const staffRole = staff?.role ?? null;
 
   if (loading) {
     return <DashboardLayoutSkeleton />;
@@ -71,9 +82,17 @@ export default function DashboardLayout({
               alt="SPMC Kidney and Transplant Institute"
               className="h-28 w-28 rounded-full object-cover shadow-md"
             />
-            <p className="smallcaps-detail text-muted-foreground">
+              <p className="smallcaps-detail text-muted-foreground">
               Internal Clinical Staff Portal
             </p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full font-normal"
+              onClick={() => navigate("/staff-login")}
+            >
+              Board staff: Guest / Nurse / Supervisor sign in
+            </Button>
             <h1 className="font-display text-4xl tracking-tight text-foreground">
               Sign in to continue
             </h1>
@@ -102,22 +121,43 @@ export default function DashboardLayout({
         } as CSSProperties
       }
     >
-      <DashboardLayoutContent>{children}</DashboardLayoutContent>
+      <DashboardLayoutContent staff={staff} staffRole={staffRole}>{children}</DashboardLayoutContent>
     </SidebarProvider>
   );
 }
 
 function DashboardLayoutContent({
   children,
+  staff,
+  staffRole,
 }: {
+
   children: React.ReactNode;
+  staff: { role: string; displayName?: string; assignedFloorId?: number | null } | null;
+  staffRole: string | null;
 }) {
   const { user, logout } = useAuth();
+  const utils = trpc.useUtils();
   const [location, setLocation] = useLocation();
   const { state } = useSidebar();
   const isCollapsed = state === "collapsed";
   const sidebarRef = useRef<HTMLDivElement>(null);
-  const floorBoardItems = useFloorBoardItems();
+  const allFloorBoardItems = useFloorBoardItems();
+  const assignedFloor =
+    staff?.assignedFloorId
+      ? allFloorBoardItems.find(f => f.floorId === staff.assignedFloorId)
+      : undefined;
+  // Sidebar scoping by staff role: nurses see only their assigned floor,
+  // supervisors see every board, guests see every board (read-only).
+  const floorBoardItems =
+    staffRole === "nurse"
+      ?       allFloorBoardItems.filter(f => f.floorId === (staff?.assignedFloorId ?? null))
+      : allFloorBoardItems;
+  // Read-only viewers (guest, logged-out staff page) don't manage rooms.
+  const visibleMenuItems =
+    staffRole === "guest"
+      ? menuItems.filter(item => item.path !== "/rooms")
+      : menuItems;
   const activeMenuItem = menuItems.find(item => item.path === location) ??
     floorBoardItems.find(item => location.startsWith("/floor/"));
   const isMobile = useIsMobile();
@@ -164,7 +204,7 @@ function DashboardLayoutContent({
 
           <SidebarContent className="gap-0">
             <SidebarMenu className="px-2 py-1">
-              {menuItems.map(item => {
+              {visibleMenuItems.map(item => {
                 const isActive = location === item.path;
                 return (
                   <SidebarMenuItem key={item.path}>
@@ -216,19 +256,38 @@ function DashboardLayoutContent({
               </Avatar>
               <div className="flex-1 min-w-0 group-data-[collapsible=icon]:hidden">
                 <p className="text-[13px] font-medium truncate leading-none text-foreground">
-                  {user?.name || "Staff"}
+                  {staff?.displayName || user?.name || "Staff"}
                 </p>
                 <p className="text-[11px] text-muted-foreground truncate mt-1.5">
-                  Clinical Staff
+                  {staff?.role === "supervisor"
+                    ? "SKTI Supervisor"
+                    : staff?.role === "nurse"
+                      ? `Nurse · ${assignedFloor?.label ?? "assigned board"}`
+                      : staff?.role === "guest"
+                        ? "Guest · view only"
+                        : "Clinical Staff"}
                 </p>
               </div>
-              <button
-                onClick={logout}
-                aria-label="Sign out"
-                className="ml-auto text-muted-foreground hover:text-foreground transition-colors group-data-[collapsible=icon]:hidden"
-              >
-                <LogOut className="h-4 w-4" />
-              </button>
+              {staff ? (
+                <button
+                  onClick={() => {
+                    void utils.staff.me.invalidate();
+                    setLocation("/staff-login");
+                  }}
+                  aria-label="Sign out"
+                  className="ml-auto text-muted-foreground hover:text-foreground transition-colors group-data-[collapsible=icon]:hidden"
+                >
+                  <LogOut className="h-4 w-4" />
+                </button>
+              ) : (
+                <button
+                  onClick={logout}
+                  aria-label="Sign out"
+                  className="ml-auto text-muted-foreground hover:text-foreground transition-colors group-data-[collapsible=icon]:hidden"
+                >
+                  <LogOut className="h-4 w-4" />
+                </button>
+              )}
             </div>
           </SidebarFooter>
         </Sidebar>
