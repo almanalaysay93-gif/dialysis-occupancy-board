@@ -109,3 +109,8 @@
 - [x] AssignSessionDialog: optional "Nurse — optional" input, persisted on assign, cleared on success
 - [x] NurseAssignmentsPanel: per-floor section on each board listing nurses with patient/machine and live remaining time (green >15m, amber ≤15m, crimson overdue); 5s poll + 30s local countdown; screenshot verified with seeded data
 - [x] Tests: 5 new (2 assignedNurse in sessions.test.ts, 3 nurseAssignments in waiting.test.ts); 61 tests passing, tsc clean; checkpoint saved and auto-published
+
+## Bug: floorId must be > 0 error on /floor/30001 (user report)
+- [x] Diagnose: root cause found — FloorBoard passed floorId=-1 to OccupancyBoard while the floors query was still loading, firing waiting.list/vacantCount/nurseAssignments with an invalid id that failed zod positive() validation ("Too small: expected number to be >0")
+- [x] Fix: FloorBoard now passes floor?.id (undefined while loading), so OccupancyBoard renders unscoped with its skeleton until the floor resolves
+- [x] Verify: tsc clean, 61 tests passing, screenshots of /floor/1-3 all render correctly; checkpoint saved and auto-published

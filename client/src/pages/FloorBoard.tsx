@@ -25,5 +25,9 @@ export default function FloorBoard() {
 
   if (!floor && !isLoading) return <NotFound />;
 
-  return <OccupancyBoard floorId={floor ? floor.id : -1} />;
+  // While the floors list is still loading, floor is undefined. Render the
+  // board skeleton (via OccupancyBoard without a floor scope) instead of
+  // passing an invalid floor id, which would make the waiting-panel queries
+  // fail zod validation ("Too small: expected number to be >0").
+  return <OccupancyBoard floorId={floor?.id} />;
 }
