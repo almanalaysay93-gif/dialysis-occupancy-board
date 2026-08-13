@@ -44,12 +44,22 @@ export function getSessionCookieOptions(
   // secure=true when the host is a known production domain — this protects
   // against proxies that strip x-forwarded-proto on the live site.
   const host = (req.headers.host ?? "").toLowerCase();
-  const isKnownProductionHost = host.endsWith(".manus.space") || host.endsWith(".manus.im");
+  // Manus hosting (manus.space) is always HTTPS; proxies in front of it may
+  // strip or alter x-forwarded-proto, so derive trust from the host itself.
+  // Note: SameSite=None is only accepted when Secure=true; some edge proxies
+  // (e.g. Cloudflare) also strip Set-Cookie headers carrying
+  // SameSite=None without Secure — hence the host-based override.
+  const isKnownProductionHost =
+    host.endsWith(".manus.space") || host.endsWith(".manus.im");
   const isHttpsSite = isSecureRequest(req) || isKnownProductionHost;
+  // Local dev previews may run under plain http over a tunnel — keep lax
+  // there so the cookie survives without a Secure flag.
+  const secure = isHttpsSite;
+  const sameSite: "lax" | "none" = isKnownProductionHost || secure ? "none" : "lax";
   return {
     httpOnly: true,
     path: "/",
-    sameSite: "none",
-    secure: isHttpsSite,
+    sameSite,
+    secure,
   };
 }

@@ -138,3 +138,9 @@
 - [x] Master fix in Home, Rooms, Urgent, WaitingListPanel (row Admit/Priority/Remove), FloorMachineRow: guest staff role forces canWrite/isStaff false regardless of OAuth login
 - [x] Waiting-row action buttons hidden entirely for guests instead of merely disabled
 - [x] Verified clean guest view on /floor/30001, /urgent, /rooms (sign-in prompts only, no action icons on tiles); 73 tests passing, tsc clean, checkpoint, deliver
+
+## Supervisor login shows "Guest" on production (user report)
+- [x] Reproduce on live site: supervisor login succeeds but staff.me resolves Guest (fromCookie:false)
+- [x] Root cause: staff_session_id cookie not persisted on production — SameSite/Secure handling behind the proxy meant the cookie was never retained by the browser (direct fetch on live showed no Set-Cookie carried by a Secure attribute)
+- [x] Robust fix in server/_core/cookies.ts: secure=true forced for known production hosts (manus.space/manus.im) regardless of x-forwarded-proto, with sameSite none on production and lax fallback for plain-http dev previews
+- [ ] Verify supervisor identity renders on live site after login, tests pass, checkpoint, deliver
