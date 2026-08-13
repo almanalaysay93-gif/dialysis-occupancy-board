@@ -14,6 +14,7 @@ export type MachineWithSession = {
     isolationTag: "clean" | "dirty";
     urgent: boolean;
     startedBy: string | null;
+    displayLabel: string | null;
   } | null;
 };
 
@@ -46,6 +47,7 @@ export async function listMachines(): Promise<MachineWithSession[]> {
         isolationTag: s.isolationTag,
         urgent: s.urgent,
         startedBy: s.startedBy,
+        displayLabel: s.displayLabel,
       };
     })(),
   }));
@@ -58,6 +60,7 @@ export async function assignSession(input: {
   isolationTag: "clean" | "dirty";
   urgent: boolean;
   startedBy: string;
+  displayLabel?: string | null;
 }) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
@@ -86,6 +89,7 @@ export async function assignSession(input: {
       isolationTag: input.isolationTag,
       urgent: input.urgent,
       startedBy: input.startedBy,
+      displayLabel: input.displayLabel ? input.displayLabel.trim() || null : null,
     })
     .$returningId();
 
@@ -126,6 +130,22 @@ export async function updateIsolationTag(input: {
   await db
     .update(sessions)
     .set({ isolationTag: input.isolationTag })
+    .where(eq(sessions.id, input.sessionId));
+}
+
+export async function updateDisplayLabel(input: {
+  sessionId: number;
+  displayLabel: string | null;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const label = input.displayLabel ? input.displayLabel.trim() || null : null;
+  if (label !== null && label.length > 64) throw new Error("LABEL_TOO_LONG");
+
+  await db
+    .update(sessions)
+    .set({ displayLabel: label })
     .where(eq(sessions.id, input.sessionId));
 }
 

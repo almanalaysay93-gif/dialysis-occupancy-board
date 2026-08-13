@@ -29,6 +29,13 @@
       "when": 1786578224227,
       "tag": "0003_ancient_molecule_man",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "5",
+      "when": 1786582495477,
+      "tag": "0004_right_goblin_queen",
+      "breakpoints": true
     }
   ]
 }

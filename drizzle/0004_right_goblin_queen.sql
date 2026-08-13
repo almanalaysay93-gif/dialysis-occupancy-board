@@ -1,0 +1,1 @@
+ALTER TABLE `sessions` ADD `displayLabel` varchar(64);

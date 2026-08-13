@@ -202,6 +202,73 @@ describe("sessions.end", () => {
   });
 });
 
+describe("sessions.updateLabel (editable highlighted title)", () => {
+  it("persists a display label and trims whitespace", async () => {
+    const db = mockDbWith([]);
+    (getDb as ReturnType<typeof vi.fn>).mockResolvedValue(db);
+
+    const caller = appRouter.createCaller(createAuthContext());
+    const result = await caller.sessions.updateLabel({
+      sessionId: 7,
+      displayLabel: "  Bed 4 — P-101  ",
+    });
+    expect(result.success).toBe(true);
+    expect(db.update).toHaveBeenCalled();
+    const updateChain = (db.update as ReturnType<typeof vi.fn>).mock.results[0].value as Record<
+      string,
+      unknown
+    >;
+    const setCalls = (updateChain.set as ReturnType<typeof vi.fn>).mock.calls;
+    const set = setCalls[0][0] as Record<string, unknown>;
+    expect(set.displayLabel).toBe("Bed 4 — P-101");
+  });
+
+  it("clears the display label when given null or blank", async () => {
+    const db = mockDbWith([]);
+    (getDb as ReturnType<typeof vi.fn>).mockResolvedValue(db);
+
+    const caller = appRouter.createCaller(createAuthContext());
+    await caller.sessions.updateLabel({ sessionId: 7, displayLabel: null });
+    const chain1 = (db.update as ReturnType<typeof vi.fn>).mock.results[0].value as Record<string, unknown>;
+    const set1 = ((chain1.set as ReturnType<typeof vi.fn>).mock.calls[0][0]) as Record<string, unknown>;
+    expect(set1.displayLabel).toBeNull();
+
+    await caller.sessions.updateLabel({ sessionId: 7, displayLabel: "   " });
+    const chain2 = (db.update as ReturnType<typeof vi.fn>).mock.results[1].value as Record<string, unknown>;
+    const set2 = ((chain2.set as ReturnType<typeof vi.fn>).mock.calls[0][0]) as Record<string, unknown>;
+    expect(set2.displayLabel).toBeNull();
+  });
+
+  it("rejects labels longer than 64 characters", async () => {
+    const caller = appRouter.createCaller(createAuthContext());
+    await expect(
+      caller.sessions.updateLabel({
+        sessionId: 7,
+        displayLabel: "a".repeat(65),
+      })
+    ).rejects.toThrow();
+  });
+
+  it("assign accepts an optional display label stored on the session", async () => {
+    const db = mockDbWith([]);
+    (getDb as ReturnType<typeof vi.fn>).mockResolvedValue(db);
+
+    const caller = appRouter.createCaller(createAuthContext());
+    await caller.sessions.assign({
+      machineId: 2,
+      patientId: "P-103",
+      durationMinutes: "180",
+      isolationTag: "clean",
+      urgent: false,
+      displayLabel: "Alias 1",
+    });
+
+    const insertChain = (db.insert as ReturnType<typeof vi.fn>).mock.results[0].value as Record<string, unknown>;
+    const vals = ((insertChain.values as ReturnType<typeof vi.fn>).mock.calls[0][0]) as Record<string, unknown>;
+    expect(vals.displayLabel).toBe("Alias 1");
+  });
+});
+
 describe("input validation", () => {
   it("rejects durations outside 3/6/8 hours", async () => {
     const caller = appRouter.createCaller(createAuthContext());

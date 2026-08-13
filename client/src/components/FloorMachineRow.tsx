@@ -14,8 +14,9 @@ import {
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import RenameMachineDialog from "@/components/RenameMachineDialog";
+import RenameSessionLabelDialog from "@/components/RenameSessionLabelDialog";
 import { cn } from "@/lib/utils";
-import { Activity, AlertTriangle, BellRing, Clock, Droplets, MoreVertical, Pencil, Plus, Power } from "lucide-react";
+import { Activity, AlertTriangle, BellRing, Clock, Droplets, FilePenLine, MoreVertical, Pencil, Plus, Power } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import type { MachineWithSession } from "../../../server/machines";
@@ -67,6 +68,7 @@ export function FloorMachineChip({
   const isStaff = !!user;
   const done = countdownMs === 0;
   const [renameOpen, setRenameOpen] = useState(false);
+  const [sessionLabelOpen, setSessionLabelOpen] = useState(false);
 
   const toggleUrgent = trpc.sessions.toggleUrgent.useMutation({
     onSuccess: () => void utils.machines.list.invalidate(),
@@ -82,6 +84,8 @@ export function FloorMachineChip({
     onSuccess: () => void utils.machines.list.invalidate(),
     onError: e => toast.error(e.message),
   });
+
+
 
   if (!occupied) {
     const chipContent = (
@@ -158,8 +162,15 @@ export function FloorMachineChip({
         </span>
       )}
       <span className="font-display text-lg leading-none">
-        {row.machine.label.replace("HD-", "")}
+        {session.displayLabel
+          ? session.displayLabel.replace("HD-", "").slice(0, 14)
+          : row.machine.label.replace("HD-", "")}
       </span>
+      {session.displayLabel && (
+        <span className="text-[8px] uppercase tracking-[0.12em] opacity-70">
+          {row.machine.label.replace("HD-", "")}
+        </span>
+      )}
       <span className="flex items-center gap-1 text-[9px] leading-tight">
         <span className="font-mono tabular-nums">
           {countdownMs === null ? "--:--" : formatHMS(countdownMs)}
@@ -194,6 +205,15 @@ export function FloorMachineChip({
                   minute: "2-digit",
                 })}
               </DropdownMenuItem>
+              {isStaff && (
+                <DropdownMenuItem
+                  className="text-[13px]"
+                  onClick={() => setSessionLabelOpen(true)}
+                >
+                  <FilePenLine className="mr-2 h-4 w-4" />
+                  Edit highlighted title
+                </DropdownMenuItem>
+              )}
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 onClick={() => toggleUrgent.mutate({ sessionId: session.id })}
@@ -228,6 +248,13 @@ export function FloorMachineChip({
         </div>
         </>
       )}
+      <RenameSessionLabelDialog
+        open={sessionLabelOpen}
+        sessionId={session.id}
+        machineLabel={row.machine.label}
+        currentLabel={session.displayLabel}
+        onClose={() => setSessionLabelOpen(false)}
+      />
     </div>
   );
 }

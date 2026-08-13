@@ -193,6 +193,8 @@ export const appRouter = router({
             .default(null),
           isolationTag: isolationTagSchema,
           urgent: z.boolean().default(false),
+          /** Optional staff-set alias shown on the machine tile instead of the patient id. */
+          displayLabel: z.string().trim().max(64).nullable().default(null),
         })
         .superRefine((data, ctxx) => {
           if (data.durationMinutes === null && (data.customMinutes === null || data.customMinutes < 15)) {
@@ -252,6 +254,28 @@ export const appRouter = router({
           isolationTag: input.isolationTag,
         });
         return { success: true } as const;
+      }),
+
+    updateLabel: protectedProcedure
+      .input(
+        z.object({
+          sessionId: z.number().int().positive(),
+          displayLabel: z.string().trim().max(64).nullable(),
+        })
+      )
+      .mutation(async ({ input }) => {
+        try {
+          await machineDb.updateDisplayLabel({
+            sessionId: input.sessionId,
+            displayLabel: input.displayLabel,
+          });
+          return { success: true } as const;
+        } catch (error) {
+          if ((error as Error)?.message === "LABEL_TOO_LONG") {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "The display label is too long (max 64 characters)." });
+          }
+          throw error;
+        }
       }),
   }),
 

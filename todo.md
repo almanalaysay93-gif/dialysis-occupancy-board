@@ -94,3 +94,11 @@
 - [x] WaitingListPanel admit form: duration buttons 3 h / 4 h / 6 h / 8 h / Custom (DurationValue union extended)
 - [x] durationLabel helpers updated in FloorMachineRow.tsx and Urgent.tsx to render "4 h" for 240 min
 - [x] Vitest: 4h preset acceptance test added; 52 tests passing, tsc clean; screenshot verified board renders
+
+## Editable session title in Assign dialog (user request)
+- [x] Sessions table: displayLabel varchar(64) column added; migration applied
+- [x] Backend: displayLabel accepted in sessions.assign; sessions.updateLabel procedure added; machines.listMachines returns displayLabel
+- [x] AssignSessionDialog: "Edit title" pencil button next to "Assign HD-xxx" opens inline input to set displayLabel
+- [x] FloorMachineRow: occupied chip shows displayLabel (truncated 14 chars) with machine number as a small sub-label when set; "Edit highlighted title" in dropdown opens RenameSessionLabelDialog
+- [x] RenameSessionLabelDialog: standalone dialog for editing the session title from the chip dropdown
+- [x] Tests: 4 new displayLabel tests (persist/trim, clear null/blank, reject >64 chars, assign stores label); 56 tests passing, tsc clean; screenshot verified tile shows BED 4 — P-4821 label correctly

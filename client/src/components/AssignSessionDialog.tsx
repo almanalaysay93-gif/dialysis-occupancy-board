@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Switch } from "@/components/ui/switch";
 import { trpc } from "@/lib/trpc";
-import { BellRing, Clock, Droplets } from "lucide-react";
+import { BellRing, Clock, Droplets, Pencil } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -45,6 +45,9 @@ export default function AssignSessionDialog({
   const [customMinutes, setCustomMinutes] = useState("0");
   const [tag, setTag] = useState<IsolationTag>("clean");
   const [urgent, setUrgent] = useState(false);
+  const [editLabelOpen, setEditLabelOpen] = useState(false);
+  const [displayLabel, setDisplayLabel] = useState("");
+
 
   const assign = trpc.sessions.assign.useMutation({
     onSuccess: () => {
@@ -83,6 +86,7 @@ export default function AssignSessionDialog({
       customMinutes: duration === "custom" ? effectiveMinutes : null,
       isolationTag: tag,
       urgent,
+      displayLabel: displayLabel.trim() || null,
     });
   };
 
@@ -95,9 +99,58 @@ export default function AssignSessionDialog({
           <p className="smallcaps-detail text-muted-foreground">
             New Treatment Session
           </p>
-          <DialogTitle className="font-display text-3xl text-[#1F2A52]">
-            Assign {machineLabel}
-          </DialogTitle>
+          <div className="flex items-center gap-2">
+            <DialogTitle className="font-display text-3xl text-[#1F2A52]">
+              Assign {machineLabel}
+            </DialogTitle>
+            {editLabelOpen ? (
+                <form
+                className="flex items-center gap-1.5"
+                onSubmit={e => {
+                  e.preventDefault();
+                  setEditLabelOpen(false);
+                }}
+              >
+                <Input
+                  value={displayLabel}
+                  onChange={e => setDisplayLabel(e.target.value)}
+                  maxLength={64}
+                  placeholder="e.g. Bed 4 — P-1042"
+                  className="h-9 w-44 border-[#D4DFE5] bg-[#F4F7F8] text-sm"
+                  autoFocus
+                />
+                <Button
+                  type="submit"
+                  size="sm"
+                  className="h-9 bg-[#1F2A52] text-[#F4F7F8] hover:bg-[#151D3A]"
+                >
+                  Save
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setEditLabelOpen(false)}
+                  className="h-9 border-[#D4DFE5] text-[#7684A0]"
+                >
+                  Cancel
+                </Button>
+              </form>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  setDisplayLabel("");
+                  setEditLabelOpen(true);
+                }}
+                aria-label="Edit the highlighted session title"
+                className="flex items-center gap-1 border border-[#D4DFE5] bg-[#F4F7F8] px-2 py-1 text-[11px] text-[#7684A0] transition-colors hover:border-[#2E9A9B] hover:text-[#2E9A9B]"
+              >
+                <Pencil className="h-3 w-3" />
+                Edit title
+              </button>
+            )}
+          </div>
           <DialogDescription className="font-serif-light text-base text-[#556680]">
             Record the patient, treatment duration, isolation classification,
             and urgency before starting the session.

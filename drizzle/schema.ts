@@ -78,6 +78,8 @@ export const sessions = mysqlTable("sessions", {
   isolationTag: mysqlEnum("isolationTag", ["clean", "dirty"]).notNull().default("clean"),
   /** Urgent/priority flag for critical cases. */
   urgent: boolean("urgent").notNull().default(false),
+  /** Optional staff-set display alias shown on the machine tile instead of the patient id. */
+  displayLabel: varchar("displayLabel", { length: 64 }),
   status: mysqlEnum("status", ["active", "ended"]).notNull().default("active"),
   endedAt: timestamp("endedAt"),
   endedBy: text("endedBy"),
