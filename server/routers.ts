@@ -8,7 +8,7 @@ import * as machineDb from "./machines";
 
 /** Preset durations (minutes) for quick selection; "custom" passes user-supplied minutes. */
 const durationMinutesSchema = z
-  .union([z.enum(["180", "360", "480", "custom"]), z.number().int().min(15).max(1440)])
+  .union([z.enum(["180", "240", "360", "480", "custom"]), z.number().int().min(15).max(1440)])
   .transform(v => (typeof v === "string" ? (v === "custom" ? null : Number(v)) : v));
 const isolationTagSchema = z.enum(["clean", "dirty"]);
 const waitingPrioritySchema = z.enum(["normal", "urgent", "veryUrgent"]);

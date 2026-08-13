@@ -34,7 +34,7 @@ type AdmitDraft = {
   urgent: boolean;
 };
 
-type DurationValue = 180 | 360 | 480 | "custom";
+type DurationValue = 180 | 240 | 360 | 480 | "custom";
 
 function draftEffectiveMinutes(d: AdmitDraft): number {
   if (d.durationMode === "custom") {
@@ -283,6 +283,7 @@ export default function WaitingListPanel({ floorId }: { floorId: number }) {
               <div className="flex gap-1">
                 {([
                   [180, "3 h"],
+                  [240, "4 h"],
                   [360, "6 h"],
                   [480, "8 h"],
                   ["custom", "Custom"],

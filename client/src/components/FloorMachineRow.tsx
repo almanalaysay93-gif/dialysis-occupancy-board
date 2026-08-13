@@ -40,6 +40,7 @@ function formatHMS(ms: number): string {
 
 function durationLabel(min: number): string {
   if (min === 180) return "3 h";
+  if (min === 240) return "4 h";
   if (min === 360) return "6 h";
   if (min === 480) return "8 h";
   return `${Math.round(min / 60)} h`;

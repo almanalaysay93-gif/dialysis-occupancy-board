@@ -16,7 +16,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 type IsolationTag = "clean" | "dirty";
-type DurationValue = 180 | 360 | 480 | "custom";
+type DurationValue = 180 | 240 | 360 | 480 | "custom";
 
 function formatDurationSummary(minutes: number): string {
   const h = Math.floor(minutes / 60);
@@ -79,7 +79,7 @@ export default function AssignSessionDialog({
     assign.mutate({
       machineId,
       patientId: patientId.trim(),
-      durationMinutes: duration === "custom" ? effectiveMinutes : (String(duration) as "180" | "360" | "480"),
+      durationMinutes: duration === "custom" ? effectiveMinutes : (String(duration) as "180" | "240" | "360" | "480"),
       customMinutes: duration === "custom" ? effectiveMinutes : null,
       isolationTag: tag,
       urgent,
@@ -127,10 +127,11 @@ export default function AssignSessionDialog({
             <RadioGroup
               value={String(duration)}
               onValueChange={v => setDuration(v as DurationValue)}
-              className="grid grid-cols-4 gap-2"
+              className="grid grid-cols-5 gap-2"
             >
               {[
                 { v: 180, label: "3", sub: "hours" },
+                { v: 240, label: "4", sub: "hours" },
                 { v: 360, label: "6", sub: "hours" },
                 { v: 480, label: "8", sub: "hours" },
                 { v: "custom", label: "Custom", sub: "any length" },

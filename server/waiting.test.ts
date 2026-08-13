@@ -246,6 +246,22 @@ describe("waiting.admit", () => {
     expect(vi.mocked(machineDb.admitWaiting)).not.toHaveBeenCalled();
   });
 
+  it("accepts the 4-hour preset (240 min)", async () => {
+    vi.mocked(machineDb.admitWaiting).mockResolvedValueOnce(undefined);
+    const caller = appRouter.createCaller(createStaffContext().ctx);
+
+    await caller.waiting.admit({
+      entryId: 5,
+      floorId: 30001,
+      durationMinutes: 240,
+      isolationTag: "clean",
+    });
+
+    expect(vi.mocked(machineDb.admitWaiting)).toHaveBeenCalledWith(
+      expect.objectContaining({ durationMinutes: 240 }),
+    );
+  });
+
   it("accepts custom durations that are not preset multiples (e.g. 4h15m = 255 min)", async () => {
     vi.mocked(machineDb.admitWaiting).mockResolvedValueOnce(undefined);
     const caller = appRouter.createCaller(createStaffContext().ctx);

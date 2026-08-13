@@ -88,3 +88,9 @@
 - [x] Urgent Cases page: all boards' urgent sessions grouped by board (SKTI Main / RDU Annex / RDU Main) with links + very-urgent waiting patients with pulsing cards and Remove action
 - [x] Vitest coverage: 3 urgentRegister tests (multi-floor aggregation, very-urgent waiting filter, null floorId); 51 tests passing, tsc clean
 - [x] Checkpoint saved and auto-published (live site verify requires staff sign-in; DB transiently unavailable during screenshot seeding)
+
+## 4-hour duration preset everywhere (new request)
+- [x] AssignSessionDialog: duration buttons 3 h / 4 h / 6 h / 8 h / Custom (grid-cols-5, DurationValue union, backend z.enum extended)
+- [x] WaitingListPanel admit form: duration buttons 3 h / 4 h / 6 h / 8 h / Custom (DurationValue union extended)
+- [x] durationLabel helpers updated in FloorMachineRow.tsx and Urgent.tsx to render "4 h" for 240 min
+- [x] Vitest: 4h preset acceptance test added; 52 tests passing, tsc clean; screenshot verified board renders
