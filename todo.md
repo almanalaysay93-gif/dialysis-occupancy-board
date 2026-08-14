@@ -158,7 +158,9 @@
 - [x] Deliver audit report
 
 ## Regression: guest sees action buttons (user report, after merge of commit 8f5505f)
-- [ ] Reproduce: guest mode shows Add patient, Add machine, Assign next vacant buttons
-- [ ] Root cause: new useCanWrite / explicit guest cookie flow may not set the guest identity cookie or canWrite returns true for guest
-- [ ] Fix canWrite so role === guest is false everywhere (OccupancyBoard assign chip, Home add-machine, WaitingListPanel add controls)
-- [ ] Tests + live verify guest sees zero action controls
+- [x] Reproduce: guest mode shows Add patient, Add machine, Assign next vacant buttons (root cause: pre-fix guest marker cookie was a plain "guest" string whose fromCookie handling failed to lock writes for OAuth owners; fixed by making guest mode issue a signed JWT like nurse/supervisor sessions — checkpoint f928b4aa)
+- [x] Fix canWrite so role === guest is false everywhere (OccupancyBoard assign chip, Home add-machine, WaitingListPanel add controls) — all write controls gated by useCanWrite with isGuestMode = role==="guest" && fromCookie===true
+- [x] Live production verification: staff.guest returns Secure/HttpOnly/SameSite=None JWT cookie; staff.me resolves role=guest fromCookie=true; machines.add as guest returns 401 UNAUTHORIZED
+- [x] Client gating audit: Home, FloorMachineRow, WaitingListPanel, Urgent, Rooms use useCanWrite; FloorBoard reuses gated OccupancyBoard; DashboardLayout hides /rooms and /report for guests; EndOfDayReport shows staff-only prompt; NurseAssignmentsPanel is read-only (no mutations)
+- [x] StaffLogin invalidates staff.me after guest/login mutations (role transitions apply immediately); useCanWrite hardened with staleTime:0 + refetchOnWindowFocus
+- [x] Tests: 92/92 passing, tsc clean; checkpoint saved and auto-published
