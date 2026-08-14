@@ -1,0 +1,1 @@
+ALTER TABLE `staff_accounts` MODIFY COLUMN `role` enum('nurse','supervisor','guest') NOT NULL;

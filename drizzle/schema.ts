@@ -135,8 +135,8 @@ export const staffAccounts = mysqlTable("staff_accounts", {
   /** Login username, unique. */
   username: varchar("username", { length: 64 }).notNull().unique(),
   displayName: varchar("displayName", { length: 64 }).notNull(),
-  role: mysqlEnum("role", ["nurse", "supervisor"]).notNull(),
-  /** Board this nurse works on (NULL for supervisors). */
+  role: mysqlEnum("role", ["nurse", "supervisor", "guest"]).notNull(),
+  /** Board this nurse works on (NULL for supervisors and guests). */
   assignedFloorId: int("assignedFloorId"),
   /** Hex-encoded SHA-256(password + salt) + salt stored alongside. */
   passwordHash: varchar("passwordHash", { length: 128 }).notNull(),

@@ -470,7 +470,7 @@ describe("machine rename scoping", () => {
 });
 
 describe("guest mode", () => {
-  it("sets a guest marker cookie that locks writes server-side", async () => {
+  it("issues a signed guest JWT cookie that locks writes server-side", async () => {
     mockResolve.mockResolvedValue({
       accountId: 0,
       username: "guest",
@@ -482,9 +482,15 @@ describe("guest mode", () => {
     const ctx = makeCtx() as TrpcContext;
     const result = await caller(ctx).staff.guest();
     expect(result.success).toBe(true);
-    expect((ctx.res.cookie as ReturnType<typeof vi.fn>).mock.calls.some(
-      c => c[0] === "staff_session_id" && c[1] === "guest"
-    )).toBe(true);
+    const cookieCall = (ctx.res.cookie as ReturnType<typeof vi.fn>).mock.calls.find(
+      c => c[0] === "staff_session_id" && typeof c[1] === "string" && c[1] !== ""
+    );
+    expect(cookieCall).toBeDefined();
+    const token = cookieCall![1] as string;
+    // The guest token must verify as a JWT carrying the guest role.
+    const session = await verifyStaffSession(token);
+    expect(session?.role).toBe("guest");
+    expect(session?.fromCookie).toBeUndefined();
   });
 
   it("a guest cookie blocks writes even for a signed-in OAuth owner", async () => {

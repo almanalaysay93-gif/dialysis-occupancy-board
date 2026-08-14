@@ -156,3 +156,9 @@
 - [x] Live production verification: guest mode stays pure view-only (staff.me with/without cookie -> guest; writes require staffOrAdminProcedure)
 - [x] Fix any bugs found and publish: token-version revocation (login/logout bump tokenVersion; stale cookies resolve to guest); 2 new vitest tests (85 passing); migration applied to production
 - [x] Deliver audit report
+
+## Regression: guest sees action buttons (user report, after merge of commit 8f5505f)
+- [ ] Reproduce: guest mode shows Add patient, Add machine, Assign next vacant buttons
+- [ ] Root cause: new useCanWrite / explicit guest cookie flow may not set the guest identity cookie or canWrite returns true for guest
+- [ ] Fix canWrite so role === guest is false everywhere (OccupancyBoard assign chip, Home add-machine, WaitingListPanel add controls)
+- [ ] Tests + live verify guest sees zero action controls

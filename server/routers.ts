@@ -581,15 +581,26 @@ export const appRouter = router({
       return resolveStaffSession(ctx.req);
     }),
     /**
-     * Enter explicit guest mode. The marker cookie never verifies as a JWT, so
-     * resolveStaffSession reports a guest session with fromCookie=true — which
-     * is what locks writes server-side even for an OAuth-signed-in owner.
+     * Enter explicit guest mode. Issues a signed JWT (role "guest") so the
+     * cookie survives the same proxy handling as nurse/supervisor sessions —
+     * resolveStaffSession then reports a guest session with fromCookie=true,
+     * which locks writes server-side even for an OAuth-signed-in owner.
      */
-    guest: publicProcedure.mutation(({ ctx }) => {
-      ctx.res.cookie(STAFF_COOKIE_NAME, "guest", {
-        ...getSessionCookieOptions(ctx.req),
-        maxAge: ONE_YEAR_MS,
-      });
+    guest: publicProcedure.mutation(async ({ ctx }) => {
+      // Await the JWT + cookie write before responding — the cookie must be
+      // on the response headers before the tRPC response is flushed.
+      await setStaffSessionCookieSync(
+        ctx.req,
+        ctx.res,
+        {
+          accountId: 0,
+          username: "guest",
+          displayName: "Guest",
+          role: "guest",
+          assignedFloorId: null,
+        },
+        1
+      );
       return { success: true } as const;
     }),
     login: publicProcedure
@@ -648,6 +659,8 @@ export const appRouter = router({
       if (current.role === "nurse" || current.role === "supervisor") {
         await bumpTokenVersion(current.accountId);
       }
+      // Guest sessions carry no revocation row: signing out simply clears
+      // the cookie (handled inside setStaffSessionCookieSync via null staff).
       await setStaffSessionCookieSync(ctx.req, ctx.res, null);
       return { success: true } as const;
     }),
