@@ -16,7 +16,10 @@ export const systemRouter = router({
   // TEMPORARY (migration probe): verify the production runtime can reach Supabase Postgres.
     // TEMPORARY: return masked Supabase URL for secret debugging (remove after)
   supabaseMask: publicProcedure.query(() => {
-    const url = process.env.SUPABASE_DATABASE_URL ?? "";
+    const url =
+      (process.env.SUPABASE_DATABASE_URL_B64
+        ? Buffer.from(process.env.SUPABASE_DATABASE_URL_B64, "base64").toString("utf8")
+        : "") || process.env.SUPABASE_DATABASE_URL || "";
     if (!url) return { set: false } as const;
     try {
       const u = new URL(url);
@@ -25,8 +28,11 @@ export const systemRouter = router({
   }),
 
   supabasePing: publicProcedure.query(async () => {
-    const url = process.env.SUPABASE_DATABASE_URL ?? "";
-    if (!url) return { ok: false, error: "SUPABASE_DATABASE_URL not set" } as const;
+    const url =
+      (process.env.SUPABASE_DATABASE_URL_B64
+        ? Buffer.from(process.env.SUPABASE_DATABASE_URL_B64, "base64").toString("utf8")
+        : "") || process.env.SUPABASE_DATABASE_URL || "";
+    if (!url) return { ok: false, error: "Supabase URL not set" } as const;
     const { Pool } = await import("pg");
     const pool = new Pool({ connectionString: url, ssl: { rejectUnauthorized: false }, connectionTimeoutMillis: 12000 });
     try {

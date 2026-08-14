@@ -185,5 +185,5 @@
 - [ ] Checkpoint + publish
 
 ## User request: push latest code to GitHub (Aug 14)
-- [ ] Save a checkpoint with the latest code state (supabaseMask/supabasePing probes + migration work)
-- [ ] Push to almanalaysay93-gif/dialysis-occupancy-board on GitHub
+- [x] Save a checkpoint with the latest code state (checkpoint 7cf0fd33)
+- [x] Push to almanalaysay93-gif/dialysis-occupancy-board on GitHub (8f5505f -> 7cf0fd3)
