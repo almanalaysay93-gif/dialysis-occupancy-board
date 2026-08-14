@@ -164,3 +164,10 @@
 - [x] Client gating audit: Home, FloorMachineRow, WaitingListPanel, Urgent, Rooms use useCanWrite; FloorBoard reuses gated OccupancyBoard; DashboardLayout hides /rooms and /report for guests; EndOfDayReport shows staff-only prompt; NurseAssignmentsPanel is read-only (no mutations)
 - [x] StaffLogin invalidates staff.me after guest/login mutations (role transitions apply immediately); useCanWrite hardened with staleTime:0 + refetchOnWindowFocus
 - [x] Tests: 92/92 passing, tsc clean; checkpoint saved and auto-published
+
+## Regression: supervisor login shows Guest (user report Aug 14)
+- [ ] Reproduce: after logging in as supervisor on the live site, the board still shows "Guest · view only"
+- [ ] Root cause: likely guest cookie/staff.me ordering conflict (guest session persists or staff.me resolves guest for logged-in supervisor)
+- [ ] Fix: supervisor login correctly replaces guest session; staff.me returns role=supervisor fromCookie=true
+- [ ] Verify on live site: sign in supervisor -> sidebar shows SKTI Supervisor, write controls visible; guest -> Guest view only
+- [ ] Tests + checkpoint

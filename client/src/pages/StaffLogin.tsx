@@ -21,6 +21,17 @@ export default function StaffLogin() {
   const utils = trpc.useUtils();
   const loginMut = trpc.staff.login.useMutation({
     onSuccess: async data => {
+      // Seed the staff.me cache immediately with the login result so the UI
+      // can never stay stuck on an old role (e.g. a stale guest session) —
+      // then refetch once the fresh staff cookie has been written.
+      utils.staff.me.setData(undefined, {
+        accountId: data.role === "guest" ? 0 : -1,
+        username: data.role === "guest" ? "guest" : username.trim(),
+        displayName: data.displayName,
+        role: data.role,
+        assignedFloorId: data.assignedFloorId,
+        fromCookie: true,
+      });
       await utils.staff.me.invalidate();
       toast.success(`Welcome, ${data.displayName}`, {
         description: data.role === "supervisor" ? "You have access to every board." : "Opening your assigned board.",
