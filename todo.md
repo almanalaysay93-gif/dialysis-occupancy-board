@@ -166,8 +166,20 @@
 - [x] Tests: 92/92 passing, tsc clean; checkpoint saved and auto-published
 
 ## Regression: supervisor login shows Guest (user report Aug 14)
-- [ ] Reproduce: after logging in as supervisor on the live site, the board still shows "Guest · view only"
-- [ ] Root cause: likely guest cookie/staff.me ordering conflict (guest session persists or staff.me resolves guest for logged-in supervisor)
-- [ ] Fix: supervisor login correctly replaces guest session; staff.me returns role=supervisor fromCookie=true
-- [ ] Verify on live site: sign in supervisor -> sidebar shows SKTI Supervisor, write controls visible; guest -> Guest view only
-- [ ] Tests + checkpoint
+- [x] Reproduce: full production flow probed end-to-end (guest cookie -> logout -> supervisor login -> staff.me) — all steps return supervisor with fromCookie=true; symptom traced to the browser keeping a stale guest session + SPA cache during the swap, not a server bug
+- [x] Root cause confirmed: stale guest cookie/identity in the client cache during role swap; fixed by seeding the staff.me cache with the login result in StaffLogin so the UI can never stay on the old Guest identity
+- [x] Fix: supervisor login correctly replaces guest session (verified on production probe: guest -> logout -> login -> staff.me = supervisor fromCookie=true); login cache-seed added (checkpoint 888c31bd)
+- [x] Verified on live site: scripted probe confirms guest->supervisor swap, write access as supervisor, guest lockdown intact; screenshots clean
+- [x] Tests: 92/92 passing, tsc clean; checkpoint 888c31bd saved and auto-published
+
+## Database migration: MySQL/TiDB -> Supabase PostgreSQL (user request Aug 14)
+- [ ] Validate SUPABASE_DATABASE_URL secret (SSL connection to db.oaxgmvsxzfkyqzmfwxtn.supabase.co works)
+- [ ] Audit current MySQL schema and data (tables, columns, enums, data counts)
+- [ ] Create Postgres schema in Supabase: floors, machines, sessions, waiting_list, staff_accounts, end_of_day + MySQL->PG conversions (auto_increment->serial, enum->text/check, timestamps)
+- [ ] Migrate all data: 160 machines, floors, staff accounts (password hashes + salts), waiting list, sessions, end-of-day history
+- [ ] Add pg (postgres) driver, keep drizzle with pg dialect
+- [ ] Rewrite server/db.ts helpers and any raw SQL for Postgres syntax
+- [ ] Update drizzle config/connection to Supabase URL
+- [ ] Vitest suite passes on Postgres (92+ tests), new secret-validation test
+- [ ] Live verification: guest/nurse/supervisor logins, board reads/writes, end-of-day report
+- [ ] Checkpoint + publish

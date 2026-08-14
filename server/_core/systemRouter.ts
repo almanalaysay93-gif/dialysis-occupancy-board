@@ -13,6 +13,22 @@ export const systemRouter = router({
       ok: true,
     })),
 
+  // TEMPORARY (migration probe): verify the production runtime can reach Supabase Postgres.
+  supabasePing: adminProcedure.query(async () => {
+    const url = process.env.SUPABASE_DATABASE_URL ?? "";
+    if (!url) return { ok: false, error: "SUPABASE_DATABASE_URL not set" } as const;
+    const { Pool } = await import("pg");
+    const pool = new Pool({ connectionString: url, ssl: { rejectUnauthorized: false }, connectionTimeoutMillis: 12000 });
+    try {
+      const r = await pool.query("SELECT version()");
+      return { ok: true, version: r.rows[0].version } as const;
+    } catch (e) {
+      return { ok: false, error: (e as Error).message } as const;
+    } finally {
+      await pool.end();
+    }
+  }),
+
   notifyOwner: adminProcedure
     .input(
       z.object({
