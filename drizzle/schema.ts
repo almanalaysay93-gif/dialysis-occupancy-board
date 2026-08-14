@@ -106,6 +106,12 @@ export const waitingList = mysqlTable("waiting_list", {
   floorId: int("floorId").notNull(),
   /** Waiting priority tier. */
   priority: mysqlEnum("priority", ["normal", "urgent", "veryUrgent"]).notNull().default("normal"),
+  /** Planned treatment length, captured when the patient joins the queue. */
+  durationMinutes: int("durationMinutes").notNull().default(240),
+  /** Isolation tag from the patient's diagnosis, captured on the queue. */
+  isolationTag: mysqlEnum("isolationTag", ["clean", "dirty"]).notNull().default("clean"),
+  /** Nurse who will handle this patient; shown in the floor's nurse roster. */
+  assignedNurse: varchar("assignedNurse", { length: 64 }),
   addedBy: text("addedBy"),
   joinedAt: timestamp("joinedAt").defaultNow().notNull(),
   /** When the patient was admitted onto a machine (leaves the list). */

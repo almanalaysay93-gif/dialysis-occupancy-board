@@ -100,6 +100,9 @@ describe("waiting.add", () => {
       floorId: 30002,
       patientId: "P-9011",
       priority: "veryUrgent",
+      durationMinutes: 240,
+      isolationTag: "clean",
+      assignedNurse: null,
       addedBy: "Staff Member",
     });
   });
@@ -132,8 +135,39 @@ describe("waiting.add", () => {
       floorId: 30003,
       patientId: "P-0001",
       priority: "normal",
+      durationMinutes: 240,
+      isolationTag: "clean",
+      assignedNurse: null,
       addedBy: "Staff Member",
     });
+  });
+
+  it("carries the treatment length, isolation tag and nurse onto the queue entry", async () => {
+    const caller = appRouter.createCaller(createStaffContext().ctx);
+    await caller.waiting.add({
+      floorId: 30001,
+      patientId: "P-7788",
+      priority: "urgent",
+      durationMinutes: 255,
+      isolationTag: "dirty",
+      assignedNurse: "  Nurse Ana  ",
+    });
+
+    expect(vi.mocked(machineDb.addWaiting)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        durationMinutes: 255,
+        isolationTag: "dirty",
+        assignedNurse: "Nurse Ana",
+      })
+    );
+  });
+
+  it("rejects a treatment length outside 15–1440 minutes", async () => {
+    const caller = appRouter.createCaller(createStaffContext().ctx);
+    await expect(
+      caller.waiting.add({ floorId: 30001, patientId: "P-1", durationMinutes: 5 })
+    ).rejects.toThrow(TRPCError);
+    expect(vi.mocked(machineDb.addWaiting)).not.toHaveBeenCalled();
   });
 });
 
@@ -215,6 +249,19 @@ describe("waiting.admit", () => {
         startedBy: "Staff Member",
       })
     );
+  });
+
+  it("leaves duration and tag unset so the queue entry's own details are used", async () => {
+    vi.mocked(machineDb.listWaiting).mockResolvedValueOnce([
+      { id: 5, patientId: "P-505", floorId: 30001, priority: "normal", addedBy: null, joinedAt: new Date() },
+    ] as Awaited<ReturnType<typeof machineDb.listWaiting>>);
+
+    const caller = appRouter.createCaller(createStaffContext().ctx);
+    await caller.waiting.admit({ entryId: 5, floorId: 30001 });
+
+    const call = vi.mocked(machineDb.admitWaiting).mock.calls[0][0];
+    expect(call.durationMinutes).toBeUndefined();
+    expect(call.isolationTag).toBeUndefined();
   });
 
   it("maps NO_VACANT_MACHINE to a staff-friendly error", async () => {

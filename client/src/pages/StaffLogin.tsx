@@ -18,8 +18,10 @@ export default function StaffLogin() {
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
 
+  const utils = trpc.useUtils();
   const loginMut = trpc.staff.login.useMutation({
-    onSuccess: data => {
+    onSuccess: async data => {
+      await utils.staff.me.invalidate();
       toast.success(`Welcome, ${data.displayName}`, {
         description: data.role === "supervisor" ? "You have access to every board." : "Opening your assigned board.",
       });
@@ -30,11 +32,15 @@ export default function StaffLogin() {
     onError: err => toast.error(err.message || "Login failed."),
   });
 
-  const enterGuest = () => {
-    // Guest mode: no staff cookie needed — boards are readable anonymously
-    // (write operations require a nurse/supervisor session).
-    navigate("/");
-  };
+  // Guest mode sets a marker cookie so the server knows the viewer opted into
+  // read-only browsing — that is what blocks writes even for a signed-in owner.
+  const guestMut = trpc.staff.guest.useMutation({
+    onSuccess: async () => {
+      await utils.staff.me.invalidate();
+      navigate("/");
+    },
+    onError: err => toast.error(err.message || "Could not enter guest mode."),
+  });
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -123,10 +129,11 @@ export default function StaffLogin() {
               </CardHeader>
               <CardContent className="space-y-2.5">
                 <Button
-                  onClick={enterGuest}
+                  onClick={() => guestMut.mutate()}
+                  disabled={guestMut.isPending}
                   className="w-full justify-between bg-[#1F2A52] hover:bg-[#2a376b] text-white h-11"
                 >
-                  <span>Enter as Guest</span>
+                  <span>{guestMut.isPending ? "Entering…" : "Enter as Guest"}</span>
                   <span className="text-xs opacity-70">Read-only · all boards</span>
                 </Button>
                 <Button

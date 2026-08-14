@@ -293,19 +293,20 @@ function ReportBoardCard({ board }: { board: ReportBoard }) {
 
         <div>
           <p className="smallcaps-detail text-[11px] tracking-[0.18em] text-[#7684A0]">
-            Priority breakdown
+            Priority breakdown · waiting list
           </p>
           <div className="mt-2 grid grid-cols-3 gap-3">
-            <BreakdownCell label="Normal" value={board.urgency.normal} color="bg-[#3E8A6A]" />
-            <BreakdownCell label="Urgent" value={board.urgency.urgent} color="bg-[#C8A63B]" />
+            <BreakdownCell label="Normal" value={board.waitingAdds.normal} color="bg-[#3E8A6A]" />
+            <BreakdownCell label="Urgent" value={board.waitingAdds.urgent} color="bg-[#C8A63B]" />
             <BreakdownCell
               label="Very Urgent"
-              value={board.urgency.veryUrgent}
+              value={board.waitingAdds.veryUrgent}
               color="bg-[#9E1F2B]"
             />
           </div>
           <p className="mt-2 text-xs text-[#556680]">
-            {urgentTotal} urgent or very urgent session{urgentTotal === 1 ? "" : "s"} among{" "}
+            {waitingTotal} patient{waitingTotal === 1 ? "" : "s"} added to the waiting list ·{" "}
+            {urgentTotal} urgent session{urgentTotal === 1 ? "" : "s"} among{" "}
             {board.sessionsEnded} concluded treatment{board.sessionsEnded === 1 ? "" : "s"}.
           </p>
         </div>
@@ -322,13 +323,11 @@ function ReportBoardCard({ board }: { board: ReportBoard }) {
           </div>
           <div className="rounded-sm border border-[#D4DFE5] bg-[#FBFCFD] px-3.5 py-3">
             <p className="smallcaps-detail text-[10px] tracking-[0.18em] text-[#7684A0]">
-              Waiting list adds
+              Sessions by urgency
             </p>
             <p className="mt-1 font-display text-lg text-[#1F2A52]">
-              {waitingTotal} added{" "}
-              <span className="text-sm text-[#7684A0]">
-                · {board.waitingAdds.urgent} urgent, {board.waitingAdds.veryUrgent} very urgent
-              </span>
+              {board.urgency.normal} routine{" "}
+              <span className="text-sm text-[#7684A0]">· {board.urgency.urgent} urgent</span>
             </p>
           </div>
         </div>

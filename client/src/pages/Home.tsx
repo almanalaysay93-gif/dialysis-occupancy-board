@@ -8,8 +8,7 @@ import NurseAssignmentsPanel from "@/components/NurseAssignmentsPanel";
 import StaffBar from "@/components/StaffBar";
 import WaitingListPanel from "@/components/WaitingListPanel";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useAuth } from "@/_core/hooks/useAuth";
-import { startLogin } from "@/const";
+import { useCanWrite } from "@/hooks/useCanWrite";
 import { trpc } from "@/lib/trpc";
 import { Activity, Plus } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -48,11 +47,7 @@ function WaitingCount({ floorId }: { floorId: number }) {
  * machines are shown and page scope is limited to it.
  */
 export function OccupancyBoard({ floorId }: { floorId?: number }) {
-  const { isAuthenticated } = useAuth();
-  const { data: staffMe } = trpc.staff.me.useQuery(undefined, {
-    retry: false,
-    refetchInterval: 30_000,
-  });
+  const { canWrite } = useCanWrite();
   const { data, isLoading } = trpc.machines.list.useQuery(undefined, {
     // Cross-device real-time sync: re-sync board state every 5 seconds
     refetchInterval: 5_000,
@@ -100,7 +95,7 @@ export function OccupancyBoard({ floorId }: { floorId?: number }) {
     }
 
     return Array.from(groups.values()).filter(g => g.machines.length > 0);
-  }, [data, floors]);
+  }, [data, floors, floorId]);
 
   const stats = useMemo(() => {
     const rows = floorId !== undefined
@@ -138,14 +133,7 @@ export function OccupancyBoard({ floorId }: { floorId?: number }) {
     ? floors?.find(f => f.id === floorId)?.name
     : undefined;
 
-  // Write permissions: OAuth admin/staff OR nurse/supervisor staff session.
-  // Guests (staff role "guest" without OAuth login) are read-only.
   const [, navigate] = useLocation();
-  // A guest staff session locks out writing even when an OAuth user is signed in.
-  const canWrite =
-    staffMe?.role === "guest"
-      ? false
-      : isAuthenticated || Boolean(staffMe?.role);
 
   // Waiting list scope: only show on a scoped (per-floor) board page
   const waitingFloorId = floorId !== undefined ? floorId : undefined;
@@ -353,7 +341,11 @@ export function OccupancyBoard({ floorId }: { floorId?: number }) {
                 <Button
                   size="sm"
                   onClick={() => {
-                    const first = data?.find(r => !r.session);
+                    // Stay inside the scoped board — never jump to another floor.
+                    const rows = floorId !== undefined
+                      ? data?.filter(r => r.machine.floorId === floorId)
+                      : data;
+                    const first = rows?.find(r => !r.session);
                     if (first) setAssignTarget(first.machine.id);
                   }}
                   className="h-9 bg-[#1F2A52] text-[#F4F7F8] hover:bg-[#151D3A] font-serif-light"

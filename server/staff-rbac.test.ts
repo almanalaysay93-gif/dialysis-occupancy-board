@@ -28,6 +28,7 @@ vi.mock("./machines", () => ({
   toggleUrgent: vi.fn(async () => undefined),
   updateIsolationTag: vi.fn(async () => undefined),
   updateSessionLabel: vi.fn(async () => undefined),
+  updateMachineLabel: vi.fn(async () => undefined),
   listWaiting: vi.fn(async () => []),
   listWaitingAll: vi.fn(async () => []),
   addWaiting: vi.fn(async () => ({ id: 42 })),
@@ -433,6 +434,75 @@ describe("room management scoping (supervisor-only)", () => {
     } as TrpcContext;
     const result = await caller(ctx).rooms.add({ name: "Owner Room" });
     expect(result.success).toBe(true);
+  });
+});
+
+describe("machine rename scoping", () => {
+  it("nurse cannot rename a machine on another floor", async () => {
+    mockResolve.mockResolvedValue({
+      accountId: 7,
+      username: "nurse.rdu",
+      displayName: "RDU Nurse",
+      role: "nurse" as const,
+      assignedFloorId: 2,
+    });
+    // HD-003 lives on floor 1; nurse is assigned to floor 2.
+    const ctx = { ...makeCtx(), user: null } as TrpcContext;
+    await expect(
+      caller(ctx).machines.updateLabel({ machineId: 3, label: "HD-999" })
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(machineDb.updateMachineLabel).not.toHaveBeenCalled();
+  });
+
+  it("nurse can rename a machine on their own floor", async () => {
+    mockResolve.mockResolvedValue({
+      accountId: 7,
+      username: "nurse.rdu",
+      displayName: "RDU Nurse",
+      role: "nurse" as const,
+      assignedFloorId: 1,
+    });
+    const ctx = { ...makeCtx(), user: null } as TrpcContext;
+    const result = await caller(ctx).machines.updateLabel({ machineId: 3, label: "HD-004" });
+    expect(result.success).toBe(true);
+    expect(machineDb.updateMachineLabel).toHaveBeenCalledWith({ machineId: 3, label: "HD-004" });
+  });
+});
+
+describe("guest mode", () => {
+  it("sets a guest marker cookie that locks writes server-side", async () => {
+    mockResolve.mockResolvedValue({
+      accountId: 0,
+      username: "guest",
+      displayName: "Guest",
+      role: "guest" as const,
+      assignedFloorId: null,
+      fromCookie: false,
+    });
+    const ctx = makeCtx() as TrpcContext;
+    const result = await caller(ctx).staff.guest();
+    expect(result.success).toBe(true);
+    expect((ctx.res.cookie as ReturnType<typeof vi.fn>).mock.calls.some(
+      c => c[0] === "staff_session_id" && c[1] === "guest"
+    )).toBe(true);
+  });
+
+  it("a guest cookie blocks writes even for a signed-in OAuth owner", async () => {
+    mockResolve.mockResolvedValue({
+      accountId: 0,
+      username: "guest",
+      displayName: "Guest",
+      role: "guest" as const,
+      assignedFloorId: null,
+      fromCookie: true,
+    });
+    const ctx: TrpcContext = {
+      ...makeCtx(),
+      user: { ...makeCtx().user!, role: "admin", name: "Owner" },
+    } as TrpcContext;
+    await expect(
+      caller(ctx).machines.remove({ machineId: 3 })
+    ).rejects.toMatchObject({ code: "UNAUTHORIZED" });
   });
 });
 

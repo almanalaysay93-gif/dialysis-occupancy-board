@@ -11,7 +11,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { useAuth } from "@/_core/hooks/useAuth";
+import { useCanWrite } from "@/hooks/useCanWrite";
 import { trpc } from "@/lib/trpc";
 import RenameMachineDialog from "@/components/RenameMachineDialog";
 import RenameSessionLabelDialog from "@/components/RenameSessionLabelDialog";
@@ -59,15 +59,9 @@ export function FloorMachineChip({
   row: MachineWithSession;
   onAssign: (machineId: number) => void;
 }) {
-  const { user } = useAuth();
   const utils = trpc.useUtils();
-  const { data: staffMe } = trpc.staff.me.useQuery(undefined, {
-    retry: false,
-    refetchInterval: 30_000,
-  });
   // Staff actions: OAuth session OR nurse/supervisor staff session (guest read-only).
-  const isStaff =
-    staffMe?.role === "guest" ? false : !!user || Boolean(staffMe?.role);
+  const { canWrite: isStaff } = useCanWrite();
   const occupied = row.session !== null;
   const urgent = row.session?.urgent ?? false;
   const countdownMs = useCountdown(row.session?.endsAt ?? null);
@@ -158,7 +152,7 @@ export function FloorMachineChip({
       className={cn(
         "relative flex h-14 w-full flex-col items-center justify-center gap-0.5 border text-center",
         urgent
-          ? "border-[#9E1F2B] bg-[#9E1F2B] text-[#F4F7F8]"
+          ? "tile-urgent-pulse border-[#9E1F2B] bg-[#9E1F2B] text-[#F4F7F8]"
           : "border-[#3E8A6A] bg-[#3E8A6A] text-[#F4F7F8]"
       )}
     >

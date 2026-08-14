@@ -1,6 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { COOKIE_NAME } from "@shared/const";
+import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router, staffOrAdminProcedure } from "./_core/trpc";
@@ -14,6 +14,7 @@ import {
   staffAccessedFloors,
   staffCanWrite,
   bumpTokenVersion,
+  STAFF_COOKIE_NAME,
   type StaffSession,
 } from "./staffAuth";
 import { staffAccounts } from "../drizzle/schema";
@@ -71,8 +72,11 @@ export const appRouter = router({
           label: z.string().trim().min(1, "Machine label is required").max(32),
         })
       )
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
         try {
+          // Floor-scope: nurses may only rename machines on their own board.
+          const machine = await machineDb.getMachineById(input.machineId);
+          if (machine?.floorId) requireFloorAccess(ctx.staff, machine.floorId, ctx.user);
           await machineDb.updateMachineLabel({ machineId: input.machineId, label: input.label });
           return { success: true } as const;
         } catch (error) {
@@ -411,6 +415,15 @@ export const appRouter = router({
           floorId: z.number().int().positive(),
           patientId: z.string().trim().min(1, "Patient identifier is required").max(64),
           priority: waitingPrioritySchema.default("normal"),
+          /** Planned treatment length, carried onto the session at admit time. */
+          durationMinutes: z
+            .number()
+            .int()
+            .min(15, "Minimum duration is 15 minutes")
+            .max(1440, "Maximum duration is 24 hours")
+            .default(240),
+          isolationTag: isolationTagSchema.default("clean"),
+          assignedNurse: z.string().trim().max(64).nullable().default(null),
         })
       )
       .mutation(async ({ ctx, input }) => {
@@ -420,6 +433,9 @@ export const appRouter = router({
             floorId: input.floorId,
             patientId: input.patientId,
             priority: input.priority,
+            durationMinutes: input.durationMinutes,
+            isolationTag: input.isolationTag,
+            assignedNurse: input.assignedNurse,
             addedBy: ctx.user?.name ?? ctx.user?.email ?? ctx.staff?.displayName ?? "staff",
           });
           return { success: true, entryId: result.id } as const;
@@ -482,8 +498,9 @@ export const appRouter = router({
         z.object({
           entryId: z.number().int().positive(),
           floorId: z.number().int().positive(),
-          durationMinutes: z.number().int().min(15).max(1440),
-          isolationTag: isolationTagSchema,
+          /** Omitted → the details captured when the patient joined the queue. */
+          durationMinutes: z.number().int().min(15).max(1440).optional(),
+          isolationTag: isolationTagSchema.optional(),
           urgent: z.boolean().default(false),
           displayLabel: z.string().trim().max(64).nullable().default(null),
           assignedNurse: z.string().trim().max(64).nullable().default(null),
@@ -562,6 +579,18 @@ export const appRouter = router({
   staff: router({
     me: publicProcedure.query(async ({ ctx }) => {
       return resolveStaffSession(ctx.req);
+    }),
+    /**
+     * Enter explicit guest mode. The marker cookie never verifies as a JWT, so
+     * resolveStaffSession reports a guest session with fromCookie=true — which
+     * is what locks writes server-side even for an OAuth-signed-in owner.
+     */
+    guest: publicProcedure.mutation(({ ctx }) => {
+      ctx.res.cookie(STAFF_COOKIE_NAME, "guest", {
+        ...getSessionCookieOptions(ctx.req),
+        maxAge: ONE_YEAR_MS,
+      });
+      return { success: true } as const;
     }),
     login: publicProcedure
       .input(

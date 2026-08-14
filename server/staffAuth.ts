@@ -74,8 +74,22 @@ interface StaffJwtPayload {
   appId: string;
 }
 
+/**
+ * Read the signing secret at call time, not at module load: ENV is captured
+ * when the module is first imported, which is before a test file (or a late
+ * dotenv load) can set JWT_SECRET. An empty key makes jose throw
+ * "Zero-length key is not supported".
+ */
 function getSessionSecret() {
-  return new TextEncoder().encode(ENV.cookieSecret);
+  const secret = process.env.JWT_SECRET || ENV.cookieSecret;
+  if (!secret) {
+    if (ENV.isProduction) {
+      throw new Error("JWT_SECRET must be set — staff sessions cannot be signed without it.");
+    }
+    // ponytail: dev/test fallback only; production throws above.
+    return new TextEncoder().encode("dev-only-insecure-staff-session-secret");
+  }
+  return new TextEncoder().encode(secret);
 }
 
 export async function createStaffSessionToken(

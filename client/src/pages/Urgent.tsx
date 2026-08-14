@@ -2,7 +2,7 @@ import EndSessionDialog from "@/components/EndSessionDialog";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { useAuth } from "@/_core/hooks/useAuth";
+import { useCanWrite } from "@/hooks/useCanWrite";
 import { startLogin } from "@/const";
 import { trpc } from "@/lib/trpc";
 import { BellRing, Droplets, Power, Siren, Users } from "lucide-react";
@@ -55,19 +55,8 @@ function boardLink(floorId: number | null): string {
 }
 
 export default function Urgent() {
-  const { isAuthenticated } = useAuth();
   const utils = trpc.useUtils();
-  const { data: staffMe } = trpc.staff.me.useQuery(undefined, {
-    retry: false,
-    refetchInterval: 30_000,
-  });
-  // Write permissions: OAuth admin/staff OR nurse/supervisor staff session.
-  // Guests (staff role "guest" without OAuth login) are read-only.
-  // A guest staff session locks out writing even when an OAuth user is signed in.
-  const canWrite =
-    staffMe?.role === "guest"
-      ? false
-      : isAuthenticated || Boolean(staffMe?.role);
+  const { canWrite } = useCanWrite();
 
   const { data, isLoading, error } = trpc.waiting.urgentRegister.useQuery(undefined, {
     refetchInterval: 5_000,

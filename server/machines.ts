@@ -356,9 +356,28 @@ export type WaitingEntryView = {
   patientId: string;
   floorId: number;
   priority: "normal" | "urgent" | "veryUrgent";
+  /** Planned treatment length captured when the patient joined the queue. */
+  durationMinutes: number;
+  isolationTag: "clean" | "dirty";
+  assignedNurse: string | null;
   addedBy: string | null;
   joinedAt: Date;
 };
+
+/** Shared row → view mapper for the waiting list queries. */
+function toWaitingView(r: typeof waitingList.$inferSelect): WaitingEntryView {
+  return {
+    id: r.id,
+    patientId: r.patientId,
+    floorId: r.floorId,
+    priority: r.priority,
+    durationMinutes: r.durationMinutes,
+    isolationTag: r.isolationTag,
+    assignedNurse: r.assignedNurse,
+    addedBy: r.addedBy,
+    joinedAt: r.joinedAt,
+  };
+}
 
 /** Every still-waiting patient across all floors (for the cross-board urgent register). */
 export async function listWaitingAll(): Promise<WaitingEntryView[]> {
@@ -371,14 +390,7 @@ export async function listWaitingAll(): Promise<WaitingEntryView[]> {
     .where(eq(waitingList.status, "waiting"))
     .orderBy(desc(waitingList.priority), waitingList.joinedAt, waitingList.id);
 
-  return rows.map(r => ({
-    id: r.id,
-    patientId: r.patientId,
-    floorId: r.floorId,
-    priority: r.priority,
-    addedBy: r.addedBy,
-    joinedAt: r.joinedAt,
-  }));
+  return rows.map(toWaitingView);
 }
 
 export async function listWaiting(input: { floorId: number }): Promise<WaitingEntryView[]> {
@@ -391,20 +403,16 @@ export async function listWaiting(input: { floorId: number }): Promise<WaitingEn
     .where(and(eq(waitingList.floorId, input.floorId), eq(waitingList.status, "waiting")))
     .orderBy(desc(waitingList.priority), waitingList.joinedAt, waitingList.id);
 
-  return rows.map(r => ({
-    id: r.id,
-    patientId: r.patientId,
-    floorId: r.floorId,
-    priority: r.priority,
-    addedBy: r.addedBy,
-    joinedAt: r.joinedAt,
-  }));
+  return rows.map(toWaitingView);
 }
 
 export async function addWaiting(input: {
   floorId: number;
   patientId: string;
   priority: "normal" | "urgent" | "veryUrgent";
+  durationMinutes: number;
+  isolationTag: "clean" | "dirty";
+  assignedNurse?: string | null;
   addedBy: string;
 }) {
   const db = await getDb();
@@ -413,6 +421,9 @@ export async function addWaiting(input: {
   const trimmed = input.patientId.trim();
   if (!trimmed) throw new Error("PATIENT_ID_REQUIRED");
   if (trimmed.length > 64) throw new Error("PATIENT_ID_TOO_LONG");
+  if (input.durationMinutes < 15 || input.durationMinutes > 1440) {
+    throw new Error("DURATION_OUT_OF_RANGE");
+  }
 
   const result = await db
     .insert(waitingList)
@@ -420,6 +431,9 @@ export async function addWaiting(input: {
       floorId: input.floorId,
       patientId: trimmed,
       priority: input.priority,
+      durationMinutes: input.durationMinutes,
+      isolationTag: input.isolationTag,
+      assignedNurse: input.assignedNurse?.trim() || null,
       addedBy: input.addedBy,
     })
     .$returningId();
@@ -480,8 +494,9 @@ export async function countVacantMachines(input: { floorId: number }): Promise<n
 export async function admitWaiting(input: {
   floorId: number;
   entryId: number;
-  durationMinutes: number;
-  isolationTag: "clean" | "dirty";
+  /** Omit to reuse what was captured when the patient joined the queue. */
+  durationMinutes?: number;
+  isolationTag?: "clean" | "dirty";
   urgent: boolean;
   startedBy: string;
   displayLabel?: string | null;
@@ -518,21 +533,26 @@ export async function admitWaiting(input: {
     throw new Error("NO_VACANT_MACHINE");
   }
 
+  // Queue-captured details are the default; the admit form may override them.
+  const durationMinutes = input.durationMinutes ?? entry[0].durationMinutes;
+  const isolationTag = input.isolationTag ?? entry[0].isolationTag;
+  const assignedNurse = input.assignedNurse?.trim() || entry[0].assignedNurse;
+
   const now = new Date();
-  const endsAt = new Date(now.getTime() + input.durationMinutes * 60 * 1000);
+  const endsAt = new Date(now.getTime() + durationMinutes * 60 * 1000);
 
   // Start the session, then mark the waiting entry admitted
   await db.insert(sessions).values({
     machineId: vacant.id,
     patientId: entry[0].patientId,
-    durationMinutes: input.durationMinutes,
+    durationMinutes,
     startedAt: now,
     endsAt,
-    isolationTag: input.isolationTag,
+    isolationTag,
     urgent: input.urgent || entry[0].priority === "veryUrgent",
     startedBy: input.startedBy,
     displayLabel: input.displayLabel ? input.displayLabel.trim() || null : null,
-    assignedNurse: input.assignedNurse ? input.assignedNurse.trim() || null : null,
+    assignedNurse: assignedNurse || null,
   });
 
   await db
@@ -548,16 +568,25 @@ export async function admitWaiting(input: {
  */
 export type NurseAssignmentRow = {
   nurse: string;
-  machineId: number;
-  machineLabel: string;
+  /** "session" = on a machine now; "waiting" = queued for this nurse. */
+  kind: "session" | "waiting";
+  /** Session id or waiting-entry id, unique within its kind. */
+  id: number;
+  machineId: number | null;
+  machineLabel: string | null;
   patientId: string;
   displayLabel: string | null;
-  endsAt: Date;
+  /** Planned end of treatment; null while the patient is still waiting. */
+  endsAt: Date | null;
   durationMinutes: number;
-  startedAt: Date;
+  startedAt: Date | null;
+  /** When a waiting patient joined the queue; null for active sessions. */
+  joinedAt: Date | null;
   urgent: boolean;
   isolationTag: "clean" | "dirty";
 };
+
+const UNASSIGNED_NURSE = "Unassigned";
 
 export async function listNurseAssignments(input: { floorId: number }): Promise<NurseAssignmentRow[]> {
   const db = await getDb();
@@ -584,25 +613,58 @@ export async function listNurseAssignments(input: { floorId: number }): Promise<
   const labelById = new Map<number, string>();
   for (const m of machineLabels) labelById.set(m.id, m.label);
 
-  const UNASSIGNED = "Unassigned";
-  return rows
-    .map(r => ({
-      nurse: r.assignedNurse ? r.assignedNurse.trim() || UNASSIGNED : UNASSIGNED,
-      machineId: r.machineId,
-      machineLabel: labelById.get(r.machineId) ?? `M${r.machineId}`,
-      patientId: r.patientId,
-      displayLabel: r.displayLabel,
-      endsAt: r.endsAt,
-      durationMinutes: r.durationMinutes,
-      startedAt: r.startedAt,
-      urgent: r.urgent,
-      isolationTag: r.isolationTag,
-    }))
-    .sort((a, b) => {
-      const nurseOrder = a.nurse === UNASSIGNED ? 1 : b.nurse === UNASSIGNED ? -1 : a.nurse.localeCompare(b.nurse);
-      if (nurseOrder !== 0) return nurseOrder;
-      return a.endsAt.getTime() - b.endsAt.getTime();
-    });
+  // Patients still queued for this floor belong on the roster too — the team
+  // needs to see who a nurse is about to take on, not only who they hold now.
+  const waiting = await listWaiting({ floorId: input.floorId });
+
+  const sessionRows: NurseAssignmentRow[] = rows.map(r => ({
+    nurse: r.assignedNurse?.trim() || UNASSIGNED_NURSE,
+    kind: "session",
+    id: r.sessionId,
+    machineId: r.machineId,
+    machineLabel: labelById.get(r.machineId) ?? `M${r.machineId}`,
+    patientId: r.patientId,
+    displayLabel: r.displayLabel,
+    endsAt: r.endsAt,
+    durationMinutes: r.durationMinutes,
+    startedAt: r.startedAt,
+    joinedAt: null,
+    urgent: r.urgent,
+    isolationTag: r.isolationTag,
+  }));
+
+  const waitingRows: NurseAssignmentRow[] = waiting.map(w => ({
+    nurse: w.assignedNurse?.trim() || UNASSIGNED_NURSE,
+    kind: "waiting",
+    id: w.id,
+    machineId: null,
+    machineLabel: null,
+    patientId: w.patientId,
+    displayLabel: null,
+    endsAt: null,
+    durationMinutes: w.durationMinutes,
+    startedAt: null,
+    joinedAt: w.joinedAt,
+    urgent: w.priority !== "normal",
+    isolationTag: w.isolationTag,
+  }));
+
+  return [...sessionRows, ...waitingRows].sort((a, b) => {
+    const nurseOrder =
+      a.nurse === UNASSIGNED_NURSE
+        ? b.nurse === UNASSIGNED_NURSE
+          ? 0
+          : 1
+        : b.nurse === UNASSIGNED_NURSE
+          ? -1
+          : a.nurse.localeCompare(b.nurse);
+    if (nurseOrder !== 0) return nurseOrder;
+    // In-treatment patients first (soonest to finish), then the queue.
+    if (a.kind !== b.kind) return a.kind === "session" ? -1 : 1;
+    if (a.endsAt && b.endsAt) return a.endsAt.getTime() - b.endsAt.getTime();
+    if (a.joinedAt && b.joinedAt) return a.joinedAt.getTime() - b.joinedAt.getTime();
+    return 0;
+  });
 }
 
 // ---------------------------------------------------------------------------

@@ -142,6 +142,14 @@ function DashboardLayoutContent({
   const { user, logout } = useAuth();
   const utils = trpc.useUtils();
   const [location, setLocation] = useLocation();
+  // Sign out must clear the staff cookie server-side (it also bumps the
+  // account's token version), not merely refetch the session.
+  const staffLogout = trpc.staff.logout.useMutation({
+    onSettled: async () => {
+      await utils.staff.me.invalidate();
+      setLocation("/staff-login");
+    },
+  });
   const { state } = useSidebar();
   const isCollapsed = state === "collapsed";
   const sidebarRef = useRef<HTMLDivElement>(null);
@@ -273,10 +281,8 @@ function DashboardLayoutContent({
               </div>
               {staff ? (
                 <button
-                  onClick={() => {
-                    void utils.staff.me.invalidate();
-                    setLocation("/staff-login");
-                  }}
+                  onClick={() => staffLogout.mutate()}
+                  disabled={staffLogout.isPending}
                   aria-label="Sign out"
                   className="ml-auto text-muted-foreground hover:text-foreground transition-colors group-data-[collapsible=icon]:hidden"
                 >

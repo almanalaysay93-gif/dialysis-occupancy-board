@@ -4,16 +4,27 @@ import { useEffect, useMemo, useState } from "react";
 
 export type NurseAssignment = {
   nurse: string;
-  machineId: number;
-  machineLabel: string;
+  kind: "session" | "waiting";
+  id: number;
+  machineId: number | null;
+  machineLabel: string | null;
   patientId: string;
   displayLabel: string | null;
-  endsAt: Date;
+  endsAt: Date | null;
   durationMinutes: number;
-  startedAt: Date;
+  startedAt: Date | null;
+  joinedAt: Date | null;
   urgent: boolean;
   isolationTag: "clean" | "dirty";
 };
+
+/** "4 h", "3 h 30 m", "45 m" — the planned length of a treatment. */
+function formatDuration(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  if (h === 0) return `${m} m`;
+  return m > 0 ? `${h} h ${m} m` : `${h} h`;
+}
 
 /**
  * Formats remaining time like "1 h 22 m" (crimson under 15 minutes, muted when done).
@@ -81,7 +92,7 @@ export default function NurseAssignmentsPanel({ floorId }: { floorId: number }) 
         <div className="p-6 text-center">
           <Clock className="mx-auto mb-2 h-5 w-5 text-[#B9C4D4]" />
           <p className="font-serif-light italic text-[#556680]">
-            No patients are on treatment on this floor — the roster will appear here once a session is assigned and a nurse is named.
+            No patients on treatment or waiting on this floor — the roster fills in as soon as a session is assigned or a patient joins the queue.
           </p>
         </div>
       ) : (
@@ -99,13 +110,17 @@ export default function NurseAssignmentsPanel({ floorId }: { floorId: number }) 
               </div>
               <ul>
                 {patients.map(p => {
-                  const remaining = formatRemaining(p.endsAt, now);
+                  const remaining = p.endsAt ? formatRemaining(p.endsAt, now) : null;
                   return (
                     <li
-                      key={p.machineId}
+                      key={`${p.kind}-${p.id}`}
                       className="flex flex-wrap items-center gap-x-4 gap-y-1 px-5 py-2.5"
                     >
-                      <p className="w-28 font-display text-sm text-[#1F2A52]">{p.machineLabel}</p>
+                      <p className="w-28 font-display text-sm text-[#1F2A52]">
+                        {p.machineLabel ?? (
+                          <span className="smallcaps-detail text-[#7684A0]">Queued</span>
+                        )}
+                      </p>
                       <p className="flex-1 text-sm text-[#37425F]">
                         {p.displayLabel && p.displayLabel.trim()
                           ? p.displayLabel
@@ -126,18 +141,24 @@ export default function NurseAssignmentsPanel({ floorId }: { floorId: number }) 
                           Dirty
                         </span>
                       )}
-                      <span
-                        className={`smallcaps-detail border px-2 py-0.5 ${
-                          remaining.overdue
-                            ? "border-[#9E1F2B] bg-[#9E1F2B]/10 text-[#9E1F2B]"
-                            : remaining.critical
-                              ? "border-[#C98A1E] bg-[#C98A1E]/10 text-[#8A5F12]"
-                              : "border-[#3E8A6A]/40 bg-[#3E8A6A]/8 text-[#3E8A6A]"
-                        }`}
-                      >
-                        {remaining.overdue ? "⏰ " : ""}
-                        {remaining.text} {remaining.overdue ? "" : "left"}
-                      </span>
+                      {remaining ? (
+                        <span
+                          className={`smallcaps-detail border px-2 py-0.5 ${
+                            remaining.overdue
+                              ? "border-[#9E1F2B] bg-[#9E1F2B]/10 text-[#9E1F2B]"
+                              : remaining.critical
+                                ? "border-[#C98A1E] bg-[#C98A1E]/10 text-[#8A5F12]"
+                                : "border-[#3E8A6A]/40 bg-[#3E8A6A]/8 text-[#3E8A6A]"
+                          }`}
+                        >
+                          {remaining.overdue ? "⏰ " : ""}
+                          {remaining.text} {remaining.overdue ? "" : "left"}
+                        </span>
+                      ) : (
+                        <span className="smallcaps-detail border border-[#D4DFE5] bg-[#F4F7F8] px-2 py-0.5 text-[#556680]">
+                          Waiting · {formatDuration(p.durationMinutes)} booked
+                        </span>
+                      )}
                     </li>
                   );
                 })}

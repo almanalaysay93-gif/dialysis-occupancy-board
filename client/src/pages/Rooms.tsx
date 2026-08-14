@@ -4,25 +4,19 @@ import RemoveRoomDialog from "@/components/RemoveRoomDialog";
 import RenameRoomDialog from "@/components/RenameRoomDialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { useAuth } from "@/_core/hooks/useAuth";
+import { useCanWrite } from "@/hooks/useCanWrite";
 import { startLogin } from "@/const";
 import { trpc } from "@/lib/trpc";
 import { LayoutGrid, Pencil, Plus, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 
 export default function Rooms() {
-  const { isAuthenticated } = useAuth();
   const utils = trpc.useUtils();
-  const { data: staffMe } = trpc.staff.me.useQuery(undefined, {
-    retry: false,
-    refetchInterval: 30_000,
-  });
-  // Write permissions: OAuth admin/staff OR nurse/supervisor staff session.
-  // A guest staff session locks out writing even when an OAuth user is signed in.
-  const canWrite =
-    staffMe?.role === "guest"
-      ? false
-      : isAuthenticated || Boolean(staffMe?.role);
+  // Rooms are a global resource: the server allows only supervisors and OAuth
+  // users to manage them, so nurses see the page read-only rather than being
+  // offered buttons that would come back FORBIDDEN.
+  const { canWrite: mayWrite, role } = useCanWrite();
+  const canWrite = mayWrite && role !== "nurse";
   const { data: rooms, isLoading } = trpc.rooms.list.useQuery(undefined, {
     refetchInterval: 5_000,
   });
