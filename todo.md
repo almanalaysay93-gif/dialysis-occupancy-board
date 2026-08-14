@@ -183,3 +183,7 @@
 - [ ] Vitest suite passes on Postgres (92+ tests), new secret-validation test
 - [ ] Live verification: guest/nurse/supervisor logins, board reads/writes, end-of-day report
 - [ ] Checkpoint + publish
+
+## User request: push latest code to GitHub (Aug 14)
+- [ ] Save a checkpoint with the latest code state (supabaseMask/supabasePing probes + migration work)
+- [ ] Push to almanalaysay93-gif/dialysis-occupancy-board on GitHub
