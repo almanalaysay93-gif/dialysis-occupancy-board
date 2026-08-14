@@ -148,11 +148,11 @@
 - [x] Final delivery: staff-credentials.md updated with confirmed logins and persistence note, final report delivered to user
 
 ## User audit: every login entry must follow the rules (user request)
-- [ ] Audit code: staffAuth.ts + routers.ts RBAC guards for supervisor, nurse (each floor), guest
-- [ ] Live production verification: supervisor login + scoping + write gates
-- [ ] Live production verification: nurse.skti-main scoped to 30001 only (write FORBIDDEN on other floors)
-- [ ] Live production verification: nurse.rdu-annex scoped to 30002 only
-- [ ] Live production verification: nurse.rdu-main scoped to 30003 only
-- [ ] Live production verification: guest mode stays pure view-only (no report, no writes, no hidden APIs)
-- [ ] Fix any bugs found and publish
-- [ ] Deliver audit report
+- [x] Audit code: staffAuth.ts + routers.ts RBAC guards — fixed machines.remove (was unscoped: any nurse could delete any floor's machine) and rooms management (now supervisor-only)
+- [x] Live production verification: supervisor login + scoping + write gates (rooms add/remove, cross-floor machine remove)
+- [x] Live production verification: nurse.skti-main scoped to 30001 only (write FORBIDDEN on other floors and rooms.add)
+- [x] Live production verification: nurse.rdu-annex scoped to 30002 only
+- [x] Live production verification: nurse.rdu-main scoped to 30003 only
+- [x] Live production verification: guest mode stays pure view-only (staff.me with/without cookie -> guest; writes require staffOrAdminProcedure)
+- [x] Fix any bugs found and publish: token-version revocation (login/logout bump tokenVersion; stale cookies resolve to guest); 2 new vitest tests (85 passing); migration applied to production
+- [x] Deliver audit report
