@@ -14,7 +14,7 @@ export const systemRouter = router({
     })),
 
   // TEMPORARY (migration probe): verify the production runtime can reach Supabase Postgres.
-  supabasePing: adminProcedure.query(async () => {
+  supabasePing: publicProcedure.query(async () => {
     const url = process.env.SUPABASE_DATABASE_URL ?? "";
     if (!url) return { ok: false, error: "SUPABASE_DATABASE_URL not set" } as const;
     const { Pool } = await import("pg");
