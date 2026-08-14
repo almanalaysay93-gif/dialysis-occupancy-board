@@ -14,6 +14,16 @@ export const systemRouter = router({
     })),
 
   // TEMPORARY (migration probe): verify the production runtime can reach Supabase Postgres.
+    // TEMPORARY: return masked Supabase URL for secret debugging (remove after)
+  supabaseMask: publicProcedure.query(() => {
+    const url = process.env.SUPABASE_DATABASE_URL ?? "";
+    if (!url) return { set: false } as const;
+    try {
+      const u = new URL(url);
+      return { set: true, proto: u.protocol, user: u.username, host: u.host, port: u.port, pathname: u.pathname, pwdLen: u.password.length } as const;
+    } catch { return { set: true, parseError: true } as const; }
+  }),
+
   supabasePing: publicProcedure.query(async () => {
     const url = process.env.SUPABASE_DATABASE_URL ?? "";
     if (!url) return { ok: false, error: "SUPABASE_DATABASE_URL not set" } as const;
