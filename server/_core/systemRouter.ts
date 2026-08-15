@@ -161,6 +161,6 @@ async function runSupabaseMigration(): Promise<{ ok: boolean; log?: string[]; er
     await dst.end();
     return { ok: true, log };
   } catch (e) {
-    return { ok: false, error: (e as Error).message };
+    return { ok: false, error: (e as Error).message, ver: "74d7ee15" };
   }
 }
