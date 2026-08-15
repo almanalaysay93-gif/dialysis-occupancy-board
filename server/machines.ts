@@ -85,37 +85,41 @@ export async function assignSession(input: {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
-  // Guarantee one active session per machine
-  const conflict = await db
-    .select({ id: sessions.id })
-    .from(sessions)
-    .where(and(eq(sessions.machineId, input.machineId), eq(sessions.status, "active")))
-    .limit(1);
-  if (conflict.length > 0) {
-    throw new Error("MACHINE_OCCUPIED");
-  }
+  // Run the check and insert on a single connection so two concurrent
+  // assignments for the same machine cannot both pass the occupancy check.
+  return await db.transaction(async tx => {
+    const conflict = await tx
+      .select({ id: sessions.id })
+      .from(sessions)
+      .where(and(eq(sessions.machineId, input.machineId), eq(sessions.status, "active")))
+      .limit(1)
+      .for("update");
+    if (conflict.length > 0) {
+      throw new Error("MACHINE_OCCUPIED");
+    }
 
-  const now = new Date();
-  const endsAt = new Date(now.getTime() + input.durationMinutes * 60 * 1000);
+    const now = new Date();
+    const endsAt = new Date(now.getTime() + input.durationMinutes * 60 * 1000);
 
-  const result = await db
-    .insert(sessions)
-    .values({
-      machineId: input.machineId,
-      patientId: input.patientId,
-      durationMinutes: input.durationMinutes,
-      startedAt: now,
-      endsAt,
-      isolationTag: input.isolationTag,
-      urgent: input.urgent,
-      startedBy: input.startedBy,
-      displayLabel: input.displayLabel ? input.displayLabel.trim() || null : null,
-      assignedNurse: input.assignedNurse ? input.assignedNurse.trim() || null : null,
-      needsRepairAfterSession: input.needsRepairAfterSession === true,
-    })
-    .returning({ id: machines.id });
+    const result = await tx
+      .insert(sessions)
+      .values({
+        machineId: input.machineId,
+        patientId: input.patientId,
+        durationMinutes: input.durationMinutes,
+        startedAt: now,
+        endsAt,
+        isolationTag: input.isolationTag,
+        urgent: input.urgent,
+        startedBy: input.startedBy,
+        displayLabel: input.displayLabel ? input.displayLabel.trim() || null : null,
+        assignedNurse: input.assignedNurse ? input.assignedNurse.trim() || null : null,
+        needsRepairAfterSession: input.needsRepairAfterSession === true,
+      })
+      .returning({ id: sessions.id });
 
-  return result[0];
+    return result[0];
+  });
 }
 
 export async function endSession(input: {
@@ -829,7 +833,7 @@ export async function addRoom(input: { name: string }) {
       name: input.name.trim(),
       sortOrder: (maxOrder[0]?.sortOrder ?? 0) + 1,
     })
-    .returning({ id: machines.id });
+    .returning({ id: floors.id });
 
   return result[0];
 }
@@ -973,7 +977,7 @@ export async function addWaiting(input: {
       assignedNurse: input.assignedNurse?.trim() || null,
       addedBy: input.addedBy,
     })
-    .returning({ id: machines.id });
+    .returning({ id: waitingList.id });
 
   return result[0];
 }
@@ -1042,7 +1046,8 @@ export async function admitWaiting(input: {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
-  // Locate the waiting entry on this floor (status must still be 'waiting')
+  // Locate the waiting entry on this floor (status must still be 'waiting').
+  // Done outside the transaction to fail fast, then re-checked inside it.
   const entry = await db
     .select()
     .from(waitingList)
@@ -1052,50 +1057,66 @@ export async function admitWaiting(input: {
     throw new Error("NO_WAITING_PATIENT");
   }
 
-  // Find the first vacant machine on this floor (lowest sortOrder)
-  const floorMachines = await db
-    .select({ id: machines.id })
-    .from(machines)
-    .where(eq(machines.floorId, input.floorId))
-    .orderBy(machines.sortOrder, machines.id);
-
-  const occupiedIds = await db
-    .select({ machineId: sessions.machineId })
-    .from(sessions)
-    .where(eq(sessions.status, "active"));
-  const occupied = new Set(occupiedIds.map(o => o.machineId));
-
-  const vacant = floorMachines.find(m => !occupied.has(m.id));
-  if (!vacant) {
-    throw new Error("NO_VACANT_MACHINE");
-  }
+  const entryRow = entry[0];
 
   // Queue-captured details are the default; the admit form may override them.
-  const durationMinutes = input.durationMinutes ?? entry[0].durationMinutes;
-  const isolationTag = input.isolationTag ?? entry[0].isolationTag;
-  const assignedNurse = input.assignedNurse?.trim() || entry[0].assignedNurse;
+  const durationMinutes = input.durationMinutes ?? entryRow.durationMinutes;
+  const isolationTag = input.isolationTag ?? entryRow.isolationTag;
+  const assignedNurse = input.assignedNurse?.trim() || entryRow.assignedNurse;
 
-  const now = new Date();
-  const endsAt = new Date(now.getTime() + durationMinutes * 60 * 1000);
+  // Vacancy lookup + session start run in one transaction with row locks so
+  // two concurrent admits for the same floor cannot grab the same machine.
+  await db.transaction(async tx => {
+    // Re-verify the waiting entry is still claimable inside the transaction.
+    const locked = await tx
+      .select({ id: waitingList.id, patientId: waitingList.patientId })
+      .from(waitingList)
+      .where(and(eq(waitingList.id, input.entryId), eq(waitingList.status, "waiting")))
+      .limit(1)
+      .for("update", { skipLocked: true });
+    if (locked.length === 0) {
+      throw new Error("NO_WAITING_PATIENT");
+    }
 
-  // Start the session, then mark the waiting entry admitted
-  await db.insert(sessions).values({
-    machineId: vacant.id,
-    patientId: entry[0].patientId,
-    durationMinutes,
-    startedAt: now,
-    endsAt,
-    isolationTag,
-    urgent: input.urgent || entry[0].priority === "veryUrgent",
-    startedBy: input.startedBy,
-    displayLabel: input.displayLabel ? input.displayLabel.trim() || null : null,
-    assignedNurse: assignedNurse || null,
+    // Find the first vacant machine on this floor (lowest sortOrder).
+    const floorMachines = await tx
+      .select({ id: machines.id })
+      .from(machines)
+      .where(eq(machines.floorId, input.floorId))
+      .orderBy(machines.sortOrder, machines.id);
+
+    const occupiedIds = await tx
+      .select({ machineId: sessions.machineId })
+      .from(sessions)
+      .where(eq(sessions.status, "active"));
+    const occupied = new Set(occupiedIds.map(o => o.machineId));
+
+    const vacant = floorMachines.find(m => !occupied.has(m.id));
+    if (!vacant) {
+      throw new Error("NO_VACANT_MACHINE");
+    }
+
+    const now = new Date();
+    const endsAt = new Date(now.getTime() + durationMinutes * 60 * 1000);
+
+    await tx.insert(sessions).values({
+      machineId: vacant.id,
+      patientId: locked[0].patientId,
+      durationMinutes,
+      startedAt: now,
+      endsAt,
+      isolationTag,
+      urgent: input.urgent || entryRow.priority === "veryUrgent",
+      startedBy: input.startedBy,
+      displayLabel: input.displayLabel ? input.displayLabel.trim() || null : null,
+      assignedNurse: assignedNurse || null,
+    });
+
+    await tx
+      .update(waitingList)
+      .set({ status: "admitted", admittedAt: now })
+      .where(eq(waitingList.id, input.entryId));
   });
-
-  await db
-    .update(waitingList)
-    .set({ status: "admitted", admittedAt: now })
-    .where(eq(waitingList.id, input.entryId));
 }
 
 /**

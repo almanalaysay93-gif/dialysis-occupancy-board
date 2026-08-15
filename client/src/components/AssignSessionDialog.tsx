@@ -143,7 +143,7 @@ export default function AssignSessionDialog({
               <button
                 type="button"
                 onClick={() => {
-                  setDisplayLabel("");
+                  // Open the title editor without losing the existing label.
                   setEditLabelOpen(true);
                 }}
                 aria-label="Edit the highlighted session title"

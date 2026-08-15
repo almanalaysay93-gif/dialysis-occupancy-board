@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "wouter";
 import { ClipboardList, Dumbbell, PenLine, Printer, Trash2, UserRound, Users } from "lucide-react";
+import { toast } from "sonner";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import {
@@ -361,10 +362,18 @@ function SupervisorNarrativeSection({
   const dialogOpen = openPeriod !== null && openFloorId !== null;
 
   const createMutation = trpc.narratives.create.useMutation({
-    onSuccess: () => void utils.narratives.list.invalidate({ reportDate: date }),
+    onSuccess: () => {
+      toast.success("Supervisor narrative saved");
+      void utils.narratives.list.invalidate({ reportDate: date });
+    },
+    onError: e => toast.error(e.message),
   });
   const removeMutation = trpc.narratives.remove.useMutation({
-    onSuccess: () => void utils.narratives.list.invalidate({ reportDate: date }),
+    onSuccess: () => {
+      toast.success("Supervisor narrative removed");
+      void utils.narratives.list.invalidate({ reportDate: date });
+    },
+    onError: e => toast.error(e.message),
   });
 
   // Map of `${floorId}:${periodKey}` -> entry, collected across the visible
@@ -592,10 +601,18 @@ function SupervisorNarrativeDialog({
   }, [body, draftKey]);
 
   const createMutation = trpc.narratives.create.useMutation({
-    onSuccess: () => void utils.narratives.list.invalidate({ reportDate: date }),
+    onSuccess: () => {
+      toast.success("Narrative saved");
+      void utils.narratives.list.invalidate({ reportDate: date });
+    },
+    onError: e => toast.error(e.message),
   });
   const updateMutation = trpc.narratives.update.useMutation({
-    onSuccess: () => void utils.narratives.list.invalidate({ reportDate: date }),
+    onSuccess: () => {
+      toast.success("Narrative updated");
+      void utils.narratives.list.invalidate({ reportDate: date });
+    },
+    onError: e => toast.error(e.message),
   });
 
   return (
@@ -896,13 +913,25 @@ export function NarrativeReport({
     { refetchInterval: editable ? 15_000 : false }
   );
   const createMutation = trpc.narratives.create.useMutation({
-    onSuccess: () => void utils.narratives.list.invalidate({ floorId, reportDate: date }),
+    onSuccess: () => {
+      toast.success("Narrative saved");
+      void utils.narratives.list.invalidate({ floorId, reportDate: date });
+    },
+    onError: e => toast.error(e.message),
   });
   const updateMutation = trpc.narratives.update.useMutation({
-    onSuccess: () => void utils.narratives.list.invalidate({ floorId, reportDate: date }),
+    onSuccess: () => {
+      toast.success("Narrative updated");
+      void utils.narratives.list.invalidate({ floorId, reportDate: date });
+    },
+    onError: e => toast.error(e.message),
   });
   const removeMutation = trpc.narratives.remove.useMutation({
-    onSuccess: () => void utils.narratives.list.invalidate({ floorId, reportDate: date }),
+    onSuccess: () => {
+      toast.success("Narrative removed");
+      void utils.narratives.list.invalidate({ floorId, reportDate: date });
+    },
+    onError: e => toast.error(e.message),
   });
 
   // Charge nurses write the board narratives; supervisors only view them.

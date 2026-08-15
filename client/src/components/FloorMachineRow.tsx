@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useCanWrite } from "@/hooks/useCanWrite";
 import { trpc } from "@/lib/trpc";
+import EndSessionDialog from "@/components/EndSessionDialog";
 import RenameMachineDialog from "@/components/RenameMachineDialog";
 import RenameSessionLabelDialog from "@/components/RenameSessionLabelDialog";
 import RemoveMachineDialog from "@/components/RemoveMachineDialog";
@@ -81,6 +82,7 @@ export function FloorMachineChip({
   const done = countdownMs === 0;
   const [renameOpen, setRenameOpen] = useState(false);
   const [sessionLabelOpen, setSessionLabelOpen] = useState(false);
+  const [endSessionOpen, setEndSessionOpen] = useState(false);
   const [removeOpen, setRemoveOpen] = useState(false);
   const [isDragSource, setIsDragSource] = useState(false);
 
@@ -89,10 +91,10 @@ export function FloorMachineChip({
     onError: e => toast.error(e.message),
   });
 
-  const endSession = trpc.sessions.end.useMutation({
-    onSuccess: () => void utils.machines.list.invalidate(),
-    onError: e => toast.error(e.message),
-  });
+  // End Session confirmation is handled by EndSessionDialog. The raw
+  // mutation is unused now that the tile menu opens the confirmation
+  // dialog instead of ending the session directly.
+  void trpc.sessions.end.useMutation;
 
   const updateTag = trpc.sessions.updateTag.useMutation({
     onSuccess: () => void utils.machines.list.invalidate(),
@@ -391,7 +393,7 @@ export function FloorMachineChip({
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
-                onClick={() => endSession.mutate({ sessionId: session.id })}
+                onClick={() => setEndSessionOpen(true)}
                 className="text-[13px] text-destructive focus:text-destructive"
               >
                 <Power className="mr-2 h-4 w-4" />
@@ -409,6 +411,13 @@ export function FloorMachineChip({
         machineLabel={row.machine.label}
         currentLabel={session.displayLabel}
         onClose={() => setSessionLabelOpen(false)}
+      />
+      <EndSessionDialog
+        open={endSessionOpen}
+        sessionId={session.id}
+        machineLabel={row.machine.label}
+        onClose={() => setEndSessionOpen(false)}
+        onEnded={() => setEndSessionOpen(false)}
       />
     </div>
   );

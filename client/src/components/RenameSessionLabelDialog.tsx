@@ -8,7 +8,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { trpc } from "@/lib/trpc";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 /**
@@ -31,7 +31,12 @@ export default function RenameSessionLabelDialog({
   onClose: () => void;
 }) {
   const utils = trpc.useUtils();
+  // Hydrate the input with the session's current label when the dialog opens
+  // so a save without retyping keeps the existing title instead of erasing it.
   const [label, setLabel] = useState("");
+  useEffect(() => {
+    if (open) setLabel(currentLabel ?? "");
+  }, [open, currentLabel]);
 
   const updateLabel = trpc.sessions.updateLabel.useMutation({
     onSuccess: (_, vars) => {
@@ -82,7 +87,7 @@ export default function RenameSessionLabelDialog({
             />
             <p className="text-[11px] leading-relaxed text-[#7684A0]">
               This replaces the machine number on the tile for the duration of
-              the session. Leave empty to restore the machine number.
+              the session. Clear the field to restore the machine number.
             </p>
           </div>
 

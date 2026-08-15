@@ -19,6 +19,7 @@ import {
 } from "./staffAuth";
 import { staffAccounts } from "../drizzle/schema";
 import { getDb } from "./db";
+import { mapBackendError } from "./errors";
 import { eq } from "drizzle-orm";
 
 /**
@@ -93,7 +94,7 @@ export const appRouter = router({
           if ((error as Error)?.message === "LABEL_REQUIRED") {
             throw new TRPCError({ code: "BAD_REQUEST", message: "Machine label cannot be empty." });
           }
-          throw error;
+          mapBackendError(error);
         }
       }),
 
@@ -122,7 +123,7 @@ export const appRouter = router({
               message: "A machine with this label already exists on the board.",
             });
           }
-          throw error;
+          mapBackendError(error);
         }
       }),
 
@@ -153,7 +154,7 @@ export const appRouter = router({
           if ((error as Error)?.message === "MACHINE_NOT_FOUND") {
             throw new TRPCError({ code: "NOT_FOUND", message: "Machine not found." });
           }
-          throw error;
+          mapBackendError(error);
         }
       }),
 
@@ -210,7 +211,7 @@ export const appRouter = router({
           if (msg === "FLOOR_REQUIRED") {
             throw new TRPCError({ code: "BAD_REQUEST", message: "Choose the board this machine returns to." });
           }
-          throw error;
+          mapBackendError(error);
         }
       }),
 
@@ -251,7 +252,7 @@ export const appRouter = router({
           if (msg === "MACHINE_OFFBOARD") {
             throw new TRPCError({ code: "BAD_REQUEST", message: "Only machines on the floor boards can be swapped." });
           }
-          throw error;
+          mapBackendError(error);
         }
       }),
 
@@ -282,7 +283,7 @@ export const appRouter = router({
               message: "A room with this name already exists.",
             });
           }
-          throw error;
+          mapBackendError(error);
         }
       }),
 
@@ -310,7 +311,7 @@ export const appRouter = router({
           if (msg === "ROOM_NAME_TOO_LONG") {
             throw new TRPCError({ code: "BAD_REQUEST", message: "Room name is too long (max 64 characters)." });
           }
-          throw error;
+          mapBackendError(error);
         }
       }),
 
@@ -338,7 +339,7 @@ export const appRouter = router({
               message: "Cannot remove a room that still has machines. Remove its machines first.",
             });
           }
-          throw error;
+          mapBackendError(error);
         }
       }),
   }),
@@ -391,10 +392,7 @@ export const appRouter = router({
           });
           return { success: true, sessionId: result.id };
         } catch (error) {
-          if ((error as Error)?.message === "MACHINE_OCCUPIED") {
-            throw new TRPCError({ code: "CONFLICT", message: "This machine already has an active session." });
-          }
-          throw error;
+          mapBackendError(error);
         }
       }),
 
@@ -405,10 +403,14 @@ export const appRouter = router({
           const floorId = await machineDb.getSessionFloorId(input.sessionId);
           if (floorId) requireFloorAccess(ctx.staff, floorId, ctx.user);
         }
-        await machineDb.endSession({
-          sessionId: input.sessionId,
-          endedBy: ctx.user?.name ?? ctx.user?.email ?? ctx.staff?.displayName ?? "staff",
-        });
+        try {
+          await machineDb.endSession({
+            sessionId: input.sessionId,
+            endedBy: ctx.user?.name ?? ctx.user?.email ?? ctx.staff?.displayName ?? "staff",
+          });
+        } catch (error) {
+          mapBackendError(error);
+        }
         return { success: true } as const;
       }),
 
@@ -419,7 +421,11 @@ export const appRouter = router({
           const floorId = await machineDb.getSessionFloorId(input.sessionId);
           if (floorId) requireFloorAccess(ctx.staff, floorId, ctx.user);
         }
-        await machineDb.toggleUrgent({ sessionId: input.sessionId });
+        try {
+          await machineDb.toggleUrgent({ sessionId: input.sessionId });
+        } catch (error) {
+          mapBackendError(error);
+        }
         return { success: true } as const;
       }),
 
@@ -433,7 +439,11 @@ export const appRouter = router({
           const floorId = await machineDb.getSessionFloorId(input.sessionId);
           if (floorId) requireFloorAccess(ctx.staff, floorId, ctx.user);
         }
-        await machineDb.setRepairFlag({ sessionId: input.sessionId, flag: input.flag });
+        try {
+          await machineDb.setRepairFlag({ sessionId: input.sessionId, flag: input.flag });
+        } catch (error) {
+          mapBackendError(error);
+        }
         return { success: true } as const;
       }),
 
@@ -458,7 +468,7 @@ export const appRouter = router({
               message: "This machine has no active session.",
             });
           }
-          throw error;
+          mapBackendError(error);
         }
       }),
 
@@ -474,10 +484,14 @@ export const appRouter = router({
           const floorId = await machineDb.getSessionFloorId(input.sessionId);
           if (floorId) requireFloorAccess(ctx.staff, floorId, ctx.user);
         }
-        await machineDb.updateIsolationTag({
-          sessionId: input.sessionId,
-          isolationTag: input.isolationTag,
-        });
+        try {
+          await machineDb.updateIsolationTag({
+            sessionId: input.sessionId,
+            isolationTag: input.isolationTag,
+          });
+        } catch (error) {
+          mapBackendError(error);
+        }
         return { success: true } as const;
       }),
 
@@ -503,7 +517,7 @@ export const appRouter = router({
           if ((error as Error)?.message === "LABEL_TOO_LONG") {
             throw new TRPCError({ code: "BAD_REQUEST", message: "The display label is too long (max 64 characters)." });
           }
-          throw error;
+          mapBackendError(error);
         }
       }),
   }),
@@ -604,7 +618,7 @@ export const appRouter = router({
           if (msg === "PATIENT_ID_TOO_LONG") {
             throw new TRPCError({ code: "BAD_REQUEST", message: "Patient identifier is too long (max 64 characters)." });
           }
-          throw error;
+          mapBackendError(error);
         }
       }),
 
@@ -618,7 +632,11 @@ export const appRouter = router({
       )
       .mutation(async ({ ctx, input }) => {
         requireFloorAccess(ctx.staff, input.floorId, ctx.user);
-        await machineDb.removeWaiting({ entryId: input.entryId, floorId: input.floorId });
+        try {
+          await machineDb.removeWaiting({ entryId: input.entryId, floorId: input.floorId });
+        } catch (error) {
+          mapBackendError(error);
+        }
         return { success: true } as const;
       }),
 
@@ -633,11 +651,15 @@ export const appRouter = router({
       )
       .mutation(async ({ ctx, input }) => {
         requireFloorAccess(ctx.staff, input.floorId, ctx.user);
-        await machineDb.markWaitingUrgent({
-          entryId: input.entryId,
-          floorId: input.floorId,
-          priority: input.priority,
-        });
+        try {
+          await machineDb.markWaitingUrgent({
+            entryId: input.entryId,
+            floorId: input.floorId,
+            priority: input.priority,
+          });
+        } catch (error) {
+          mapBackendError(error);
+        }
         return { success: true } as const;
       }),
 
@@ -687,7 +709,7 @@ export const appRouter = router({
           if (msg === "NO_VACANT_MACHINE") {
             throw new TRPCError({ code: "BAD_REQUEST", message: "No vacant machine on this floor — end or release a session first." });
           }
-          throw error;
+          mapBackendError(error);
         }
       }),
 
@@ -764,16 +786,20 @@ export const appRouter = router({
         const staffSession = ctx.staff;
         const row = await machineDb.getNarrativeById(input.id, input.floorId);
         if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Narrative not found." });
-        await machineDb.updateNarrativeBody(input.id, input.body);
-        await machineDb.logNarrativeUpdate({
-          narrativeId: row.id,
-          floorId: row.floorId,
-          reportDate: row.reportDate,
-          periodKey: row.periodKey,
-          actor: staffSession?.displayName ?? "(unknown)",
-          actorRole: staffSession?.role === "supervisor" ? "supervisor" : staffSession?.role === "auditor" ? "auditor" : "nurse",
-          body: input.body,
-        });
+        try {
+          await machineDb.updateNarrativeBody(input.id, input.body);
+          await machineDb.logNarrativeUpdate({
+            narrativeId: row.id,
+            floorId: row.floorId,
+            reportDate: row.reportDate,
+            periodKey: row.periodKey,
+            actor: staffSession?.displayName ?? "(unknown)",
+            actorRole: staffSession?.role === "supervisor" ? "supervisor" : staffSession?.role === "auditor" ? "auditor" : "nurse",
+            body: input.body,
+          });
+        } catch (error) {
+          mapBackendError(error);
+        }
         return { success: true } as const;
       }),
 
@@ -812,7 +838,7 @@ export const appRouter = router({
           if (msg === "FORBIDDEN_PERIOD") {
             throw new TRPCError({ code: "FORBIDDEN", message: "This period is not part of your reporting scope." });
           }
-          throw error;
+          mapBackendError(error);
         }
       }),
 
@@ -821,12 +847,16 @@ export const appRouter = router({
       .input(z.object({ id: z.number().int().positive(), floorId: z.number().int().positive() }))
       .mutation(async ({ ctx, input }) => {
         requireFloorAccess(ctx.staff, input.floorId, ctx.user);
-        await machineDb.deleteNarrative({
-          id: input.id,
-          floorId: input.floorId,
-          actor: ctx.staff?.displayName ?? "(unknown)",
-          actorRole: ctx.staff?.role === "supervisor" ? "supervisor" : ctx.staff?.role === "auditor" ? "auditor" : "nurse",
-        });
+        try {
+          await machineDb.deleteNarrative({
+            id: input.id,
+            floorId: input.floorId,
+            actor: ctx.staff?.displayName ?? "(unknown)",
+            actorRole: ctx.staff?.role === "supervisor" ? "supervisor" : ctx.staff?.role === "auditor" ? "auditor" : "nurse",
+          });
+        } catch (error) {
+          mapBackendError(error);
+        }
         return { success: true } as const;
       }),
 

@@ -21,10 +21,16 @@ function mockDbWith(rows: unknown[]) {
   // On Postgres, inserts end with .returning(...) which must resolve to the
   // inserted rows, so the chain carries an explicit resolve value.
   const chain = (terminal: unknown, resolveValue = rows) => ({
+    // Drizzle builders are thenable: awaiting a chain must resolve to the
+    // mocked row array so occupancy checks and vacancy lookups observe the
+    // configured rows instead of the chain object itself.
+    then: (resolve: (v: unknown) => unknown) =>
+      Promise.resolve(resolveValue).then(resolve),
     from: vi.fn(() => chain(terminal, resolveValue)),
     where: vi.fn(() => chain(terminal, resolveValue)),
     orderBy: vi.fn(() => chain(terminal, resolveValue)),
-    limit: vi.fn().mockResolvedValue(rows),
+    limit: vi.fn().mockImplementation(() => chain(terminal, resolveValue)),
+    for: vi.fn(() => chain(terminal, resolveValue)),
     values: vi.fn(() => chain(terminal, resolveValue)),
     set: vi.fn(() => chain(terminal, resolveValue)),
     // Postgres inserts use .returning({ id: <table>.id }) instead of
@@ -33,9 +39,21 @@ function mockDbWith(rows: unknown[]) {
     onConflictDoUpdate: vi.fn(() => chain(terminal, resolveValue)),
   });
 
-  db.select = vi.fn(() => chain(undefined));
+  // The first select call is the occupancy check inside assignSession's
+  // transaction; subsequent selects resolve against the provided rows.
+  let selectCall = 0;
+  db.select = vi.fn(() => {
+    const callIndex = selectCall;
+    selectCall += 1;
+    const result = callIndex === 0 && rows.length > 0 ? rows : [];
+    return chain(undefined, result);
+  });
   db.insert = vi.fn(() => chain(undefined));
   db.update = vi.fn(() => chain(undefined));
+  // assignSession now runs its check + insert inside db.transaction(); the
+  // mock transaction simply executes the callback with the same chainable db
+  // so both steps resolve against the mocked rows.
+  db.transaction = vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn(db));
   return db;
 }
 
