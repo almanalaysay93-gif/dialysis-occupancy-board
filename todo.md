@@ -272,3 +272,6 @@
 - [x] Backend: createNarrative role guard — supervisor cannot write board periods (session/transition), only supervisor periods; nurse cannot write supervisor periods; router reports the writer's real staff role server-authoritatively
 - [x] End of Day Report: SupervisorNarrativeSection added with the three 7-3/3-11/11-7 periods per floor — writable by supervisors only, read-only for nurses/guests
 - [x] Tests + tsc: 119/119 vitest passing (supervisor-nurse split spec verifies role-gated period validation), tsc clean; checkpoint saved (auto-publish); push GitHub; deliver
+
+## Supervisor narrative layout restructure (Aug 15)
+- [x] End of Day Report: Supervisor Narrative Report grouped by shift (7–3, 3–11, 11–7) as the primary rows, with SKTI Main / RDU Annex / RDU Main areas as sub-tables inside each shift (instead of per-area cards) — verified end-to-end in browser as supervisor (write → saved with area picker → renders in correct shift/area slot with delete; probe entry cleaned)
