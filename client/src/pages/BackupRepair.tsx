@@ -72,7 +72,7 @@ export default function BackupRepair() {
 
   return (
     <DashboardLayout>
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+      <div className="w-full px-4 sm:px-6 py-6 space-y-6">
         <div>
           <h1 className="font-display text-3xl tracking-tight text-foreground">Backup &amp; Repair</h1>
           <p className="text-sm text-muted-foreground mt-1">

@@ -300,18 +300,23 @@ function DashboardLayoutContent({
         </Sidebar>
       </div>
 
-      <SidebarInset>
-        {isMobile && (
-          <div className="flex border-b border-border h-14 items-center justify-between bg-background/95 px-2 backdrop-blur supports-[backdrop-filter]:backdrop-blur sticky top-0 z-40">
-            <div className="flex items-center gap-2">
-              <SidebarTrigger className="h-9 w-9 rounded-sm bg-secondary" />
-              <span className="tracking-tight text-foreground">
-                {activeMenuItem?.label ?? "Menu"}
-              </span>
-            </div>
+      <SidebarInset className="min-w-0 flex-1 bg-background">
+        <div className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-[#D4DFE5]/80 bg-[#FBFCFD]/95 px-4 backdrop-blur supports-[backdrop-filter]:backdrop-blur">
+          <div className="flex items-center gap-3">
+            <SidebarTrigger className="h-9 w-9 rounded-sm border border-[#D4DFE5] bg-[#F4F7F8] text-[#1F2A52] hover:bg-[#E8EFF1] hover:text-[#1F2A52]" />
+            <span className="font-display text-base tracking-tight text-[#1F2A52]">
+              {activeMenuItem?.label ?? "Dialysis Board"}
+            </span>
           </div>
-        )}
-        <main className="flex-1">{children}</main>
+          <div className="flex items-center gap-2">
+            {staff && (
+              <span className="smallcaps-detail rounded border border-[#D4DFE5] bg-[#F4F7F8] px-2 py-1 text-[#556680]">
+                {staff.displayName} · {staff.role}
+              </span>
+            )}
+          </div>
+        </div>
+        <main className="flex-1 w-full min-w-0">{children}</main>
       </SidebarInset>
     </>
   );

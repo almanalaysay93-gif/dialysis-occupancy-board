@@ -112,7 +112,7 @@ export default function Urgent() {
 
   return (
     <DashboardLayout>
-      <div className="px-6 py-8 lg:px-12 lg:py-10">
+      <div className="w-full px-4 sm:px-6 py-6">
         <header className="border-b border-[#1F2A52]/80 pb-4">
           <p className="smallcaps-detail text-[#7684A0]">SPMCKTI · Priority Register</p>
           <h1 className="font-display mt-2 text-4xl text-[#1F2A52] sm:text-5xl">

@@ -160,7 +160,7 @@ export function OccupancyBoard({ floorId }: { floorId?: number }) {
 
   return (
     <DashboardLayout>
-      <div className="px-4 py-6 sm:px-6 lg:px-10 lg:py-8">
+      <div className="w-full px-4 sm:px-6 py-6">
         {/* Editorial masthead */}
         <header className="flex flex-col gap-2">
           <div className="flex items-center justify-between border-b border-[#1F2A52]/80 pb-3">
