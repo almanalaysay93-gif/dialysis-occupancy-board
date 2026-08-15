@@ -304,3 +304,8 @@
 ## Duplicate header on floor board page (user report Aug 15)
 - [x] /floor/:id showed two stacked headers: FloorBoard's own "LIVE BOARD" masthead rendered inside the dashboard shell; fixed canonically — /floor/:id route wrapped in DashboardLayout in App.tsx and FloorBoard's masthead header removed, so the shell header is the single header on every floor board (SKTI ICU, SKTI Service Ward included)
 - [x] Verified /floor/1, /floor/30001, /floor/30002 and Home render with one header (screenshots); 124/124 tests passing, tsc clean; checkpoint saved (auto-publish); push GitHub; deliver
+
+## Add machine reports success but no machine appears (user report Aug 15)
+- [x] Reproduce: root cause found — AddMachineDialog's floorId state started at "none" and never initialized from initialFloorId/first floor; submitting without touching the Floor select inserted the machine with floorId NULL, invisible on scoped /floor/:id boards (grouped under "Unassigned" which is excluded)
+- [x] Fix: useEffect in AddMachineDialog initializes floorId to the dialog's initial floor (or the first floor) when it opens; the user's two test machines (098, 099, created with null floorId on Aug 15) were re-assigned to SKTI ICU in the live Supabase DB
+- [x] Verify end-to-end: /floor/1 shows machines 098/099 on the SKTI ICU board; /floor/30001 (SKTI Main, 94 machines), /floor/30002 (RDU Annex, 36), /floor/30003 (RDU Main, 24) all resolve with correct names and single header; tests 124/124 passing, tsc clean

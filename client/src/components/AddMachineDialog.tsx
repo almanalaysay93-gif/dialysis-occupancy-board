@@ -17,7 +17,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { trpc } from "@/lib/trpc";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 export default function AddMachineDialog({
@@ -55,6 +55,16 @@ export default function AddMachineDialog({
       : floorsReady[0]?.id != null
         ? String(floorsReady[0].id)
         : "none";
+
+  // Keep the dialog's floor selection in sync with the floor the user is
+  // actually on. Without this, floorId stayed "none" when the dialog opened,
+  // so machines added without touching the Floor select were inserted
+  // unassigned and never appeared on the board (they landed in the hidden
+  // "Unassigned Machines" group). This was the cause of the "added but not
+  // shown" bug reported on Aug 15.
+  useEffect(() => {
+    if (open) setFloorId(defaultFloor);
+  }, [open, defaultFloor]);
 
   const handleSubmit = () => {
     if (!label.trim()) {
