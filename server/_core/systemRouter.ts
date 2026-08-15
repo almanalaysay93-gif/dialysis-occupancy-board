@@ -112,7 +112,7 @@ async function runSupabaseMigration(): Promise<{ ok: boolean; log?: string[]; er
     }
     log.push(`floors: ${floors.length}`);
     // 3) machines
-    const machines = await q("SELECT id, label, location, floorId, sortOrder, isolationTag, urgent, displayLabel, createdAt, updatedAt FROM machines ORDER BY id");
+    const machines = await q("SELECT id, label, location, floorId, sortOrder, createdAt, updatedAt, COALESCE(isolationTag, 'clean') AS isolationTag, COALESCE(urgent, 0) AS urgent, displayLabel FROM machines ORDER BY id");
     await dst.query("DELETE FROM machines");
     for (const m of machines) {
       await dst.query(
