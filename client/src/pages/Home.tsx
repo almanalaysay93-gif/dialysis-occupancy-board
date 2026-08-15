@@ -316,20 +316,11 @@ export function OccupancyBoard({ floorId }: { floorId?: number }) {
           )}
         </section>
 
-        {/* Per-board waiting list (visible on each floor's board) */}
-        {waitingFloorId !== undefined && (
-          <WaitingListPanel floorId={waitingFloorId} />
-        )}
-        {/* Per-floor nurse patient assignments roster */}
-        {waitingFloorId !== undefined && (
-          <NurseAssignmentsPanel floorId={waitingFloorId} />
-        )}
-
-        {/* Footer controls for authenticated staff */}
+        {/* Staff footer controls (vacant count + Add Machine / Assign Next Vacant) */}
         {canWrite && !isLoading && (
           <div className="mt-6 flex items-center justify-between border-t border-[#D4DFE5] pt-4">
             <p className="font-serif-light italic text-[#556680]">
-              {stats.vacant} machine{stats.vacant === 1 ? "" : "s"} vacant ·{" "}
+              {stats.vacant} machine{stats.vacant === 1 ? "s" : ""} vacant ·{" "}
               {data?.filter(r => floorId !== undefined ? r.machine.floorId === floorId : true).length ?? 0} machine
               {data?.filter(r => floorId !== undefined ? r.machine.floorId === floorId : true).length === 1 ? "" : "s"} on the board
             </p>
@@ -362,6 +353,15 @@ export function OccupancyBoard({ floorId }: { floorId?: number }) {
               )}
             </div>
           </div>
+        )}
+
+        {/* Per-board waiting list (visible on each floor's board) */}
+        {waitingFloorId !== undefined && (
+          <WaitingListPanel floorId={waitingFloorId} />
+        )}
+        {/* Per-floor nurse patient assignments roster */}
+        {waitingFloorId !== undefined && (
+          <NurseAssignmentsPanel floorId={waitingFloorId} />
         )}
 
         {/* Charge nurse narrative report at the bottom of the board —
