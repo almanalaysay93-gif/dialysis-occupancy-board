@@ -296,3 +296,7 @@
 - [x] Backend: machines.remove procedure (RBAC: supervisor/auditor any machine; nurse own floor only via requireFloorAccess; guest UNAUTHORIZED) with safety guards: refuse if machine has an active session (MACHINE_IN_TREATMENT → CONFLICT), refuse if status backup/repair (MACHINE_OFFBOARD → CONFLICT, must return to active floor first), MACHINE_NOT_FOUND → NOT_FOUND
 - [x] UI: Remove Machine action on vacant machine tile menu — staff only, destructive confirmation dialog (RemoveMachineDialog.tsx) explaining in-treatment/backup-repair restrictions; in-treatment tiles keep the end-session path
 - [x] Vitest coverage: remove guards tests in machine-swap.test.ts (supervisor remove, backup reject, in-treatment reject, not-found, guest blocked); nurse cross-floor scoping covered in staff-rbac.test.ts "machine removal scoping"; 124/124 passing, tsc clean; live end-to-end verified on Supabase (removed HD-012 on SKTI Main, confirmed deletion, restored to keep 100 machines); checkpoint saved (auto-publish); push GitHub; deliver
+
+## SKTI ICU floor naming bug (user report Aug 15)
+- [x] Newly added "SKTI ICU" floor displays as "SKTI Main" on its board page — root cause: auto-assigned id 1 collided with the sort-order fallback in FloorBoard's route resolver (raw '1' matched SKTI Main's sortOrder 1 first); fixed resolver to match floor code/id first and only fall back to sortOrder when no id matches
+- [x] Verify other floors unaffected (/floor/30001, /floor/30002 correct), tests + tsc (124/124 passing), checkpoint, push GitHub, deliver

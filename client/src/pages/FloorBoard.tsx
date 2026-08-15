@@ -17,13 +17,15 @@ export default function FloorBoard() {
     refetchInterval: 30_000,
   });
 
-  // Resolve by floor code (F1/F2/F3), raw DB id, or 1-based sort order.
-  const floor = floors?.find(
-    f =>
-      f.code === raw.toUpperCase() ||
-      String(f.id) === raw ||
-      String(f.sortOrder) === raw
-  );
+  // Resolve by floor code (F1/F2/F3) or raw DB id first; fall back to the
+  // 1-based sort order only when the numeric route value matches no floor id.
+  // This avoids the collision where the newest floor (auto-assigned id 1)
+  // resolved to SKTI Main because its sort order 1 matched the route.
+  const floor =
+    floors?.find(f => f.code === raw.toUpperCase() || String(f.id) === raw) ??
+    floors?.find(
+      f => String(f.sortOrder) === raw && String(f.id) !== raw
+    );
 
   if (!floor && !isLoading) return <NotFound />;
 
