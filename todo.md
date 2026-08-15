@@ -173,10 +173,10 @@
 - [x] Tests: 92/92 passing, tsc clean; checkpoint 888c31bd saved and auto-published
 
 ## Database migration: MySQL/TiDB -> Supabase PostgreSQL (user request Aug 14)
-- [ ] Validate SUPABASE_DATABASE_URL secret (SSL connection to db.oaxgmvsxzfkyqzmfwxtn.supabase.co works)
+- [x] Validate connection secret: base64-encoded SUPABASE_DATABASE_URL_B64 decodes cleanly and production ping returns PostgreSQL 17.6 (pooler endpoint works; direct db host unreachable from sandbox but prod egress works)
 - [ ] Audit current MySQL schema and data (tables, columns, enums, data counts)
 - [ ] Create Postgres schema in Supabase: floors, machines, sessions, waiting_list, staff_accounts, end_of_day + MySQL->PG conversions (auto_increment->serial, enum->text/check, timestamps)
-- [ ] Migrate all data: 160 machines, floors, staff accounts (password hashes + salts), waiting list, sessions, end-of-day history
+- [ ] Migrate all data: 160 machines, floors, staff accounts (password hashes + salts), waiting list, sessions, end-of-day history (run via production runtime: temporary migrate procedure)
 - [ ] Add pg (postgres) driver, keep drizzle with pg dialect
 - [ ] Rewrite server/db.ts helpers and any raw SQL for Postgres syntax
 - [ ] Update drizzle config/connection to Supabase URL
