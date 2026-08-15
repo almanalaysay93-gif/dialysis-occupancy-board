@@ -3,6 +3,14 @@ import { Link } from "wouter";
 import { ClipboardList, Dumbbell, PenLine, Printer, Trash2, UserRound, Users } from "lucide-react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { trpc } from "@/lib/trpc";
@@ -337,7 +345,7 @@ function SupervisorNarrativeSection({
   const [openPeriod, setOpenPeriod] = useState<string | null>(null);
   const [openFloorId, setOpenFloorId] = useState<number | null>(null);
   const [openAuthor, setOpenAuthor] = useState(() => staff?.displayName ?? "");
-  const [openBody, setOpenBody] = useState("");
+  const dialogOpen = openPeriod !== null && openFloorId !== null;
 
   const createMutation = trpc.narratives.create.useMutation({
     onSuccess: () => void utils.narratives.list.invalidate({ reportDate: date }),
@@ -374,6 +382,21 @@ function SupervisorNarrativeSection({
         </p>
       </CardHeader>
       <CardContent className="space-y-4 pt-4">
+        {dialogOpen && (
+          <SupervisorNarrativeDialog
+            visibleFloors={visibleFloors}
+            periodKey={openPeriod!}
+            floorId={openFloorId!}
+            date={date}
+            authorName={openAuthor}
+            onOpenChange={open => {
+              if (!open) {
+                setOpenPeriod(null);
+                setOpenFloorId(null);
+              }
+            }}
+          />
+        )}
         {isLoading ? (
           <Skeleton className="h-40 w-full" />
         ) : isError ? (
@@ -405,7 +428,6 @@ function SupervisorNarrativeSection({
                           ) ?? visibleFloors[0];
                         setOpenPeriod(period.key);
                         setOpenFloorId(target?.id ?? null);
-                        setOpenBody("");
                         setOpenAuthor(staff?.displayName ?? "");
                       }}
                     >
@@ -472,94 +494,126 @@ function SupervisorNarrativeSection({
             );
           })
         )}
-
-        {canWriteSupervisor && openPeriod && openFloorId && (
-          <div className="rounded-sm border border-[#2E9A9B]/40 bg-[#EFF8F8] p-4">
-            <p className="text-[11px] uppercase tracking-[0.18em] text-[#1d6b6c]">
-              {SUPERVISOR_PERIODS.find(p => p.key === openPeriod)?.label} ·{" "}
-              {(floors ?? []).find(f => f.id === openFloorId)?.name ?? "Area"}
-            </p>
-            <div className="mt-3 grid gap-3">
-              <div>
-                <label className="text-[10px] uppercase tracking-[0.14em] text-[#556680]">Area</label>
-                <div className="mt-1 flex flex-wrap gap-2">
-                  {visibleFloors.map(f => (
-                    <button
-                      key={f.id}
-                      type="button"
-                      onClick={() => setOpenFloorId(f.id)}
-                      className={
-                        f.id === openFloorId
-                          ? "h-7 rounded-sm border border-[#2E9A9B] bg-[#2E9A9B]/15 px-2.5 text-[11px] font-medium text-[#1d6b6c]"
-                          : "h-7 rounded-sm border border-[#D4DFE5] bg-white px-2.5 text-[11px] text-[#556680] hover:border-[#2E9A9B]/50"
-                      }
-                    >
-                      {f.name}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <label className="text-[10px] uppercase tracking-[0.14em] text-[#556680]">Your name</label>
-                <input
-                  value={openAuthor}
-                  onChange={e => setOpenAuthor(e.target.value)}
-                  className="mt-1 h-9 w-full rounded-sm border border-[#D4DFE5] bg-white px-2 text-sm text-[#1F2A52] outline-none focus:border-[#2E9A9B]"
-                  placeholder="e.g., Al John Manalaysay"
-                />
-              </div>
-              <div>
-                <label className="text-[10px] uppercase tracking-[0.14em] text-[#556680]">Narrative</label>
-                <textarea
-                  value={openBody}
-                  onChange={e => setOpenBody(e.target.value)}
-                  rows={4}
-                  maxLength={4000}
-                  className="mt-1 w-full resize-y rounded-sm border border-[#D4DFE5] bg-white px-2.5 py-2 text-sm leading-relaxed text-[#1F2A52] outline-none focus:border-[#2E9A9B]"
-                  placeholder={`Write the supervisor narrative for ${SUPERVISOR_PERIODS.find(p => p.key === openPeriod)?.label ?? "this shift"} · ${(floors ?? []).find(f => f.id === openFloorId)?.name ?? "the area"}…`}
-                />
-              </div>
-            </div>
-            <div className="mt-3 flex items-center justify-end gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                className="border-[#D4DFE5] text-[#556680]"
-                onClick={() => setOpenPeriod(null)}
-              >
-                Cancel
-              </Button>
-              <Button
-                size="sm"
-                className="bg-[#2E9A9B] text-white hover:bg-[#278788] disabled:opacity-60"
-                disabled={!openBody.trim() || createMutation.isPending}
-                onClick={() => {
-                  if (!openBody.trim() || !openAuthor.trim() || !openPeriod || !openFloorId) return;
-                  createMutation.mutate(
-                    {
-                      floorId: openFloorId,
-                      reportDate: date,
-                      periodKey: openPeriod,
-                      shiftKey: null,
-                      author: openAuthor.trim(),
-                      body: openBody.trim(),
-                    },
-                    {
-                      onSuccess: () => {
-                        setOpenPeriod(null);
-                        setOpenBody("");
-                      },
-                    }
-                  );
-                }}
-              >
-                {createMutation.isPending ? "Saving…" : "Save narrative"}
-              </Button>
-            </div>
-          </div>
-        )}
       </CardContent>
     </Card>
+  );
+}
+
+/**
+ * Popup dialog for writing a supervisor narrative for a shift + area.
+ */
+function SupervisorNarrativeDialog({
+  visibleFloors,
+  periodKey,
+  floorId,
+  date,
+  authorName,
+  onOpenChange,
+}: {
+  visibleFloors: { id: number; name: string }[];
+  periodKey: string;
+  floorId: number;
+  date: string;
+  authorName: string;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const utils = trpc.useUtils();
+  const [areaId, setAreaId] = useState(floorId);
+  const [author, setAuthor] = useState(authorName);
+  const [body, setBody] = useState("");
+
+  const createMutation = trpc.narratives.create.useMutation({
+    onSuccess: () => void utils.narratives.list.invalidate({ reportDate: date }),
+  });
+
+  return (
+    <Dialog open onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="text-left font-display text-lg text-[#1F2A52]">
+            Supervisor Narrative
+          </DialogTitle>
+          <DialogDescription className="text-left">
+            {SUPERVISOR_PERIODS.find(p => p.key === periodKey)?.label ?? periodKey} ·{" "}
+            {visibleFloors.find(f => f.id === areaId)?.name ?? "Area"}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-4">
+          <div>
+            <label className="text-[10px] uppercase tracking-[0.14em] text-[#556680]">Area</label>
+            <div className="mt-1.5 flex flex-wrap gap-2">
+              {visibleFloors.map(f => (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => setAreaId(f.id)}
+                  className={
+                    f.id === areaId
+                      ? "h-7 rounded-sm border border-[#2E9A9B] bg-[#2E9A9B]/15 px-2.5 text-[11px] font-medium text-[#1d6b6c]"
+                      : "h-7 rounded-sm border border-[#D4DFE5] bg-white px-2.5 text-[11px] text-[#556680] hover:border-[#2E9A9B]/50"
+                  }
+                >
+                  {f.name}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label className="text-[10px] uppercase tracking-[0.14em] text-[#556680]">Your name</label>
+            <input
+              value={author}
+              onChange={e => setAuthor(e.target.value)}
+              className="mt-1.5 h-9 w-full rounded-sm border border-[#D4DFE5] bg-white px-2 text-sm text-[#1F2A52] outline-none focus:border-[#2E9A9B]"
+              placeholder="e.g., Al John Manalaysay"
+            />
+          </div>
+          <div>
+            <label className="text-[10px] uppercase tracking-[0.14em] text-[#556680]">Narrative</label>
+            <textarea
+              value={body}
+              onChange={e => setBody(e.target.value)}
+              rows={5}
+              maxLength={4000}
+              className="mt-1.5 w-full resize-y rounded-sm border border-[#D4DFE5] bg-white px-2.5 py-2 text-sm leading-relaxed text-[#1F2A52] outline-none focus:border-[#2E9A9B]"
+              placeholder={`Write the supervisor narrative for ${SUPERVISOR_PERIODS.find(p => p.key === periodKey)?.label ?? "this shift"} · ${visibleFloors.find(f => f.id === areaId)?.name ?? "the area"}…`}
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button
+            size="sm"
+            variant="outline"
+            className="border-[#D4DFE5] text-[#556680]"
+            onClick={() => onOpenChange(false)}
+          >
+            Cancel
+          </Button>
+          <Button
+            size="sm"
+            className="bg-[#2E9A9B] text-white hover:bg-[#278788] disabled:opacity-60"
+            disabled={!body.trim() || !author.trim() || createMutation.isPending}
+            onClick={() => {
+              if (!body.trim() || !author.trim()) return;
+              createMutation.mutate(
+                {
+                  floorId: areaId,
+                  reportDate: date,
+                  periodKey,
+                  shiftKey: null,
+                  author: author.trim(),
+                  body: body.trim(),
+                },
+                {
+                  onSuccess: () => onOpenChange(false),
+                }
+              );
+            }}
+          >
+            {createMutation.isPending ? "Saving…" : "Save narrative"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

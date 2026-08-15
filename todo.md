@@ -275,3 +275,6 @@
 
 ## Supervisor narrative layout restructure (Aug 15)
 - [x] End of Day Report: Supervisor Narrative Report grouped by shift (7–3, 3–11, 11–7) as the primary rows, with SKTI Main / RDU Annex / RDU Main areas as sub-tables inside each shift (instead of per-area cards) — verified end-to-end in browser as supervisor (write → saved with area picker → renders in correct shift/area slot with delete; probe entry cleaned)
+
+## Supervisor narrative write form as popup (Aug 15)
+- [x] Write form (Area picker, Your name, Narrative textarea, Cancel/Save) opens in a Dialog popup modal instead of an inline panel inside the Supervisor Narrative Report card — verified end-to-end as supervisor in browser (dialog opens from any shift/area row, save lands entry in correct shift-area slot with delete icon, probe cleaned); 119/119 tests, tsc clean
