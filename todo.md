@@ -254,3 +254,9 @@
 - [x] Backend: narratives.list / narratives.create / narratives.remove tRPC procedures (floor-scoped RBAC; staff only; INVALID_PERIOD/EMPTY_BODY error mapping)
 - [x] EOD report page/UI: Narrative Report card per board with 7 periods (S1 5-10, T1 9-11 hook/term, S2 10-14, T2 13-15, S3 14-18, T3 17-20, S4 18-22), shift selector (6 shifts incl. 7-3/3-11/11-7), author prefill from staff session, write/save/delete per entry, print-friendly
 - [x] Vitest: 4 narrative + metrics specs in staff-rbac.test.ts (nurse own floor OK, nurse other floor FORBIDDEN, supervisor any floor + guest UNAUTHORIZED, endOfDay summary metrics present) — 117/117 passing, tsc clean; checkpoint saved (auto-publish); push GitHub; deliver
+
+## Move narrative report to floor boards (user request Aug 15)
+- [x] NarrativeReport extracted from EndOfDayReport (editable prop; NarrativeSection = read-only wrapper)
+- [x] NarrativeReport mounted on each floor board page (FloorBoard /floor/:id + combined board when scoped) — nurses write during the shift; RBAC floor-scoped, guests read-only
+- [x] End of Day Report (/report) now read-only reflection: completed narratives shown, "No entry" markers, no write/delete controls
+- [x] tsc clean, 117/117 vitest; screenshots verified on all three boards; checkpoint saved (auto-publish); push GitHub; deliver

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import NurseAssignmentsPanel from "@/components/NurseAssignmentsPanel";
 import StaffBar from "@/components/StaffBar";
 import WaitingListPanel from "@/components/WaitingListPanel";
+import { NarrativeReport } from "@/pages/EndOfDayReport";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useCanWrite } from "@/hooks/useCanWrite";
 import { trpc } from "@/lib/trpc";
@@ -14,6 +15,10 @@ import { Activity, Plus } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 import type { MachineWithSession } from "../../../server/machines";
+
+function todayKey() {
+  return new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Manila" });
+}
 
 type FloorGroup = {
   id: number | null;
@@ -52,6 +57,7 @@ export function OccupancyBoard({ floorId }: { floorId?: number }) {
     // Cross-device real-time sync: re-sync board state every 5 seconds
     refetchInterval: 5_000,
   });
+  const { data: staff } = trpc.staff.me.useQuery(undefined, { refetchInterval: 15_000 });
   const { data: floors } = trpc.machines.listFloors.useQuery(undefined, {
     refetchInterval: 30_000,
   });
@@ -317,6 +323,18 @@ export function OccupancyBoard({ floorId }: { floorId?: number }) {
         {/* Per-floor nurse patient assignments roster */}
         {waitingFloorId !== undefined && (
           <NurseAssignmentsPanel floorId={waitingFloorId} />
+        )}
+
+        {/* Charge nurse narrative report for this board (write on the board;
+            the End of Day Report reflects it read-only) */}
+        {waitingFloorId !== undefined && (
+          <NarrativeReport
+            floorId={waitingFloorId}
+            floorName={floorNameForScope ?? ""}
+            date={todayKey()}
+            staff={staff ?? null}
+            editable={canWrite}
+          />
         )}
 
         {/* Footer controls for authenticated staff */}

@@ -3,6 +3,7 @@ import { trpc } from "@/lib/trpc";
 import { useParams } from "wouter";
 import StaffBar from "@/components/StaffBar";
 import { OccupancyBoard } from "@/pages/Home";
+import { NarrativeReport } from "@/pages/EndOfDayReport";
 
 /**
  * Dedicated occupancy board for a single floor, e.g. /floor/2 or /floor/3.
@@ -16,6 +17,10 @@ export default function FloorBoard() {
   const { data: floors, isLoading } = trpc.machines.listFloors.useQuery(undefined, {
     refetchInterval: 30_000,
   });
+
+  const { data: staff } = trpc.staff.me.useQuery(undefined, { refetchInterval: 15_000 });
+  const isStaff = staff?.role === "nurse" || staff?.role === "supervisor";
+  const isGuest = staff?.role === "guest";
 
   // Resolve by floor code (F1/F2/F3), raw DB id, or 1-based sort order.
   const floor = floors?.find(
@@ -50,6 +55,21 @@ export default function FloorBoard() {
         </div>
       </header>
       <OccupancyBoard floorId={floor?.id} />
+      {floor?.id ? (
+        <div className="mt-8">
+          <NarrativeReport
+            floorId={floor.id}
+            floorName={floor.name}
+            date={todayKey()}
+            staff={staff ?? null}
+            editable={isStaff && !isGuest}
+          />
+        </div>
+      ) : null}
     </div>
   );
+}
+
+function todayKey() {
+  return new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Manila" });
 }

@@ -448,11 +448,32 @@ function NarrativeSection({
   date: string;
   staff: { role: string; displayName?: string | null; name?: string } | null;
 }) {
+  return <NarrativeReport floorId={floorId} floorName={floorName} date={date} staff={staff} editable={false} />;
+}
+
+/**
+ * Charge-nurse narrative report: shared between the board pages (editable,
+ * nurses write it during the shift) and the End of Day Report (read-only
+ * reflection of what was written).
+ */
+export function NarrativeReport({
+  floorId,
+  floorName,
+  date,
+  staff,
+  editable,
+}: {
+  floorId: number;
+  floorName: string;
+  date: string;
+  staff: { role: string; displayName?: string | null; name?: string } | null;
+  editable: boolean;
+}) {
   if (!floorId) return null;
   const utils = trpc.useUtils();
   const { data: narratives, isLoading } = trpc.narratives.list.useQuery(
     { floorId, reportDate: date },
-    { refetchInterval: false }
+    { refetchInterval: editable ? 15_000 : false }
   );
   const createMutation = trpc.narratives.create.useMutation({
     onSuccess: () => void utils.narratives.list.invalidate({ floorId, reportDate: date }),
@@ -485,8 +506,9 @@ function NarrativeSection({
           </CardTitle>
         </div>
         <p className="text-xs text-[#556680]">
-          Charge nurse narratives for each session and hooking/terminating
-          transition of the day.
+          {editable
+            ? "Charge nurse narratives for each session and hooking/terminating transition of the day — write during the shift."
+            : "Charge nurse narratives recorded for this day."}
         </p>
       </CardHeader>
       <CardContent className="space-y-2 pt-4">
@@ -519,32 +541,38 @@ function NarrativeSection({
                         {new Date(entry.updatedAt).toLocaleString([], { timeZone: "Asia/Manila", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
                       </p>
                     </div>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-7 shrink-0 border-[#D4DFE5] text-[#1F2A52]"
-                      onClick={() => void removeMutation.mutate({ id: entry.id, floorId })}
-                      title="Delete this narrative"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
+                    {editable && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 shrink-0 border-[#D4DFE5] text-[#1F2A52]"
+                        onClick={() => void removeMutation.mutate({ id: entry.id, floorId })}
+                        title="Delete this narrative"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
                   </div>
                 ) : (
                   <div className="flex items-center justify-between gap-3 px-3.5 py-3">
                     <p className="text-[13px] font-serif-light text-[#7684A0]">{period.label}</p>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-7 shrink-0 border-[#2E9A9B]/50 text-[#1d6b6c]"
-                      onClick={() => {
-                        setOpenPeriod(period.key);
-                        setOpenBody("");
-                        setOpenAuthor(authorName);
-                        setOpenShift("05-13");
-                      }}
-                    >
-                      Write narrative
-                    </Button>
+                    {editable ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 shrink-0 border-[#2E9A9B]/50 text-[#1d6b6c]"
+                        onClick={() => {
+                          setOpenPeriod(period.key);
+                          setOpenBody("");
+                          setOpenAuthor(authorName);
+                          setOpenShift("05-13");
+                        }}
+                      >
+                        Write narrative
+                      </Button>
+                    ) : (
+                      <span className="text-[10px] uppercase tracking-[0.12em] text-[#9E1F2B]/70">No entry</span>
+                    )}
                   </div>
                 )}
               </div>
@@ -552,7 +580,7 @@ function NarrativeSection({
           })
         )}
 
-        {openPeriod && (
+        {editable && openPeriod && (
           <div className="rounded-sm border border-[#2E9A9B]/40 bg-[#EFF8F8] p-4">
             <p className="text-[11px] uppercase tracking-[0.18em] text-[#1d6b6c]">
               {REPORT_PERIODS.find(p => p.key === openPeriod)?.label}
