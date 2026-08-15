@@ -350,6 +350,8 @@ export const appRouter = router({
           displayLabel: z.string().trim().max(64).nullable().default(null),
           /** Nurse responsible for this patient during the session, shown in the floor nurse roster. */
           assignedNurse: z.string().trim().max(64).nullable().default(null),
+          /** When true, ending this session automatically parks the machine in repair storage. */
+          needsRepairAfterSession: z.boolean().default(false),
         })
         .superRefine((data, ctxx) => {
           if (data.durationMinutes === null && (data.customMinutes === null || data.customMinutes < 15)) {
@@ -405,6 +407,20 @@ export const appRouter = router({
           if (floorId) requireFloorAccess(ctx.staff, floorId, ctx.user);
         }
         await machineDb.toggleUrgent({ sessionId: input.sessionId });
+        return { success: true } as const;
+      }),
+
+    /** Flag an active session for repair: ending it parks the machine in repair storage. */
+    setRepairFlag: staffOrAdminProcedure
+      .input(
+        z.object({ sessionId: z.number().int().positive(), flag: z.boolean() })
+      )
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.staff && ctx.staff.role === "nurse") {
+          const floorId = await machineDb.getSessionFloorId(input.sessionId);
+          if (floorId) requireFloorAccess(ctx.staff, floorId, ctx.user);
+        }
+        await machineDb.setRepairFlag({ sessionId: input.sessionId, flag: input.flag });
         return { success: true } as const;
       }),
 

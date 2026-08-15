@@ -90,6 +90,29 @@ export function FloorMachineChip({
     onError: e => toast.error(e.message),
   });
 
+  const setRepairFlag = trpc.sessions.setRepairFlag.useMutation({
+    onMutate: async vars => {
+      await utils.machines.list.cancel();
+      const prev = utils.machines.list.getData();
+      utils.machines.list.setData(undefined, old =>
+        old?.map(r =>
+          r.session?.id === vars.sessionId
+            ? {
+                ...r,
+                session: { ...r.session, needsRepairAfterSession: vars.flag },
+              }
+            : r,
+        ),
+      );
+      return { prev };
+    },
+    onError: (e, _v, ctx) => {
+      if (ctx?.prev) utils.machines.list.setData(undefined, ctx.prev);
+      toast.error(e.message);
+    },
+    onSettled: () => void utils.machines.list.invalidate(),
+  });
+
   /** Drag-and-drop swap: vacant chips are draggable (source) and accept drops
    *  from other vacant chips on any board — the server enforces RBAC and the
    *  both-vacant constraint. */
@@ -292,6 +315,20 @@ export function FloorMachineChip({
               </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={() =>
+                  setRepairFlag.mutate({
+                    sessionId: session.id,
+                    flag: !session.needsRepairAfterSession,
+                  })
+                }
+                className="text-[13px]"
+              >
+                <Wrench className="mr-2 h-4 w-4" />
+                {session.needsRepairAfterSession
+                  ? "Clear repair flag"
+                  : "Flag for repair"}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() =>
                   updateTag.mutate({
                     sessionId: session.id,
                     isolationTag:
@@ -310,6 +347,7 @@ export function FloorMachineChip({
               >
                 <Power className="mr-2 h-4 w-4" />
                 End session
+                {session.needsRepairAfterSession && " · sends machine to repair"}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

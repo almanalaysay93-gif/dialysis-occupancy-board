@@ -109,6 +109,8 @@ export const sessions = pgTable("sessions", {
   displayLabel: varchar("displayLabel", { length: 64 }),
   /** Nurse assigned to this patient during the session, shown in the floor's nurse roster. */
   assignedNurse: varchar("assignedNurse", { length: 64 }),
+  /** When true, ending this session automatically parks the machine in repair storage. */
+  needsRepairAfterSession: boolean("needsRepairAfterSession").notNull().default(false),
   status: sessionStatusEnum("status").notNull().default("active"),
   endedAt: timestamp("endedAt", { mode: "date" }),
   endedBy: text("endedBy"),

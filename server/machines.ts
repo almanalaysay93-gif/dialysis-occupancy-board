@@ -18,6 +18,7 @@ export type MachineWithSession = {
     startedBy: string | null;
     displayLabel: string | null;
     assignedNurse: string | null;
+    needsRepairAfterSession: boolean;
   } | null;
 };
 
@@ -56,6 +57,7 @@ export async function listMachines(): Promise<MachineWithSession[]> {
         startedBy: s.startedBy,
         displayLabel: s.displayLabel,
         assignedNurse: s.assignedNurse,
+        needsRepairAfterSession: s.needsRepairAfterSession,
       };
     })(),
   }))
@@ -71,6 +73,8 @@ export async function assignSession(input: {
   startedBy: string;
   displayLabel?: string | null;
   assignedNurse?: string | null;
+  /** When true, ending this session automatically parks the machine in repair storage. */
+  needsRepairAfterSession?: boolean;
 }) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
@@ -101,6 +105,7 @@ export async function assignSession(input: {
       startedBy: input.startedBy,
       displayLabel: input.displayLabel ? input.displayLabel.trim() || null : null,
       assignedNurse: input.assignedNurse ? input.assignedNurse.trim() || null : null,
+      needsRepairAfterSession: input.needsRepairAfterSession === true,
     })
     .returning({ id: machines.id });
 
@@ -115,10 +120,28 @@ export async function endSession(input: {
   if (!db) throw new Error("Database not available");
 
   const now = new Date();
+  // Fetch the repair flag before ending so we can act on it afterwards
+  const session = await db
+    .select({
+      needsRepairAfterSession: sessions.needsRepairAfterSession,
+      machineId: sessions.machineId,
+    })
+    .from(sessions)
+    .where(eq(sessions.id, input.sessionId))
+    .limit(1);
+
   await db
     .update(sessions)
     .set({ status: "ended", endedAt: now, endedBy: input.endedBy })
     .where(and(eq(sessions.id, input.sessionId), eq(sessions.status, "active")));
+
+  // If the session was flagged for repair, park the machine in repair storage
+  if (session[0]?.needsRepairAfterSession) {
+    await setMachineStatus({ machineId: session[0].machineId, status: "repair" })
+      .catch(() => {
+        // Machine may already be off the floor or missing — never fail the end.
+      });
+  }
 }
 
 export async function toggleUrgent(input: { sessionId: number }) {
@@ -128,6 +151,17 @@ export async function toggleUrgent(input: { sessionId: number }) {
   await db
     .update(sessions)
     .set({ urgent: sql`NOT urgent` })
+    .where(eq(sessions.id, input.sessionId));
+}
+
+/** Set or clear the repair-after-session flag on an active session. */
+export async function setRepairFlag(input: { sessionId: number; flag: boolean }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db
+    .update(sessions)
+    .set({ needsRepairAfterSession: input.flag })
     .where(eq(sessions.id, input.sessionId));
 }
 

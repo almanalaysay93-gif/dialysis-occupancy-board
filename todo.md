@@ -214,3 +214,13 @@
 - [x] Rework chip drag: Tooltip wrapper already removed (native title attribute on the chip), explicit onDragStart/onDragOver/onDrop handlers with unconditional preventDefault; grab/grabbing cursor + teal highlight + opacity feedback while dragging; BackupRepair DropCard unconditional accept with onDragLeave relatedTarget guard
 - [x] Verify end-to-end in the automated browser as SKTI Supervisor: same-board reorder 60001→60002 (200 OK, tiles reordered), offboard 60003 via drop onto Backup card (200 OK, appears with Return action), return-to-board (200 OK, count back to 0); guest draggable=false, RBAC 105/105 tests green
 - [x] Vitest 105/105 + tsc clean, checkpoint saved (auto-published), pushed to GitHub, delivered
+
+## Repair flag (user request Aug 15)
+- [x] Decided placement (user's screenshot = assign dialog): "Needs Repair" toggle in AssignSessionDialog — when the session ends, the machine auto-moves to Machines in Repair on /backup
+- [x] Schema: sessions.needsRepairAfterSession boolean NOT NULL DEFAULT false — applied to Supabase directly (webdev_execute_sql hits TiDB, not Supabase!)
+- [x] Backend: assignSession stores flag; endSession parks machine as status=repair when flagged (best-effort, never blocks end); sessions.setRepairFlag mutation toggles the flag on a live session (tile menu "Flag for repair"/"Clear repair flag" with wrench icon; End session shows "· sends machine to repair" when set); listMachines exposes needsRepairAfterSession in session payload
+- [x] RBAC: setRepairFlag gated by staffOrAdminProcedure + requireFloorAccess
+- [x] UI: tile menu items + wrench indicator near End session; Backup & Repair already visually distinguishes Repair (wrench, pink) vs Backup (boxes, teal); Return button still works
+- [x] Vitest: 5 new repair-flag tests in sessions.test.ts — 110/110 passing; tsc clean
+- [x] Browser verified as SKTI Supervisor: assigned HD-005 (P-REPAIR-TEST, 3h, clean, Needs Repair ON) → toast "marked for repair after session"; ended session → HD-005 appeared under Machines in Repair on /backup with Return action
+- [ ] Final: cleanup, checkpoint (auto-publish), push GitHub, deliver

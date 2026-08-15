@@ -325,6 +325,131 @@ describe("sessions.updateLabel (editable highlighted title)", () => {
   });
 });
 
+describe("sessions.repair flag (needsRepairAfterSession)", () => {
+  it("assign stores needsRepairAfterSession when flagged", async () => {
+    const db = mockDbWith([]);
+    (getDb as ReturnType<typeof vi.fn>).mockResolvedValue(db);
+
+    const caller = appRouter.createCaller(createAuthContext());
+    await caller.sessions.assign({
+      machineId: 2,
+      patientId: "P-103",
+      durationMinutes: "180",
+      isolationTag: "clean",
+      urgent: false,
+      needsRepairAfterSession: true,
+    });
+
+    const insertChain = (db.insert as ReturnType<typeof vi.fn>).mock.results[0].value as Record<string, unknown>;
+    const vals = ((insertChain.values as ReturnType<typeof vi.fn>).mock.calls[0][0]) as Record<string, unknown>;
+    expect(vals.needsRepairAfterSession).toBe(true);
+  });
+
+  it("assign defaults needsRepairAfterSession to false", async () => {
+    const db = mockDbWith([]);
+    (getDb as ReturnType<typeof vi.fn>).mockResolvedValue(db);
+
+    const caller = appRouter.createCaller(createAuthContext());
+    await caller.sessions.assign({
+      machineId: 2,
+      patientId: "P-103",
+      durationMinutes: "180",
+      isolationTag: "clean",
+      urgent: false,
+    });
+
+    const insertChain = (db.insert as ReturnType<typeof vi.fn>).mock.results[0].value as Record<string, unknown>;
+    const vals = ((insertChain.values as ReturnType<typeof vi.fn>).mock.calls[0][0]) as Record<string, unknown>;
+    expect(vals.needsRepairAfterSession).toBe(false);
+  });
+
+  it("setRepairFlag updates the repair-after-session flag", async () => {
+    const db = mockDbWith([]);
+    (getDb as ReturnType<typeof vi.fn>).mockResolvedValue(db);
+
+    const caller = appRouter.createCaller(createAuthContext());
+    const result = await caller.sessions.setRepairFlag({ sessionId: 7, flag: true });
+    expect(result.success).toBe(true);
+    expect(db.update).toHaveBeenCalled();
+    const updateChain = (db.update as ReturnType<typeof vi.fn>).mock.results[0].value as Record<string, unknown>;
+    const set = ((updateChain.set as ReturnType<typeof vi.fn>).mock.calls[0][0]) as Record<string, unknown>;
+    expect(set.needsRepairAfterSession).toBe(true);
+  });
+
+  it("ending a flagged session parks the machine in repair storage", async () => {
+    // End session: first select reads the flag, then update ends the session,
+    // then (flag set) setMachineStatus is invoked (getMachineById select +
+    // in-treatment guard select + machines update) → machines update.
+    const sessionWithFlag = [{ needsRepairAfterSession: true, machineId: 2 }];
+    const machineRow = { id: 2, label: "HD-02", status: "active", floorId: 1 };
+    let selectCalls = 0;
+    const db = {
+      select: vi.fn(() => ({
+        from: vi.fn(() => ({
+          where: vi.fn(() => ({
+            innerJoin: vi.fn(() => ({
+              where: vi.fn(() => ({ limit: vi.fn().mockResolvedValue([]) })),
+            })),
+            limit: vi.fn().mockImplementation(async () => {
+              selectCalls += 1;
+              // First read is the flag lookup in endSession; subsequent reads
+              // (getMachineById, in-treatment guard) must pass their checks:
+              // the guard must see no active sessions, and the machine must exist.
+              if (selectCalls === 1) return sessionWithFlag;
+              if (selectCalls === 2) return [machineRow];
+              return [];
+            }),
+          })),
+        })),
+      })),
+      insert: vi.fn(),
+      update: vi.fn(() => ({
+        set: vi.fn(() => ({
+          where: vi.fn().mockResolvedValue(undefined),
+        })),
+      })),
+    };
+    (getDb as ReturnType<typeof vi.fn>).mockResolvedValue(db);
+
+    const caller = appRouter.createCaller(createAuthContext());
+    const result = await caller.sessions.end({ sessionId: 7 });
+    expect(result.success).toBe(true);
+
+    // At least two update chains: end the session, then park the machine in repair.
+    expect(db.update).toHaveBeenCalledTimes(2);
+    const endSet = ((db.update.mock.results[0].value.set as ReturnType<typeof vi.fn>).mock.calls[0][0]) as Record<string, unknown>;
+    expect(endSet.status).toBe("ended");
+    const repairSet = ((db.update.mock.results[1].value.set as ReturnType<typeof vi.fn>).mock.calls[0][0]) as Record<string, unknown>;
+    expect(repairSet.status).toBe("repair");
+  });
+
+  it("ending an unflagged session does NOT touch the machine status", async () => {
+    const db = {
+      select: vi.fn(() => ({
+        from: vi.fn(() => ({
+          where: vi.fn(() => ({
+            limit: vi.fn().mockResolvedValue([
+              { needsRepairAfterSession: false, machineId: 2 },
+            ]),
+          })),
+        })),
+      })),
+      insert: vi.fn(),
+      update: vi.fn(() => ({
+        set: vi.fn(() => ({
+          where: vi.fn().mockResolvedValue(undefined),
+        })),
+      })),
+    };
+    (getDb as ReturnType<typeof vi.fn>).mockResolvedValue(db);
+
+    const caller = appRouter.createCaller(createAuthContext());
+    const result = await caller.sessions.end({ sessionId: 7 });
+    expect(result.success).toBe(true);
+    expect(db.update).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("input validation", () => {
   it("rejects durations outside 3/6/8 hours", async () => {
     const caller = appRouter.createCaller(createAuthContext());

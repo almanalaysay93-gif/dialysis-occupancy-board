@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Switch } from "@/components/ui/switch";
 import { trpc } from "@/lib/trpc";
-import { BellRing, Clock, Droplets, Pencil } from "lucide-react";
+import { BellRing, Clock, Droplets, Pencil, Wrench } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -48,6 +48,7 @@ export default function AssignSessionDialog({
   const [editLabelOpen, setEditLabelOpen] = useState(false);
   const [displayLabel, setDisplayLabel] = useState("");
   const [nurse, setNurse] = useState("");
+  const [needsRepair, setNeedsRepair] = useState(false);
 
 
   const assign = trpc.sessions.assign.useMutation({
@@ -57,11 +58,12 @@ export default function AssignSessionDialog({
           ? (Number(customHours) || 0) * 60 + (Number(customMinutes) || 0)
           : duration;
       toast.success(`Session started on ${machineLabel}`, {
-        description: `Patient ${patientId} · ${formatDurationSummary(minutes)} · ${tag}`,
+        description: `Patient ${patientId} · ${formatDurationSummary(minutes)} · ${tag}${needsRepair ? " · marked for repair after session" : ""}`,
       });
       setPatientId("");
       setUrgent(false);
       setNurse("");
+      setNeedsRepair(false);
       void utils.machines.list.invalidate();
       onAssigned();
     },
@@ -90,6 +92,7 @@ export default function AssignSessionDialog({
       urgent,
       displayLabel: displayLabel.trim() || null,
       assignedNurse: nurse.trim() || null,
+      needsRepairAfterSession: needsRepair,
     });
   };
 
@@ -330,6 +333,23 @@ export default function AssignSessionDialog({
               checked={urgent}
               onCheckedChange={setUrgent}
               aria-label="Mark as urgent case"
+            />
+          </label>
+
+          <label className="flex items-center justify-between border border-[#A9542C]/40 bg-[#A9542C]/5 p-3">
+            <div className="flex items-center gap-2.5">
+              <Wrench className="h-4 w-4 text-[#A9542C]" />
+              <div className="flex flex-col">
+                <span className="smallcaps-detail text-[#1F2A52]">Needs Repair</span>
+                <span className="mt-0.5 text-[11px] text-[#7684A0]">
+                  After the session ends, the machine moves to the Backup &amp; Repair area as Machines in Repair
+                </span>
+              </div>
+            </div>
+            <Switch
+              checked={needsRepair}
+              onCheckedChange={setNeedsRepair}
+              aria-label="Flag machine for repair after this session"
             />
           </label>
 
