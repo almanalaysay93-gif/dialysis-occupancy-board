@@ -189,7 +189,7 @@ export function FloorMachineChip({
           swapMachine.mutate({ machineAId: srcId, machineBId: row.machine.id });
         }}
         className={cn(
-          "group relative flex h-14 w-full flex-col items-center justify-center gap-0.5 border border-[#D4DFE5]/70 bg-[#FBFCFD] text-center transition-all",
+          "group relative flex h-16 sm:h-14 w-full flex-col items-center justify-center gap-0.5 border border-[#D4DFE5]/70 bg-[#FBFCFD] text-center transition-all",
           isStaff && !isDragSource && !isDragOver && !isPending && "cursor-grab hover:border-[#7684A0] hover:bg-[#E8EFF1]",
           isDragOver && !isDragSource && "border-2 border-dashed border-[#2E9A9B] bg-[#E8F4F4]/90 scale-[1.03] z-10 shadow-sm",
           isDragSource && "cursor-grabbing border-2 border-[#2E9A9B] bg-[#E8F4F4] opacity-60 ring-2 ring-[#2E9A9B]/40 scale-95",
@@ -216,16 +216,16 @@ export function FloorMachineChip({
       </button>
     );
     return (
-      <div className="group relative h-14">
+      <div className="group relative h-16 sm:h-14">
         {chipContent}
         {isStaff && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
                 aria-label={`Actions for machine ${row.machine.label}`}
-                className="absolute -right-1 -top-1 z-10 flex h-5 w-5 items-center justify-center rounded-sm border border-[#D4DFE5]/70 bg-[#FBFCFD] opacity-0 transition-opacity hover:bg-[#E8EFF1] group-hover:opacity-100"
+                className="absolute -right-1 -top-1 z-10 flex h-7 w-7 sm:h-5 sm:w-5 items-center justify-center rounded-sm border border-[#D4DFE5]/70 bg-[#FBFCFD] opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity hover:bg-[#E8EFF1]"
               >
-                <MoreVertical className="h-2.5 w-2.5 text-[#7684A0]" />
+                <MoreVertical className="h-3.5 w-3.5 sm:h-2.5 sm:w-2.5 text-[#7684A0]" />
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-52">
@@ -283,7 +283,7 @@ export function FloorMachineChip({
   return (
     <div
       className={cn(
-        "relative flex h-14 w-full flex-col items-center justify-center gap-0.5 border text-center",
+        "relative flex h-16 sm:h-14 w-full flex-col items-center justify-center gap-0.5 border text-center",
         urgent
           ? "tile-urgent-pulse border-[#9E1F2B] bg-[#9E1F2B] text-[#F4F7F8]"
           : "border-[#3E8A6A] bg-[#3E8A6A] text-[#F4F7F8]"

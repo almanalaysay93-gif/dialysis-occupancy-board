@@ -317,18 +317,18 @@ export function OccupancyBoardContent({ floorId }: { floorId?: number }) {
 
         {/* Staff footer controls (vacant count + Add Machine / Assign Next Vacant) */}
         {canWrite && !isLoading && (
-          <div className="mt-6 flex items-center justify-between border-t border-[#D4DFE5] pt-4">
-            <p className="font-serif-light italic text-[#556680]">
+          <div className="mt-6 flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between border-t border-[#D4DFE5] pt-4">
+            <p className="font-serif-light italic text-[#556680] text-sm sm:text-base">
               {stats.vacant} machine{stats.vacant === 1 ? "s" : ""} vacant ·{" "}
               {data?.filter(r => floorId !== undefined ? r.machine.floorId === floorId : true).length ?? 0} machine
               {data?.filter(r => floorId !== undefined ? r.machine.floorId === floorId : true).length === 1 ? "" : "s"} on the board
             </p>
-            <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
               <Button
                 size="sm"
                 variant="outline"
                 onClick={() => setAddOpen(true)}
-                className="h-9 border-[#7684A0]/60 text-[#1F2A52] hover:bg-[#E8EFF1]"
+                className="h-11 sm:h-9 w-full sm:w-auto text-base sm:text-sm border-[#7684A0]/60 text-[#1F2A52] hover:bg-[#E8EFF1]"
               >
                 <Plus className="mr-2 h-4 w-4" />
                 Add Machine
@@ -344,7 +344,7 @@ export function OccupancyBoardContent({ floorId }: { floorId?: number }) {
                     const first = rows?.find(r => !r.session);
                     if (first) setAssignTarget(first.machine.id);
                   }}
-                  className="h-9 bg-[#1F2A52] text-[#F4F7F8] hover:bg-[#151D3A] font-serif-light"
+                  className="h-11 sm:h-9 w-full sm:w-auto text-base sm:text-sm bg-[#1F2A52] text-[#F4F7F8] hover:bg-[#151D3A]"
                 >
                   <Plus className="mr-2 h-4 w-4" />
                   Assign Next Vacant

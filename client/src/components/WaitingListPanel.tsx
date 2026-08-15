@@ -680,7 +680,7 @@ function WaitingRow({
               disabled={isAdmitDisabled || admitOpen}
               title={admitDisabledReason ?? undefined}
               onClick={onAdmit}
-              className="h-9 border-[#3E8A6A] text-[#3E8A6A] hover:bg-[#3E8A6A]/10"
+              className="h-10 sm:h-9 px-3.5 border-[#3E8A6A] text-[#3E8A6A] font-medium hover:bg-[#3E8A6A]/10"
             >
               <ArrowRightCircle className="mr-1.5 h-4 w-4" />
               Admit
@@ -690,7 +690,7 @@ function WaitingRow({
                 <Button
                   size="sm"
                   variant="outline"
-                  className="h-9 border-[#D4DFE5] text-[#1F2A52] hover:bg-[#E8EFF1]"
+                  className="h-10 sm:h-9 px-3.5 border-[#D4DFE5] text-[#1F2A52] font-medium hover:bg-[#E8EFF1]"
                 >
                   Priority
                 </Button>
