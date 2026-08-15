@@ -170,8 +170,10 @@ function DashboardLayoutContent({
     staffRole === "guest"
       ? menuItems.filter(item => item.path !== "/rooms" && item.path !== "/report" && item.path !== "/backup")
       : menuItems;
+  // Match the exact floor board by path first (e.g. /floor/30001);
+  // a bare /floor/ location (a redirect artifact) highlights nothing.
   const activeMenuItem = menuItems.find(item => item.path === location) ??
-    floorBoardItems.find(item => location.startsWith("/floor/"));
+    floorBoardItems.find(item => item.path === location);
   const isMobile = useIsMobile();
 
   return (
@@ -180,14 +182,7 @@ function DashboardLayoutContent({
         <Sidebar collapsible="icon" className="bg-sidebar border-r border-sidebar-border">
           <SidebarHeader className="h-16 justify-center">
             <div className="flex items-center gap-3 px-2 transition-all w-full">
-              <button
-                onClick={() => {}}
-                aria-hidden
-                className="h-8 w-8 flex items-center justify-center shrink-0"
-                tabIndex={-1}
-              >
-                <PanelLeft className="h-4 w-4 text-muted-foreground" />
-              </button>
+              <SidebarTrigger className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground data-[state=open]:hidden [&_svg]:h-4 [&_svg]:w-4" />
               {!isCollapsed ? (
                 <div className="flex items-center gap-2.5 min-w-0">
                   <img

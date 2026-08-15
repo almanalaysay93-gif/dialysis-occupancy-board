@@ -309,3 +309,20 @@
 - [x] Reproduce: root cause found — AddMachineDialog's floorId state started at "none" and never initialized from initialFloorId/first floor; submitting without touching the Floor select inserted the machine with floorId NULL, invisible on scoped /floor/:id boards (grouped under "Unassigned" which is excluded)
 - [x] Fix: useEffect in AddMachineDialog initializes floorId to the dialog's initial floor (or the first floor) when it opens; the user's two test machines (098, 099, created with null floorId on Aug 15) were re-assigned to SKTI ICU in the live Supabase DB
 - [x] Verify end-to-end: /floor/1 shows machines 098/099 on the SKTI ICU board; /floor/30001 (SKTI Main, 94 machines), /floor/30002 (RDU Annex, 36), /floor/30003 (RDU Main, 24) all resolve with correct names and single header; tests 124/124 passing, tsc clean
+
+## User-reported 10-bug pass (Aug 15)
+
+### Critical
+- [x] Fix `.returning({ id: machines.id })` copy-paste crash in machines.ts — the sessions.insert, waiting.insert, and floors.insert calls in machines.ts now return their own table ids (`sessions.id` / `waiting_list.id` / `floors.id`); all three workflows (assign session, add waiting, add room) now return a usable id
+- [x] Fix race condition on concurrent session assignments — assignSession and admitWaiting now run the vacancy lookup and session insert inside a DB transaction with FOR UPDATE row locking and a post-lock re-check; a concurrent second assignment is rejected with CONFLICT instead of double-booking; mock db.transaction/.for added to sessions.test.ts
+
+### High
+- [x] Add confirmation dialog to End Session — occupied tile menu now opens the existing EndSessionDialog (confirm before terminating); raw mutation removed from FloorMachineRow
+- [x] Sidebar highlights wrong floor (active state) — sidebar active state now matches the floor by id on /floor/:id instead of always highlighting the first floor item
+- [x] Sidebar toggle button does nothing — PanelLeft button now calls the sidebar state's toggle instead of being a no-op
+- [x] Edit title (rename session label) erases existing text — RenameSessionLabelDialog hydrates its input from the current label when opening, and AssignSessionDialog's inline title editor keeps the existing label instead of clearing it
+
+### Medium
+- [x] Silent narrative mutation failures — all narrative mutations (board session/transition narratives, supervisor shift summaries, supervisor dialog) now have onSuccess/onError toasts and invalidate on success
+- [x] Unmapped error codes leaking as 500 — new server/errors.ts mapBackendError maps known backend error codes (MACHINE_OCCUPIED, DURATION_OUT_OF_RANGE, etc.) to typed tRPC errors; passes existing TRPCError through untouched; all catches (waiting.add/remove, setPriority, sessions.end/toggleUrgent/setRepairFlag/updateTag, machines.add, narratives.update/remove) route through it
+- [x] Race conditions on concurrent session assignments (covered by the transaction/locking fix above)
