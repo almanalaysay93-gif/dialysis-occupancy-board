@@ -1,11 +1,30 @@
 import { useMemo, useState } from "react";
 import { Link } from "wouter";
-import { ClipboardList, Dumbbell, Printer, UserRound, Users } from "lucide-react";
+import { ClipboardList, Dumbbell, PenLine, Printer, Trash2, UserRound, Users } from "lucide-react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { trpc } from "@/lib/trpc";
+
+const REPORT_PERIODS: { key: string; label: string }[] = [
+  { key: "session1", label: "Session 1 · 5:00 – 10:00 AM" },
+  { key: "transition1", label: "Transition 1 · Hooking & Terminating · 9:00 – 11:00 AM" },
+  { key: "session2", label: "Session 2 · 10:00 AM – 2:00 PM" },
+  { key: "transition2", label: "Transition 2 · Hooking & Terminating · 1:00 – 3:00 PM" },
+  { key: "session3", label: "Session 3 · 2:00 – 6:00 PM" },
+  { key: "transition3", label: "Transition 3 · Hooking & Terminating · 5:00 – 8:00 PM" },
+  { key: "session4", label: "Session 4 · 6:00 – 10:00 PM" },
+];
+
+const REPORT_SHIFTS: { key: string; label: string }[] = [
+  { key: "05-13", label: "5:00 AM – 1:00 PM" },
+  { key: "13-21", label: "1:00 – 9:00 PM" },
+  { key: "21-05", label: "9:00 PM – 5:00 AM" },
+  { key: "07-15", label: "7:00 AM – 3:00 PM" },
+  { key: "15-23", label: "3:00 – 11:00 PM" },
+  { key: "23-07", label: "11:00 PM – 7:00 AM" },
+];
 
 type ReportBoard = {
   floorName: string | null;
@@ -18,6 +37,11 @@ type ReportBoard = {
   isolation: { clean: number; dirty: number };
   totalTreatmentHours: number;
   waitingAdds: { normal: number; urgent: number; veryUrgent: number; total: number };
+  machineMetrics: Record<
+    string,
+    { machineLabel?: string; pausedMinutes: number; idleMinutes: number; occupiedMinutes: number }
+  >;
+  pauseSummary: { totalPausedMinutes: number; machinesPaused: number };
 };
 
 function formatDateLabel(date: Date): string {
@@ -221,7 +245,17 @@ export default function EndOfDayReport() {
 
         {!isMulti && singleQuery.data && (
           <div className="mt-8 grid gap-5 lg:grid-cols-2 print:grid-cols-1">
-            <ReportBoardCard board={singleQuery.data} />
+            <div className="flex flex-col gap-5">
+              <ReportBoardCard board={singleQuery.data} />
+              {singleQuery.data.floorName && (
+                <NarrativeSection
+                  floorId={(floors ?? []).find(f => f.name === singleQuery.data.floorName)?.id ?? 0}
+                  floorName={singleQuery.data.floorName}
+                  date={date}
+                  staff={staff}
+                />
+              )}
+            </div>
           </div>
         )}
 
@@ -232,6 +266,17 @@ export default function EndOfDayReport() {
             ))}
           </div>
         )}
+
+        {isMulti &&
+          (floors ?? []).map(f => (
+            <NarrativeSection
+              key={`narrative-${f.id}`}
+              floorId={f.id}
+              floorName={f.name}
+              date={date}
+              staff={staff}
+            />
+          ))}
       </div>
         </>
       )}
@@ -336,8 +381,258 @@ function ReportBoardCard({ board }: { board: ReportBoard }) {
           <UserRound className="h-3.5 w-3.5 text-[#2E9A9B]" />
           <p className="text-xs text-[#556680]">
             Total treatment time today: {board.totalTreatmentHours} hours
+            {board.pauseSummary.totalPausedMinutes > 0 &&
+              ` · ${board.pauseSummary.totalPausedMinutes} paused minutes across ${board.pauseSummary.machinesPaused} machine${board.pauseSummary.machinesPaused === 1 ? "" : "s"}`}
           </p>
         </div>
+
+        {board.machineMetrics && Object.keys(board.machineMetrics).length > 0 && (
+          <div className="border-t border-[#D4DFE5]/70 pt-3">
+            <p className="smallcaps-detail text-[11px] tracking-[0.18em] text-[#7684A0]">
+              Machine time · pause &amp; idle minutes
+            </p>
+            <div className="mt-2 max-h-56 overflow-y-auto print:max-h-none">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-left text-[10px] uppercase tracking-[0.12em] text-[#7684A0]">
+                    <th className="py-1.5 pr-2 font-medium">Machine</th>
+                    <th className="px-2 py-1.5 font-medium">In treatment</th>
+                    <th className="px-2 py-1.5 font-medium">Paused</th>
+                    <th className="pl-2 py-1.5 font-medium">Idle (vacant)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(Object.entries(board.machineMetrics) as [
+                    string,
+                    { machineLabel: string; pausedMinutes: number; idleMinutes: number; occupiedMinutes: number },
+                  ][])
+                    .sort((a, b) => a[1].idleMinutes - b[1].idleMinutes)
+                    .map(([label, m]) => (
+                      <tr key={label} className="border-t border-[#D4DFE5]/50">
+                        <td className="py-1 pr-2 font-medium text-[#1F2A52]">{m.machineLabel}</td>
+                        <td className="px-2 py-1 text-[#556680]">{fmtMinutes(m.occupiedMinutes)}</td>
+                        <td className="px-2 py-1 text-[#9E1F2B]">{fmtMinutes(m.pausedMinutes)}</td>
+                        <td className="pl-2 py-1 text-[#556680]">{fmtMinutes(m.idleMinutes)}</td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="mt-1.5 text-[10px] text-[#7684A0]">
+              Idle = hours the board was running treatments but this machine sat
+              vacant. Machines with no activity today are not listed.
+            </p>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function fmtMinutes(total: number): string {
+  if (total <= 0) return "0 min";
+  const h = Math.floor(total / 60);
+  const m = total % 60;
+  if (h > 0) return `${h}h ${m > 0 ? `${m}m` : ""}`.trim();
+  return `${m} min`;
+}
+
+function NarrativeSection({
+  floorId,
+  floorName,
+  date,
+  staff,
+}: {
+  floorId: number;
+  floorName: string;
+  date: string;
+  staff: { role: string; displayName?: string | null; name?: string } | null;
+}) {
+  if (!floorId) return null;
+  const utils = trpc.useUtils();
+  const { data: narratives, isLoading } = trpc.narratives.list.useQuery(
+    { floorId, reportDate: date },
+    { refetchInterval: false }
+  );
+  const createMutation = trpc.narratives.create.useMutation({
+    onSuccess: () => void utils.narratives.list.invalidate({ floorId, reportDate: date }),
+  });
+  const removeMutation = trpc.narratives.remove.useMutation({
+    onSuccess: () => void utils.narratives.list.invalidate({ floorId, reportDate: date }),
+  });
+
+  const [openPeriod, setOpenPeriod] = useState<string | null>(null);
+  const [openShift, setOpenShift] = useState<string>("05-13");
+  const [openAuthor, setOpenAuthor] = useState(() => staff?.displayName ?? "");
+  const [openBody, setOpenBody] = useState("");
+
+  const entriesByPeriod = useMemo(() => {
+    const map = new Map<string, { id: number; periodKey: string; shiftKey: string | null; author: string; body: string; updatedAt: Date }>();
+    (narratives ?? []).forEach(n => map.set(n.periodKey, n as never));
+    return map;
+  }, [narratives]);
+
+  const authorName = staff?.displayName ?? "";
+  if (!authorName && openAuthor === "") setOpenAuthor("");
+
+  return (
+    <Card className="border border-[#1F2A52]/15 shadow-sm print:break-inside-avoid">
+      <CardHeader className="border-b border-[#D4DFE5]/70 pb-4">
+        <div className="flex items-center gap-2">
+          <PenLine className="h-4 w-4 text-[#2E9A9B]" />
+          <CardTitle className="font-display text-lg text-[#1F2A52]">
+            Narrative Report · {floorName}
+          </CardTitle>
+        </div>
+        <p className="text-xs text-[#556680]">
+          Charge nurse narratives for each session and hooking/terminating
+          transition of the day.
+        </p>
+      </CardHeader>
+      <CardContent className="space-y-2 pt-4">
+        {isLoading ? (
+          <Skeleton className="h-40" />
+        ) : (
+          REPORT_PERIODS.map(period => {
+            const entry = entriesByPeriod.get(period.key);
+            return (
+              <div
+                key={period.key}
+                className="rounded-sm border border-[#D4DFE5] bg-[#FBFCFD]"
+              >
+                {entry ? (
+                  <div className="flex items-start justify-between gap-3 px-3.5 py-3">
+                    <div>
+                      <p className="font-serif-light text-[13px] font-semibold text-[#1F2A52]">
+                        {period.label}
+                      </p>
+                      {entry.shiftKey && (
+                        <p className="mt-0.5 text-[10px] uppercase tracking-[0.12em] text-[#7684A0]">
+                          Shift {REPORT_SHIFTS.find(s => s.key === entry.shiftKey)?.label ?? entry.shiftKey}
+                        </p>
+                      )}
+                      <p className="mt-1 whitespace-pre-wrap text-xs leading-relaxed text-[#556680]">
+                        {entry.body}
+                      </p>
+                      <p className="mt-1.5 text-[10px] text-[#7684A0]">
+                        by {entry.author} · updated{" "}
+                        {new Date(entry.updatedAt).toLocaleString([], { timeZone: "Asia/Manila", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 shrink-0 border-[#D4DFE5] text-[#1F2A52]"
+                      onClick={() => void removeMutation.mutate({ id: entry.id, floorId })}
+                      title="Delete this narrative"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between gap-3 px-3.5 py-3">
+                    <p className="text-[13px] font-serif-light text-[#7684A0]">{period.label}</p>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 shrink-0 border-[#2E9A9B]/50 text-[#1d6b6c]"
+                      onClick={() => {
+                        setOpenPeriod(period.key);
+                        setOpenBody("");
+                        setOpenAuthor(authorName);
+                        setOpenShift("05-13");
+                      }}
+                    >
+                      Write narrative
+                    </Button>
+                  </div>
+                )}
+              </div>
+            );
+          })
+        )}
+
+        {openPeriod && (
+          <div className="rounded-sm border border-[#2E9A9B]/40 bg-[#EFF8F8] p-4">
+            <p className="text-[11px] uppercase tracking-[0.18em] text-[#1d6b6c]">
+              {REPORT_PERIODS.find(p => p.key === openPeriod)?.label}
+            </p>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <div>
+                <label className="text-[10px] uppercase tracking-[0.14em] text-[#556680]">
+                  Shift on duty
+                </label>
+                <select
+                  value={openShift}
+                  onChange={e => setOpenShift(e.target.value)}
+                  className="mt-1 h-9 w-full rounded-sm border border-[#D4DFE5] bg-white px-2 text-sm text-[#1F2A52] outline-none focus:border-[#2E9A9B]"
+                >
+                  {REPORT_SHIFTS.map(s => (
+                    <option key={s.key} value={s.key}>
+                      {s.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-[10px] uppercase tracking-[0.14em] text-[#556680]">
+                  Charge nurse (author)
+                </label>
+                <input
+                  value={openAuthor}
+                  onChange={e => setOpenAuthor(e.target.value)}
+                  placeholder="e.g. RN Maria Cruz"
+                  className="mt-1 h-9 w-full rounded-sm border border-[#D4DFE5] bg-white px-2 text-sm text-[#1F2A52] outline-none focus:border-[#2E9A9B]"
+                />
+              </div>
+            </div>
+            <label className="mt-3 block text-[10px] uppercase tracking-[0.14em] text-[#556680]">
+              Narrative · what happened during this period
+            </label>
+            <textarea
+              value={openBody}
+              onChange={e => setOpenBody(e.target.value)}
+              placeholder="Patients hooked / terminated, transfers, incidents, supply issues, equipment notes…"
+              rows={4}
+              className="mt-1 w-full rounded-sm border border-[#D4DFE5] bg-white px-2 py-1.5 text-sm text-[#1F2A52] outline-none focus:border-[#2E9A9B]"
+            />
+            <div className="mt-3 flex items-center gap-2">
+              <Button
+                size="sm"
+                className="bg-[#2E9A9B] text-white hover:bg-[#1d6b6c]"
+                disabled={!openBody.trim() || !openAuthor.trim() || createMutation.isPending}
+                onClick={() => {
+                  if (!openBody.trim() || !openAuthor.trim()) return;
+                  createMutation.mutate(
+                    {
+                      floorId,
+                      reportDate: date,
+                      periodKey: openPeriod,
+                      shiftKey: openShift,
+                      author: openAuthor.trim(),
+                      body: openBody.trim(),
+                    },
+                    {
+                      onSuccess: () => {
+                        setOpenPeriod(null);
+                      },
+                    }
+                  );
+                }}
+              >
+                {createMutation.isPending ? "Saving…" : "Save narrative"}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 border-[#D4DFE5] text-[#556680]"
+                onClick={() => setOpenPeriod(null)}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

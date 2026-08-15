@@ -49,7 +49,12 @@ vi.mock("./machines", () => ({
     totalTreatmentHours: 20,
     waitingAdds: { normal: 1, urgent: 1, veryUrgent: 0, total: 2 },
     sessions: [],
+    machineMetrics: {},
+    pauseSummary: { totalPausedMinutes: 0, machinesPaused: 0 },
   })),
+  listNarratives: vi.fn(async () => []),
+  createNarrative: vi.fn(async () => ({ id: 99 })),
+  deleteNarrative: vi.fn(async () => undefined),
 }));
 import * as machineDb from "./machines";
 
@@ -115,6 +120,89 @@ beforeEach(() => {
     displayName: "",
     role: "supervisor" as const,
     assignedFloorId: null,
+  });
+});
+
+describe("narrative reports", () => {
+  it("nurse can list and create narratives for their own floor", async () => {
+    mockResolve.mockResolvedValue({
+      accountId: 0,
+      username: "nurse.sk",
+      displayName: "SKTI Nurse",
+      role: "nurse" as const,
+      assignedFloorId: 1,
+    });
+    const ctx = makeCtx();
+    const list = await caller(ctx).narratives.list({ floorId: 1, reportDate: "2026-08-15" });
+    expect(machineDb.listNarratives).toHaveBeenCalledWith({ floorId: 1, reportDate: "2026-08-15" });
+    expect(list).toEqual([]);
+
+    const created = await caller(ctx).narratives.create({
+      floorId: 1,
+      reportDate: "2026-08-15",
+      periodKey: "session1",
+      shiftKey: "05-13",
+      author: "SKTI Nurse",
+      body: "All patients hooked on time.",
+    });
+    expect(created.success).toBe(true);
+    expect(machineDb.createNarrative).toHaveBeenCalledOnce();
+  });
+
+  it("nurse cannot create narratives for another floor", async () => {
+    // Floor scoping in requireFloorAccess only applies to staff-cookie sessions
+    // (ctx.user null); an OAuth user keeps global access, so drop the OAuth user.
+    mockResolve.mockResolvedValue({
+      accountId: 0,
+      username: "nurse.sk",
+      displayName: "SKTI Nurse",
+      role: "nurse" as const,
+      assignedFloorId: 1,
+    });
+    const ctx = { ...makeCtx(), user: null } as TrpcContext;
+    await expect(
+      caller(ctx).narratives.create({
+        floorId: 2,
+        reportDate: "2026-08-15",
+        periodKey: "session2",
+        shiftKey: null,
+        author: "SKTI Nurse",
+        body: "Should not persist.",
+      })
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(machineDb.createNarrative).not.toHaveBeenCalled();
+  });
+
+  it("supervisor can create narratives for any floor; guest cannot", async () => {
+    const ctx = makeCtx(); // supervisor via staff cookie + OAuth user still passes
+    const created = await caller(ctx).narratives.create({
+      floorId: 2,
+      reportDate: "2026-08-15",
+      periodKey: "transition1",
+      shiftKey: "07-15",
+      author: "Supervisor",
+      body: "Two patients admitted from waiting list.",
+    });
+    expect(created.success).toBe(true);
+
+    mockResolve.mockResolvedValue({
+      accountId: 0,
+      username: "guest",
+      displayName: "Guest",
+      role: "guest" as const,
+      assignedFloorId: null,
+    });
+    const guestCtx = { ...makeCtx(), user: null } as TrpcContext;
+    await expect(
+      caller(guestCtx).narratives.list({ floorId: 1, reportDate: "2026-08-15" })
+    ).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+  });
+
+  it("endOfDay summary includes pause and idle metrics", async () => {
+    const ctx = makeCtx();
+    const report = await caller(ctx).endOfDay.summary({ floorId: 1, date: "2026-08-15" });
+    expect(report.machineMetrics).toBeDefined();
+    expect(report.pauseSummary).toEqual({ totalPausedMinutes: 0, machinesPaused: 0 });
   });
 });
 

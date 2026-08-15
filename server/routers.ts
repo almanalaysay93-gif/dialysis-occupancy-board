@@ -717,6 +717,67 @@ export const appRouter = router({
   }),
 
   /**
+   * Charge-nurse narrative reports. One board's day is split into four
+   * treatment sessions plus three hooking/terminating transitions; the nurse
+   * on duty writes a narrative per period they cover, optionally tagging the
+   * shift window they worked. Floor-scoped: nurses write only for their own
+   * board; supervisors see everything.
+   */
+  narratives: router({
+    /** All narratives for a board on a given day (staff only). */
+    list: staffOrAdminProcedure
+      .input(
+        z.object({
+          floorId: z.number().int().positive(),
+          /** Report date in ISO format (YYYY-MM-DD). */
+          reportDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        })
+      )
+      .query(async ({ ctx, input }) => {
+        requireFloorAccess(ctx.staff, input.floorId, ctx.user);
+        return machineDb.listNarratives({ floorId: input.floorId, reportDate: input.reportDate });
+      }),
+
+    /** Write or update a period narrative (staff only, floor-scoped). */
+    create: staffOrAdminProcedure
+      .input(
+        z.object({
+          floorId: z.number().int().positive(),
+          reportDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+          periodKey: z.string().max(16),
+          shiftKey: z.string().max(16).nullable().default(null),
+          author: z.string().trim().min(1, "Author name is required").max(64),
+          body: z.string().trim().min(1, "The narrative cannot be empty").max(4000),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        requireFloorAccess(ctx.staff, input.floorId, ctx.user);
+        try {
+          const result = await machineDb.createNarrative(input);
+          return { success: true, id: result.id } as const;
+        } catch (error) {
+          const msg = (error as Error)?.message;
+          if (msg === "INVALID_PERIOD") {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "Unknown reporting period." });
+          }
+          if (msg === "EMPTY_BODY") {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "The narrative cannot be empty." });
+          }
+          throw error;
+        }
+      }),
+
+    /** Remove a narrative (staff only, floor-scoped). */
+    remove: staffOrAdminProcedure
+      .input(z.object({ id: z.number().int().positive(), floorId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        requireFloorAccess(ctx.staff, input.floorId, ctx.user);
+        await machineDb.deleteNarrative({ id: input.id, floorId: input.floorId });
+        return { success: true } as const;
+      }),
+  }),
+
+  /**
    * Local board staff authentication (RDU nurses + SKTI supervisor).
    * Independent of the Manus OAuth login used by the owner/admin.
    */

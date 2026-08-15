@@ -1,6 +1,6 @@
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { getDb } from "./db";
-import { floors, machines, sessions, waitingList } from "../drizzle/schema";
+import { floors, machines, narrativeReports, sessions, waitingList } from "../drizzle/schema";
 
 export type MachineStatus = "active" | "backup" | "repair";
 
@@ -505,6 +505,159 @@ async function reorderMachines(machineAId: number, machineBId: number) {
     .where(eq(machines.id, b.id));
 }
 
+/* ------------------------------------------------------------------ */
+/* Narrative reports (charge-nurse session/transition narratives)      */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Reporting periods for a board's day. Sessions are the four treatment
+ * windows; transitions are the hooking/terminating windows that overlap
+ * session boundaries (patients leaving and arriving).
+ */
+export const REPORT_PERIODS = [
+  { key: "session1", label: "Session 1 (5:00 AM – 10:00 AM)", hours: [5, 10] },
+  { key: "transition1", label: "Transition 1 · Hooking & Terminating (9:00 – 11:00 AM)", hours: [9, 11] },
+  { key: "session2", label: "Session 2 (10:00 AM – 2:00 PM)", hours: [10, 14] },
+  { key: "transition2", label: "Transition 2 · Hooking & Terminating (1:00 – 3:00 PM)", hours: [13, 15] },
+  { key: "session3", label: "Session 3 (2:00 – 6:00 PM)", hours: [14, 18] },
+  { key: "transition3", label: "Transition 3 · Hooking & Terminating (5:00 – 8:00 PM)", hours: [17, 20] },
+  { key: "session4", label: "Session 4 (6:00 – 10:00 PM)", hours: [18, 22] },
+] as const;
+
+/** Supported nurse shift windows. */
+export const REPORT_SHIFTS = [
+  { key: "05-13", label: "5:00 AM – 1:00 PM" },
+  { key: "13-21", label: "1:00 – 9:00 PM" },
+  { key: "21-05", label: "9:00 PM – 5:00 AM" },
+  { key: "07-15", label: "7:00 AM – 3:00 PM" },
+  { key: "15-23", label: "3:00 – 11:00 PM" },
+  { key: "23-07", label: "11:00 PM – 7:00 AM" },
+] as const;
+
+export async function createNarrative(input: {
+  floorId: number;
+  reportDate: string;
+  periodKey: string;
+  shiftKey?: string | null;
+  author: string;
+  body: string;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const period = REPORT_PERIODS.find(p => p.key === input.periodKey);
+  if (!period) throw new Error("INVALID_PERIOD");
+  const body = input.body.trim();
+  if (!body) throw new Error("EMPTY_BODY");
+
+  const result = await db
+    .insert(narrativeReports)
+    .values({
+      floorId: input.floorId,
+      reportDate: input.reportDate,
+      periodKey: input.periodKey,
+      shiftKey: input.shiftKey?.trim() || null,
+      author: input.author,
+      body,
+    })
+    .returning({ id: narrativeReports.id });
+  return result[0];
+}
+
+export async function listNarratives(input: { floorId: number; reportDate: string }) {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select()
+    .from(narrativeReports)
+    .where(and(eq(narrativeReports.floorId, input.floorId), eq(narrativeReports.reportDate, input.reportDate)))
+    .orderBy(narrativeReports.updatedAt);
+}
+
+export async function deleteNarrative(input: { id: number; floorId: number }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db
+    .delete(narrativeReports)
+    .where(and(eq(narrativeReports.id, input.id), eq(narrativeReports.floorId, input.floorId)));
+}
+
+/**
+ * Compute per-machine pause minutes and idle minutes for a floor day.
+ * Returns a map of machineId -> { pausedMinutes, idleMinutes, occupiedMinutes }.
+ * The operating day window is taken as the union of all active sessions on the
+ * floor for that date (floors don't have fixed "open" hours), so idle time
+ * measures gaps between sessions while the floor was operating.
+ */
+export async function machineDayMetrics(input: { floorId: number; date: string }) {
+  const db = await getDb();
+  const out: Record<string, { pausedMinutes: number; idleMinutes: number; occupiedMinutes: number }> = {};
+  if (!db) return out;
+
+  const dateStart = new Date(`${input.date}T00:00:00Z`);
+  const dateEnd = new Date(`${input.date}T23:59:59Z`);
+
+  const rows = await db
+    .select()
+    .from(sessions)
+    .where(
+      and(
+        eq(sessions.status, "ended"),
+        sql`${sessions.endedAt} >= ${dateStart}`,
+        sql`${sessions.endedAt} <= ${dateEnd}`,
+      ),
+    );
+  // Also include currently active sessions that started today.
+  const activeToday = await db
+    .select()
+    .from(sessions)
+    .where(
+      and(eq(sessions.status, "active"), sql`${sessions.startedAt} >= ${dateStart}`, sql`${sessions.startedAt} <= ${dateEnd}`),
+    );
+
+  // Map session.machineId -> machineId requires machine rows on this floor.
+  const floorMachines = await db
+    .select({ id: machines.id, machineId: machines.id })
+    .from(machines)
+    .where(and(eq(machines.floorId, input.floorId), eq(machines.status, "active")));
+  const onFloor = new Set(floorMachines.map(m => m.id));
+
+  const byMachine = new Map<number, { sessions: (typeof rows)[number][]; pausedSeconds: number }>();
+  for (const s of [...rows, ...activeToday]) {
+    if (!onFloor.has(s.machineId)) continue;
+    let acc = byMachine.get(s.machineId);
+    if (!acc) {
+      acc = { sessions: [], pausedSeconds: 0 };
+      byMachine.set(s.machineId, acc);
+    }
+    acc.sessions.push(s);
+  }
+
+  const now = Date.now();
+  for (const entry of Array.from(byMachine.entries())) {
+    const [machineId, acc] = entry;
+    let occupiedMs = 0;
+    let pausedMs = 0;
+    for (const s of acc.sessions) {
+      const start = Math.max(s.startedAt.getTime(), dateStart.getTime());
+      const end = Math.min((s.endedAt ?? new Date(now)).getTime(), dateEnd.getTime());
+      if (end > start) occupiedMs += end - start;
+      // pausedSeconds accumulates any pauses that completed within the session.
+      pausedMs += Math.max(0, s.pausedSeconds) * 1000;
+    }
+    const floorStart = dateStart.getTime();
+    const floorEnd = dateEnd.getTime();
+    // Idle = time the floor was operating but this machine was not in treatment.
+    const idleMs = Math.max(0, floorEnd - floorStart - occupiedMs);
+    out[String(machineId)] = {
+      pausedMinutes: Math.round(pausedMs / 60000),
+      idleMinutes: Math.round(idleMs / 60000),
+      occupiedMinutes: Math.round(occupiedMs / 60000),
+    };
+  }
+  return out;
+}
+
 export async function removeMachine(input: { machineId: number }) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
@@ -951,6 +1104,13 @@ export type EndOfDayReport = {
     isolationTag: string;
     nurse: string | null;
   }[];
+  /** Per-machine minutes: pause time and idle (vacant) time for the day. */
+  machineMetrics: Record<
+    string,
+    { pausedMinutes: number; idleMinutes: number; occupiedMinutes: number }
+  >;
+  /** Pause-time summary across the floor for the day. */
+  pauseSummary: { totalPausedMinutes: number; machinesPaused: number };
 };
 
 /**
@@ -1027,6 +1187,38 @@ export async function endOfDayReport(opts?: {
     else waitingAdds.normal++;
   }
 
+  // Per-machine pause & idle minutes for the floor day.
+  const machineMetrics = opts?.floorId
+    ? await machineDayMetrics({ floorId: opts.floorId, date: reportDate })
+    : {};
+
+  // Attach machine labels to the metrics map for display.
+  const metricsWithLabels: Record<
+    string,
+    {
+      machineLabel: string;
+      pausedMinutes: number;
+      idleMinutes: number;
+      occupiedMinutes: number;
+    }
+  > = {};
+  for (const key of Object.keys(machineMetrics)) {
+    const id = Number(key);
+    metricsWithLabels[machineLabels.get(id) ?? key] = {
+      machineLabel: machineLabels.get(id) ?? key,
+      ...machineMetrics[key],
+    };
+  }
+
+  let totalPausedMinutes = 0;
+  let machinesPaused = 0;
+  for (const m of Object.values(metricsWithLabels)) {
+    if (m.pausedMinutes > 0) {
+      machinesPaused++;
+      totalPausedMinutes += m.pausedMinutes;
+    }
+  }
+
   return {
     reportDate,
     floorName,
@@ -1048,6 +1240,8 @@ export async function endOfDayReport(opts?: {
       isolationTag: s.isolationTag,
       nurse: s.assignedNurse,
     })),
+    machineMetrics: metricsWithLabels,
+    pauseSummary: { totalPausedMinutes, machinesPaused },
   };
 }
 
@@ -1083,5 +1277,7 @@ function baseEmptyReport(floorId?: number, date?: string): EndOfDayReport {
     totalTreatmentHours: 0,
     waitingAdds: { normal: 0, urgent: 0, veryUrgent: 0, total: 0 },
     sessions: [],
+    machineMetrics: {},
+    pauseSummary: { totalPausedMinutes: 0, machinesPaused: 0 },
   };
 }

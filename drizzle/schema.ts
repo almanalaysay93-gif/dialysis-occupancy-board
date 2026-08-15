@@ -188,3 +188,30 @@ export const staffAccounts = pgTable("staff_accounts", {
 
 export type StaffAccount = typeof staffAccounts.$inferSelect;
 export type InsertStaffAccount = typeof staffAccounts.$inferInsert;
+
+/**
+ * Charge-nurse narrative entries per board. One board has a fixed set of
+ * reporting periods per day (four sessions plus three hooking/terminating
+ * transitions); nurses write a narrative per period they cover, optionally
+ * tagged with the shift on duty. The end-of-day report pulls these in.
+ */
+export const narrativeReports = pgTable("narrative_reports", {
+  id: serial("id").primaryKey(),
+  /** Floor this narrative belongs to. */
+  floorId: integer("floorId").notNull(),
+  /** Calendar date of the narrative, stored as a date string "YYYY-MM-DD". */
+  reportDate: varchar("reportDate", { length: 10 }).notNull(),
+  /** Period key: session1, session2, session3, session4, transition1, transition2, transition3. */
+  periodKey: varchar("periodKey", { length: 16 }).notNull(),
+  /** Optional shift key of the reporting nurse, e.g. "05-13" or "07-15". */
+  shiftKey: varchar("shiftKey", { length: 16 }),
+  /** Staff member who wrote the narrative. */
+  author: text("author").notNull(),
+  /** Free-text narrative for this period. */
+  body: text("body").notNull(),
+  createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt", { mode: "date" }).defaultNow().notNull(),
+});
+
+export type NarrativeReport = typeof narrativeReports.$inferSelect;
+export type InsertNarrativeReport = typeof narrativeReports.$inferInsert;
