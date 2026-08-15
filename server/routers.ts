@@ -3,7 +3,7 @@ import { z } from "zod";
 import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
-import { protectedProcedure, publicProcedure, router, staffOrAdminProcedure } from "./_core/trpc";
+import { protectedProcedure, publicProcedure, router, staffOrAdminProcedure, staffReadProcedure } from "./_core/trpc";
 import * as machineDb from "./machines";
 import {
   hashWithSalt,
@@ -33,6 +33,10 @@ function requireFloorAccess(
 ) {
   // OAuth admin/users (the owner's Google login) keep full access to every floor.
   if (oauthUser) return;
+  // Write endpoints reject guests upstream (staffOrAdminProcedure), so when a
+  // guest reaches this guard it is a read-only endpoint — guests may view any
+  // board's public content, the same way machines.list does.
+  if (staff.role === "guest") return;
   const allowed = staffAccessedFloors(staff);
   if (allowed !== null && !allowed.includes(floorId)) {
     throw new TRPCError({ code: "FORBIDDEN", message: "You do not have access to this board" });
@@ -692,7 +696,7 @@ export const appRouter = router({
    * waiting-list adds of that day grouped by priority.
    */
   endOfDay: router({
-    summary: staffOrAdminProcedure
+    summary: staffReadProcedure
       .input(
         z.object({
           floorId: z.number().int().positive().optional(),
@@ -702,8 +706,7 @@ export const appRouter = router({
       )
       .query(async ({ ctx, input }) => {
         const staff = ctx.staff;
-        // Guests are blocked server-side (guest cookie → UNAUTHORIZED via the
-        // staffOrAdminProcedure middleware) — the report is staff-only.
+        // Guests may view (read-only); writes stay blocked upstream.
         // Nurses see only their board; supervisors/OAuth users see all.
         let floorId: number | undefined = input?.floorId;
         if (floorId === undefined && staff.role === "nurse") {
@@ -725,7 +728,7 @@ export const appRouter = router({
    */
   narratives: router({
     /** All narratives for a board on a given day (staff only). */
-    list: staffOrAdminProcedure
+    list: staffReadProcedure
       .input(
         z.object({
           floorId: z.number().int().positive(),

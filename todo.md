@@ -260,3 +260,8 @@
 - [x] NarrativeReport mounted on each floor board page (FloorBoard /floor/:id + combined board when scoped) — nurses write during the shift; RBAC floor-scoped, guests read-only
 - [x] End of Day Report (/report) now read-only reflection: completed narratives shown, "No entry" markers, no write/delete controls
 - [x] tsc clean, 117/117 vitest; screenshots verified on all three boards; checkpoint saved (auto-publish); push GitHub; deliver
+
+## Fix narrative doubling and reposition (Aug 15)
+- [ ] Narrative Report appears twice on floor boards (double-mounted) — find duplicate mount point and remove it
+- [ ] Reposition Narrative Report directly below the machines grid (above Waiting List / Add Machine footer)
+- [ ] Verify on /floor/30001-30003 and scoped board; tests + tsc; checkpoint (auto-publish); push GitHub; deliver

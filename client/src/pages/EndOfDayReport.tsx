@@ -471,7 +471,7 @@ export function NarrativeReport({
 }) {
   if (!floorId) return null;
   const utils = trpc.useUtils();
-  const { data: narratives, isLoading } = trpc.narratives.list.useQuery(
+  const { data: narratives, isLoading, isError, error } = trpc.narratives.list.useQuery(
     { floorId, reportDate: date },
     { refetchInterval: editable ? 15_000 : false }
   );
@@ -514,6 +514,10 @@ export function NarrativeReport({
       <CardContent className="space-y-2 pt-4">
         {isLoading ? (
           <Skeleton className="h-40" />
+        ) : isError ? (
+          <p className="px-3.5 py-3 text-xs text-[#9E1F2B]">
+            Narratives could not be loaded ({String(error?.message ?? "network error")}) — try signing in as clinical staff or refresh the page.
+          </p>
         ) : (
           REPORT_PERIODS.map(period => {
             const entry = entriesByPeriod.get(period.key);

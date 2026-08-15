@@ -46,6 +46,43 @@ export const adminProcedure = t.procedure.use(
 );
 
 /**
+ * Staff read access: accepts any board staff session (nurse / supervisor /
+ * guest cookie) or a logged-in OAuth user. Used for read-only endpoints —
+ * guests may view but never edit (write endpoints stay on staffOrAdminProcedure).
+ */
+export const staffReadProcedure = t.procedure.use(
+  t.middleware(async opts => {
+    const { ctx, next } = opts;
+    const staff: StaffSession = await resolveStaffSession(ctx.req);
+    const oauthUser = ctx.user;
+    // Anonymous visitors (no staff cookie, no OAuth) count as read-only
+    // viewers — the same visibility as board content (machines.list is
+    // fully public). Write endpoints stay on staffOrAdminProcedure.
+    if (!staff.fromCookie && !oauthUser) {
+      return next({
+        ctx: { ...ctx, user: null, staff, isStaff: false as const },
+      });
+    }
+    if (staff.role === "guest" && staff.fromCookie) {
+      return next({
+        ctx: { ...ctx, user: null, staff, isStaff: false as const },
+      });
+    }
+    if (oauthUser) {
+      return next({
+        ctx: { ...ctx, user: oauthUser, staff, isStaff: true as const },
+      });
+    }
+    if (staff.role === "nurse" || staff.role === "supervisor") {
+      return next({
+        ctx: { ...ctx, user: null, staff, isStaff: true as const },
+      });
+    }
+    throw new TRPCError({ code: "UNAUTHORIZED", message: UNAUTHED_ERR_MSG });
+  }),
+);
+
+/**
  * Staff-or-admin: accepts either a logged-in OAuth user (role admin/user) or
  * a board staff session cookie (nurse/supervisor). Guests (no credentials) are
  * rejected with UNAUTHORIZED. Exposes `staff` on the context for scoping.

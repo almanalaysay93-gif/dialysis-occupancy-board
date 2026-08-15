@@ -191,11 +191,23 @@ describe("narrative reports", () => {
       displayName: "Guest",
       role: "guest" as const,
       assignedFloorId: null,
+      fromCookie: true,
     });
     const guestCtx = { ...makeCtx(), user: null } as TrpcContext;
+    // Guests may view narratives (read-only); writing stays blocked.
+    const entries = await caller(guestCtx).narratives.list({ floorId: 1, reportDate: "2026-08-15" });
+    expect(Array.isArray(entries)).toBe(true);
+    (machineDb.createNarrative as ReturnType<typeof vi.fn>).mockClear();
     await expect(
-      caller(guestCtx).narratives.list({ floorId: 1, reportDate: "2026-08-15" })
+      caller(guestCtx).narratives.create({
+        floorId: 1,
+        reportDate: "2026-08-15",
+        periodKey: "session1",
+        author: "Guest",
+        body: "Guests cannot write.",
+      })
     ).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+    expect(machineDb.createNarrative).not.toHaveBeenCalled();
   });
 
   it("endOfDay summary includes pause and idle metrics", async () => {
@@ -431,7 +443,7 @@ describe("end of day report scoping", () => {
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 
-  it("guest cannot read the report (staff-only)", async () => {
+  it("guest may view the report read-only (floor defaults to undefined, no write calls)", async () => {
     mockResolve.mockResolvedValue({
       accountId: 0,
       username: "guest",
@@ -441,10 +453,36 @@ describe("end of day report scoping", () => {
       fromCookie: true,
     });
     const ctx = makeCtx();
-    await expect(caller(ctx).endOfDay.summary({})).rejects.toMatchObject({
-      code: "UNAUTHORIZED",
+    const report = await caller(ctx).endOfDay.summary({});
+    expect(report.reportDate).toBeTruthy();
+    const call = (machineDb.endOfDayReport as ReturnType<typeof vi.fn>).mock
+      .calls[0][0] as { floorId?: number };
+    expect(call.floorId).toBeUndefined();
+    expect(machineDb.createNarrative).not.toHaveBeenCalled();
+  });
+
+  it("guest may view a board's narratives but cannot write one", async () => {
+    mockResolve.mockResolvedValue({
+      accountId: 0,
+      username: "guest",
+      displayName: "Guest",
+      role: "guest" as const,
+      assignedFloorId: null,
+      fromCookie: true,
     });
-    expect(machineDb.endOfDayReport).not.toHaveBeenCalled();
+    const ctx = makeCtx();
+    const entries = await caller(ctx).narratives.list({ floorId: 1, reportDate: "2026-08-15" });
+    expect(Array.isArray(entries)).toBe(true);
+    await expect(
+      caller(ctx).narratives.create({
+        floorId: 1,
+        reportDate: "2026-08-15",
+        periodKey: "session1",
+        author: "Guest",
+        body: "Guests cannot write narratives.",
+      })
+    ).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+    expect(machineDb.createNarrative).not.toHaveBeenCalled();
   });
 });
 
