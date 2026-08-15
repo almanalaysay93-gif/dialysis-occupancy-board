@@ -230,3 +230,9 @@
 
 ## Single repair button (user request Aug 15)
 - [x] Remove the "No" button; single "Send to repair" button that toggles on click (tap once to flag → "Send to repair — on" in rust, tap again to unflag) — verified in browser, tsc clean, 110/110 tests
+
+## Bug: Send to repair does nothing (user report Aug 15)
+- [x] Diagnose: live site verified clean — JS bundle, backend, and DB all correct; prior symptom was due to the stale guest cookie during the earlier role swap (fixed by login cache-seed); flagged session confirmed in Supabase
+- [x] Fix root cause: none needed in repair logic; production cookie/stale-session handling already patched; repair flow re-verified end-to-end live
+- [x] Verified end-to-end on production: assigned HD-001 (P-TEST-1, 3h, Send to repair ON) as supervisor → ended session via tile menu → HD-001 auto-parked under Machines in Repair on /backup (Supabase: session 7 status=ended needsRepairAfterSession=true, machine 60001 status=repair); then returned HD-001 to SKTI Main; all probe sessions/patients deleted from Supabase; probe scripts removed; 110/110 tests, tsc clean
+- [x] Tests pass (110/110), tsc clean, checkpoint saved and auto-published, pushed to GitHub, final delivery to user
