@@ -332,9 +332,10 @@ export async function setMachineStatus(input: {
 }
 
 /**
- * Drag-and-drop swap: exchange two machines between different floors.
- * Both machines must be free of active sessions. Scoping is enforced in the
- * router (nurses may swap only when both floors are theirs or supervisor).
+ * Drag-and-drop swap/reorder: exchange two machines between different floors,
+ * or rearrange their positions when they share the same board. Both machines
+ * must be free of active sessions. Scoping is enforced in the router (nurses
+ * may swap only when both floors are theirs or supervisor).
  */
 export async function swapMachines(input: { machineAId: number; machineBId: number }) {
   const db = await getDb();
@@ -344,9 +345,8 @@ export async function swapMachines(input: { machineAId: number; machineBId: numb
   const b = await getMachineById(input.machineBId);
   if (!a || !b) throw new Error("MACHINE_NOT_FOUND");
   if (a.id === b.id) throw new Error("SAME_MACHINE");
-  if (a.floorId === b.floorId) throw new Error("SAME_FLOOR");
   if (!a.floorId || !b.floorId) throw new Error("FLOOR_REQUIRED");
-  // Only active floor machines participate in swaps.
+  // Only active floor machines participate in swaps/reorders.
   if (a.status !== "active" || b.status !== "active") throw new Error("MACHINE_OFFBOARD");
 
   const active = await db
@@ -358,6 +358,12 @@ export async function swapMachines(input: { machineAId: number; machineBId: numb
     .limit(1);
   if (active.length > 0) throw new Error("MACHINE_IN_TREATMENT");
 
+  if (a.floorId === b.floorId) {
+    // Same-board drop = rearrange positions by exchanging sortOrder.
+    await reorderMachines(input.machineAId, input.machineBId);
+    return;
+  }
+
   await db
     .update(machines)
     .set({ floorId: b.floorId })
@@ -365,6 +371,25 @@ export async function swapMachines(input: { machineAId: number; machineBId: numb
   await db
     .update(machines)
     .set({ floorId: a.floorId })
+    .where(eq(machines.id, b.id));
+}
+
+/** Exchange the sort positions of two machines on the same board. */
+async function reorderMachines(machineAId: number, machineBId: number) {
+  const db = await getDb();
+  if (!db) return;
+
+  const a = await getMachineById(machineAId);
+  const b = await getMachineById(machineBId);
+  if (!a || !b || a.floorId !== b.floorId) return;
+
+  await db
+    .update(machines)
+    .set({ sortOrder: b.sortOrder })
+    .where(eq(machines.id, a.id));
+  await db
+    .update(machines)
+    .set({ sortOrder: a.sortOrder })
     .where(eq(machines.id, b.id));
 }
 

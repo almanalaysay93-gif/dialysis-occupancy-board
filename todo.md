@@ -201,3 +201,10 @@
 - [x] Guest mode: draggable={isStaff} keeps guests unable to drag/drop; DropdownMenu guarded by isStaff; swap RBAC server-enforced
 - [x] Sidebar nav entry "Backup & Repair" hidden for guests (DashboardLayout isStaff gate)
 - [x] Vitest: 13 new tests in server/machine-swap.test.ts (setStatus RBAC + mid-treatment guard, swap scoping + same-board/offboard/same-machine guards, guest blocks, offboarded.list public), 105/105 passing, tsc clean, screenshots verified (/backup, /, /floor/30001); checkpoint saved and auto-published
+
+## Drag-and-drop fixes (user report Aug 15)
+- [x] Diagnose + fix drag: onDragStart now sets text/plain + custom key (Chrome exposes all set types); onDragOver now correctly detects our tiles
+- [x] Backend: swapMachines now handles same-board drops via reorderMachines (exchanges sortOrder); drop-to-backup/repair calls machines.setStatus (exists)
+- [x] BackupRepair page: DropCard zones on both cards — drag-over shows teal dashed highlight + "Drop here" banner; drop calls setStatus backup/repair with toast + invalidation
+- [x] Within-board reorder: same-board vacant-drop exchanges sortOrder via reorderMachines; occupied tiles remain non-droppable
+- [x] Vitest updated (same-board = rearranges, 105/105 passing), tsc clean, screenshots verified (/backup drop zones, /floor/30001), checkpoint saved (auto-published), pushed to GitHub

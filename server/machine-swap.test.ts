@@ -181,12 +181,12 @@ describe("machines.swap (drag-and-drop swap)", () => {
     ).rejects.toThrow(/cannot be swapped with itself/i);
   });
 
-  it("rejects swapping machines already on the same board", async () => {
+  it("rearranges positions when both machines share the same board", async () => {
+    // Same-board drops no longer error — the db layer rearranges their
+    // positions (sortOrder) instead. The router pre-checks pass.
     mockResolve.mockResolvedValueOnce({ role: "supervisor", assignedFloorId: null, fromCookie: true });
-    swapMachinesMock.mockRejectedValueOnce(new Error("SAME_FLOOR"));
-    await expect(
-      caller(makeCtx(supervisor)).machines.swap({ machineAId: 11, machineBId: 99 })
-    ).rejects.toThrow(/same board/i);
+    await caller(makeCtx(supervisor)).machines.swap({ machineAId: 11, machineBId: 99 });
+    expect(swapMachinesMock).toHaveBeenCalledWith({ machineAId: 11, machineBId: 99 });
   });
 
   it("rejects swapping when either machine is offboard (backup/repair)", async () => {

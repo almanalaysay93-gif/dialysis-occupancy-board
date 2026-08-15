@@ -101,7 +101,7 @@ export function FloorMachineChip({
   const swapMachine = trpc.machines.swap.useMutation({
     onSuccess: async () => {
       await utils.machines.list.invalidate();
-      toast.success("Machines swapped between boards");
+      toast.success("Machines rearranged");
     },
     onError: e => toast.error(e.message || "Could not swap the machines"),
   });
@@ -131,6 +131,10 @@ export function FloorMachineChip({
           isStaff
             ? e => {
                 setIsDragSource(true);
+                // text/plain guarantees Chrome/Firefox/Safari all register the
+                // payload in e.dataTransfer.types; the custom key lets us tell
+                // our own tiles apart from ordinary text drags.
+                e.dataTransfer.setData("text/plain", String(row.machine.id));
                 e.dataTransfer.setData(DRAG_KEY, String(row.machine.id));
                 e.dataTransfer.effectAllowed = "move";
               }
@@ -138,7 +142,9 @@ export function FloorMachineChip({
         }
         onDragEnd={() => setIsDragSource(false)}
         onDragOver={e => {
-          if (!isStaff || e.dataTransfer.types.includes(DRAG_KEY)) {
+          if (!isStaff) return;
+          const isOurTile = e.dataTransfer.types.includes(DRAG_KEY);
+          if (isOurTile) {
             e.preventDefault();
             e.dataTransfer.dropEffect = "move";
           }

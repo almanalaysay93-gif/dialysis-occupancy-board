@@ -24,6 +24,7 @@ import { trpc } from "@/lib/trpc";
 import { Boxes, RefreshCw, Wrench } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { readDraggedMachineId } from "@/components/FloorMachineRow";
 
 
 export default function BackupRepair() {
@@ -38,6 +39,20 @@ export default function BackupRepair() {
 
   const [returning, setReturning] = useState<OffboardedMachine | null>(null);
   const [returnFloorId, setReturnFloorId] = useState<number | null>(null);
+  const [dragTarget, setDragTarget] = useState<"backup" | "repair" | null>(null);
+
+  /** Drop a dragged vacant tile onto the Backup or Repair card to park it. */
+  const setStorage = trpc.machines.setStatus.useMutation({
+    onSuccess: async (_v, vars) => {
+      await Promise.all([utils.machines.offboarded.list.invalidate(), utils.machines.list.invalidate()]);
+      toast.success(`Machine moved to ${vars.status} storage`);
+      setDragTarget(null);
+    },
+    onError: err => {
+      toast.error(err.message || "Could not move the machine");
+      setDragTarget(null);
+    },
+  });
 
   const setStatus = trpc.machines.setStatus.useMutation({
     onSuccess: async () => {
@@ -83,65 +98,74 @@ export default function BackupRepair() {
           </div>
         ) : (
           <div className="grid gap-6 md:grid-cols-2">
-            <section>
-              <Card className="border-[#E2E8F0]">
-                <CardHeader className="pb-3">
-                  <CardTitle className="flex items-center gap-2 text-lg">
-                    <Boxes className="h-5 w-5 text-[#2563EB]" />
-                    Backup Machines
-                    <Badge variant="secondary" className="ml-auto font-sans">
-                      {backupMachines.length}
-                    </Badge>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {backupMachines.length === 0 ? (
-                    <p className="text-sm text-muted-foreground py-6 text-center">
-                      No backup machines in storage. Send one here from any board.
-                    </p>
-                  ) : (
-                    <ul className="space-y-2">
-                      {backupMachines.map(m => (
-                        <MachineRow key={m.id} m={m} onReturn={() => openReturn(m)} />
-                      ))}
-                    </ul>
-                  )}
-                </CardContent>
-              </Card>
-            </section>
+            <DropCard
+              type="backup"
+              count={backupMachines.length}
+              active={dragTarget === "backup"}
+              onDragOver={e => {
+                if (e.dataTransfer.types.includes("skti-machine-swap")) {
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = "move";
+                  setDragTarget("backup");
+                }
+              }}
+              onDragLeave={() => setDragTarget(null)}
+              onDrop={e => {
+                e.preventDefault();
+                setDragTarget(null);
+                const id = readDraggedMachineId(e.dataTransfer);
+                if (id !== null) setStorage.mutate({ machineId: id, status: "backup" });
+              }}
+              title={
+                <>
+                  <Boxes className="h-5 w-5 text-[#2563EB]" />
+                  Backup Machines
+                </>
+              }
+              emptyText="No backup machines in storage. Drag a vacant machine here, or use the tile menu on any board."
+            >
+              {backupMachines.map(m => (
+                <MachineRow key={m.id} m={m} onReturn={() => openReturn(m)} />
+              ))}
+            </DropCard>
 
-            <section>
-              <Card className="border-[#F3D8DC]">
-                <CardHeader className="pb-3">
-                  <CardTitle className="flex items-center gap-2 text-lg">
-                    <Wrench className="h-5 w-5 text-[#C0392B]" />
-                    Machines in Repair
-                    <Badge variant="secondary" className="ml-auto font-sans">
-                      {repairMachines.length}
-                    </Badge>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {repairMachines.length === 0 ? (
-                    <p className="text-sm text-muted-foreground py-6 text-center">
-                      No machines under repair right now.
-                    </p>
-                  ) : (
-                    <ul className="space-y-2">
-                      {repairMachines.map(m => (
-                        <MachineRow key={m.id} m={m} onReturn={() => openReturn(m)} />
-                      ))}
-                    </ul>
-                  )}
-                </CardContent>
-              </Card>
-            </section>
+            <DropCard
+              type="repair"
+              count={repairMachines.length}
+              active={dragTarget === "repair"}
+              onDragOver={e => {
+                if (e.dataTransfer.types.includes("skti-machine-swap")) {
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = "move";
+                  setDragTarget("repair");
+                }
+              }}
+              onDragLeave={() => setDragTarget(null)}
+              onDrop={e => {
+                e.preventDefault();
+                setDragTarget(null);
+                const id = readDraggedMachineId(e.dataTransfer);
+                if (id !== null) setStorage.mutate({ machineId: id, status: "repair" });
+              }}
+              title={
+                <>
+                  <Wrench className="h-5 w-5 text-[#C0392B]" />
+                  Machines in Repair
+                </>
+              }
+              emptyText="No machines under repair right now. Drag a vacant machine here to send it for repair."
+            >
+              {repairMachines.map(m => (
+                <MachineRow key={m.id} m={m} onReturn={() => openReturn(m)} />
+              ))}
+            </DropCard>
           </div>
         )}
 
         <p className="text-xs text-muted-foreground">
-          Tip: on any floor board, use the tile menu to send a machine to Backup or Repair. Machines in
-          treatment cannot be moved — end the session first.
+          Tip: drag a vacant machine tile onto either card to park it — Backup Machines or Machines in
+          Repair. Machines in treatment cannot be moved — end the session first. You can also use the
+          tile menu (⋮) on any board.
         </p>
       </div>
 
@@ -191,6 +215,68 @@ export default function BackupRepair() {
         </DialogContent>
       </Dialog>
     </DashboardLayout>
+  );
+}
+
+function DropCard({
+  type,
+  count,
+  active,
+  onDragOver,
+  onDragLeave,
+  onDrop,
+  title,
+  emptyText,
+  children,
+}: {
+  type: "backup" | "repair";
+  count: number;
+  active: boolean;
+  onDragOver: (e: React.DragEvent<HTMLDivElement>) => void;
+  onDragLeave: (e: React.DragEvent<HTMLDivElement>) => void;
+  onDrop: (e: React.DragEvent<HTMLDivElement>) => void;
+  title: React.ReactNode;
+  emptyText: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section>
+      <Card
+        className={
+          active
+            ? "border-[#2E9A9B] ring-2 ring-[#2E9A9B]/40 transition-all"
+            : type === "backup"
+              ? "border-[#E2E8F0] transition-colors"
+              : "border-[#F3D8DC] transition-colors"
+        }
+      >
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-lg">{title}</CardTitle>
+          <Badge variant="secondary" className="ml-auto font-sans">
+            {count}
+          </Badge>
+        </CardHeader>
+        <div
+          className="rounded-b-md transition-colors"
+          onDragOver={onDragOver}
+          onDragLeave={onDragLeave}
+          onDrop={onDrop}
+        >
+          {active && (
+            <div className="mx-4 mt-2 border-2 border-dashed border-[#2E9A9B] rounded-md py-3 text-center text-sm text-[#2E9A9B]">
+              Drop here to park the machine{type === "repair" ? " for repair" : " as backup"}
+            </div>
+          )}
+          <CardContent>
+            {count === 0 && !active ? (
+              <p className="text-sm text-muted-foreground py-6 text-center">{emptyText}</p>
+            ) : (
+              <ul className="space-y-2">{children}</ul>
+            )}
+          </CardContent>
+        </div>
+      </Card>
+    </section>
   );
 }
 
