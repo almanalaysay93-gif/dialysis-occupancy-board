@@ -11,6 +11,7 @@ import Rooms from "./pages/Rooms";
 import Urgent from "./pages/Urgent";
 import StaffLogin from "./pages/StaffLogin";
 import EndOfDayReport from "./pages/EndOfDayReport";
+import DashboardLayout from "./components/DashboardLayout";
 
 function Router() {
   // make sure to consider if you need authentication for certain routes
@@ -22,7 +23,11 @@ function Router() {
       <Route path={"/urgent"} component={Urgent} />
       <Route path={"/staff-login"} component={StaffLogin} />
       <Route path={"/report"} component={EndOfDayReport} />
-      <Route path={"/floor/:id"} component={FloorBoard} />
+      <Route path={"/floor/:id"}>
+        <DashboardLayout>
+          <FloorBoard />
+        </DashboardLayout>
+      </Route>
       <Route path={"/404"} component={NotFound} />
       {/* Final fallback route */}
       <Route component={NotFound} />

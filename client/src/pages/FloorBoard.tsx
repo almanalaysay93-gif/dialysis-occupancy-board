@@ -1,13 +1,13 @@
 import NotFound from "@/pages/NotFound";
 import { trpc } from "@/lib/trpc";
 import { useParams } from "wouter";
-import StaffBar from "@/components/StaffBar";
 import { OccupancyBoard } from "@/pages/Home";
 
 /**
  * Dedicated occupancy board for a single floor, e.g. /floor/2 or /floor/3.
- * Reuses the shared OccupancyBoard scoped to the requested floor, with its
- * own editorial masthead and the staff session bar.
+ * Reuses the shared OccupancyBoard scoped to the requested floor. Renders
+ * inside the dashboard shell, so the shell's page header is the only header
+ * (the duplicated masthead bug).
  */
 export default function FloorBoard() {
   const params = useParams<{ id: string }>();
@@ -35,22 +35,6 @@ export default function FloorBoard() {
   // fail zod validation ("Too small: expected number to be >0").
   return (
     <div className="px-4 py-6 sm:px-6 lg:px-10 lg:py-8">
-      <header className="flex items-center justify-between border-b border-[#1F2A52]/80 pb-3">
-        <p className="smallcaps-detail text-[#7684A0]">
-          SPMC Kidney &amp; Transplant Institute · {floor?.name ?? "Floor Board"}
-        </p>
-        <div className="flex items-center gap-3">
-          <StaffBar />
-          <p className="smallcaps-detail text-[#7684A0]">
-            {new Date().toLocaleDateString([], {
-              weekday: "long",
-              month: "long",
-              day: "numeric",
-              year: "numeric",
-            })}
-          </p>
-        </div>
-      </header>
       <OccupancyBoard floorId={floor?.id} />
     </div>
   );
