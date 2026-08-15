@@ -21,27 +21,26 @@ import {
 } from "@/components/ui/select";
 import type { OffboardedMachine } from "../../../server/machines";
 import { trpc } from "@/lib/trpc";
-import { Boxes, RefreshCw, Wrench } from "lucide-react";
+import { Boxes, Loader2, RefreshCw, Wrench } from "lucide-react";
 import { useState } from "react";
-import { toast } from "sonner";
 import { readDraggedMachineId } from "@/components/FloorMachineRow";
+import { toast } from "sonner";
 
 
 export default function BackupRepair() {
   const utils = trpc.useUtils();
-  const { data: offboarded = [], isLoading } = trpc.machines.offboarded.list.useQuery(undefined, {
-    refetchInterval: 20_000,
-    staleTime: 10_000,
-  });
-  const { data: floors = [] } = trpc.machines.listFloors.useQuery(undefined, {
-    staleTime: 60_000,
-  });
-
+  const [dragTarget, setDragTarget] = useState<"backup" | "repair" | null>(null);
   const [returning, setReturning] = useState<OffboardedMachine | null>(null);
   const [returnFloorId, setReturnFloorId] = useState<number | null>(null);
-  const [dragTarget, setDragTarget] = useState<"backup" | "repair" | null>(null);
 
-  /** Drop a dragged vacant tile onto the Backup or Repair card to park it. */
+  const { data: offboarded = [], isLoading } = trpc.machines.offboarded.list.useQuery(undefined, {
+    refetchInterval: 15_000,
+  });
+
+  const { data: floors = [] } = trpc.machines.listFloors.useQuery(undefined, {
+    refetchInterval: 30_000,
+  });
+
   const setStorage = trpc.machines.setStatus.useMutation({
     onSuccess: async (_v, vars) => {
       await Promise.all([utils.machines.offboarded.list.invalidate(), utils.machines.list.invalidate()]);
@@ -68,8 +67,6 @@ export default function BackupRepair() {
 
   const openReturn = (m: OffboardedMachine) => {
     setReturning(m);
-    // Default to the machine's last floor if it has one, else first floor.
-    // offboarded machines keep their floorId so they return to their board.
     setReturnFloorId(m.floorId ? Number(m.floorId) : floors[0]?.id ?? null);
   };
 
@@ -102,16 +99,13 @@ export default function BackupRepair() {
               type="backup"
               count={backupMachines.length}
               active={dragTarget === "backup"}
+              isPending={setStorage.isPending && setStorage.variables?.status === "backup"}
               onDragOver={e => {
-                // Accept any drag — the server still enforces RBAC and the
-                // vacant-machine constraint on the actual move.
                 e.preventDefault();
                 e.dataTransfer.dropEffect = "move";
                 setDragTarget("backup");
               }}
               onDragLeave={e => {
-                // relatedTarget inside the card keeps firing leave — only
-                // clear when leaving the whole section.
                 const sec = (e.currentTarget as HTMLElement).closest("section");
                 const related = e.relatedTarget as Node | null;
                 if (!sec?.contains(related)) setDragTarget(null);
@@ -139,9 +133,8 @@ export default function BackupRepair() {
               type="repair"
               count={repairMachines.length}
               active={dragTarget === "repair"}
+              isPending={setStorage.isPending && setStorage.variables?.status === "repair"}
               onDragOver={e => {
-                // Accept any drag — the server still enforces RBAC and the
-                // vacant-machine constraint on the actual move.
                 e.preventDefault();
                 e.dataTransfer.dropEffect = "move";
                 setDragTarget("repair");
@@ -159,11 +152,11 @@ export default function BackupRepair() {
               }}
               title={
                 <>
-                  <Wrench className="h-5 w-5 text-[#C0392B]" />
+                  <Wrench className="h-5 w-5 text-[#9E1F2B]" />
                   Machines in Repair
                 </>
               }
-              emptyText="No machines under repair right now. Drag a vacant machine here to send it for repair."
+              emptyText="No machines undergoing repair. Flag a session or use the tile menu to send a machine to repair."
             >
               {repairMachines.map(m => (
                 <MachineRow key={m.id} m={m} onReturn={() => openReturn(m)} />
@@ -179,22 +172,22 @@ export default function BackupRepair() {
         </p>
       </div>
 
-      <Dialog open={!!returning} onOpenChange={o => !o && setReturning(null)}>
-        <DialogContent className="max-w-md">
+      <Dialog open={returning !== null} onOpenChange={open => !open && setReturning(null)}>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Return {returning?.label} to a board</DialogTitle>
+            <DialogTitle>Return {returning?.label} to board</DialogTitle>
             <DialogDescription>
-              The machine will be marked Active and placed back on the chosen floor.
+              Select which floor board to return this machine to. It will appear as a vacant machine.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-3 py-2">
-            <Label htmlFor="br-floor">Floor board</Label>
+          <div className="space-y-4 py-2">
+            <Label>Target Floor Board</Label>
             <Select
-              value={returnFloorId !== null ? String(returnFloorId) : undefined}
+              value={returnFloorId !== null ? String(returnFloorId) : ""}
               onValueChange={v => setReturnFloorId(Number(v))}
             >
-              <SelectTrigger id="br-floor">
-                <SelectValue placeholder="Choose a floor" />
+              <SelectTrigger>
+                <SelectValue placeholder="Select a floor" />
               </SelectTrigger>
               <SelectContent>
                 {floors.map(f => (
@@ -232,6 +225,7 @@ function DropCard({
   type,
   count,
   active,
+  isPending,
   onDragOver,
   onDragLeave,
   onDrop,
@@ -242,6 +236,7 @@ function DropCard({
   type: "backup" | "repair";
   count: number;
   active: boolean;
+  isPending?: boolean;
   onDragOver: (e: React.DragEvent<HTMLDivElement>) => void;
   onDragLeave: (e: React.DragEvent<HTMLDivElement>) => void;
   onDrop: (e: React.DragEvent<HTMLDivElement>) => void;
@@ -272,13 +267,19 @@ function DropCard({
           onDragLeave={onDragLeave}
           onDrop={onDrop}
         >
-          {active && (
+          {isPending && (
+            <div className="mx-4 mt-2 flex items-center justify-center gap-2 border border-[#2E9A9B]/40 bg-[#E8F4F4]/80 rounded-md py-3 text-sm text-[#2E9A9B]">
+              <Loader2 className="h-4 w-4 animate-spin text-[#2E9A9B]" />
+              Moving machine to storage…
+            </div>
+          )}
+          {active && !isPending && (
             <div className="mx-4 mt-2 border-2 border-dashed border-[#2E9A9B] rounded-md py-3 text-center text-sm text-[#2E9A9B]">
               Drop here to park the machine{type === "repair" ? " for repair" : " as backup"}
             </div>
           )}
           <CardContent>
-            {count === 0 && !active ? (
+            {count === 0 && !active && !isPending ? (
               <p className="text-sm text-muted-foreground py-6 text-center">{emptyText}</p>
             ) : (
               <ul className="space-y-2">{children}</ul>

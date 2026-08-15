@@ -13,7 +13,7 @@ import RenameMachineDialog from "@/components/RenameMachineDialog";
 import RenameSessionLabelDialog from "@/components/RenameSessionLabelDialog";
 import RemoveMachineDialog from "@/components/RemoveMachineDialog";
 import { cn } from "@/lib/utils";
-import { Activity, AlertTriangle, BellRing, Clock, Droplets, FilePenLine, MoreVertical, Pause, Play, Pencil, Plus, Power, Trash2, Boxes, Wrench } from "lucide-react";
+import { Activity, AlertTriangle, BellRing, Clock, Droplets, FilePenLine, Loader2, MoreVertical, Pause, Play, Pencil, Plus, Power, Trash2, Boxes, Wrench } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import type { MachineWithSession } from "../../../server/machines";
@@ -30,10 +30,11 @@ export function readDraggedMachineId(dt: DataTransfer | null): number | null {
 function useCountdown(endsAt: Date | null) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(id);
-  }, []);
-  if (!endsAt) return null;
+    if (!endsAt) return;
+    const interval = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, [endsAt]);
+  if (!endsAt) return 0;
   return Math.max(0, endsAt.getTime() - now);
 }
 
@@ -85,6 +86,7 @@ export function FloorMachineChip({
   const [endSessionOpen, setEndSessionOpen] = useState(false);
   const [removeOpen, setRemoveOpen] = useState(false);
   const [isDragSource, setIsDragSource] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
 
   const toggleUrgent = trpc.sessions.toggleUrgent.useMutation({
     onSuccess: () => void utils.machines.list.invalidate(),
@@ -152,55 +154,65 @@ export function FloorMachineChip({
     onError: e => toast.error(e.message || `Could not move ${row.machine.label}`),
   });
 
-
+  const isPending = swapMachine.isPending || sendToStorage.isPending;
 
   if (!occupied) {
     const chipContent = (
       <button
         type="button"
-        onClick={() => isStaff && onAssign(row.machine.id)}
-        disabled={!isStaff}
+        onClick={() => isStaff && !isPending && onAssign(row.machine.id)}
+        disabled={!isStaff || isPending}
         aria-label={`Assign a session to machine ${row.machine.label}`}
         title={`${row.machine.label} · ${row.machine.location}`}
-        draggable={isStaff}
+        draggable={isStaff && !isPending}
         onDragStart={e => {
-          if (!isStaff) return;
+          if (!isStaff || isPending) return;
           setIsDragSource(true);
-          // text/plain guarantees Chrome/Firefox/Safari all register the
-          // payload in e.dataTransfer.types; the custom key lets us tell
-          // our own tiles apart from ordinary text drags.
           e.dataTransfer.setData("text/plain", String(row.machine.id));
           e.dataTransfer.setData(DRAG_KEY, String(row.machine.id));
           e.dataTransfer.effectAllowed = "move";
         }}
         onDragEnd={() => setIsDragSource(false)}
         onDragOver={e => {
-          if (!isStaff) return;
-          // Accept our own tiles unconditionally — the server still enforces
-          // RBAC and the both-vacant constraint on the actual swap.
+          if (!isStaff || isPending) return;
           e.preventDefault();
           e.dataTransfer.dropEffect = "move";
+          if (!isDragOver) setIsDragOver(true);
         }}
+        onDragLeave={() => setIsDragOver(false)}
         onDrop={e => {
-          if (!isStaff) return;
+          setIsDragOver(false);
+          if (!isStaff || isPending) return;
           const srcId = readDraggedMachineId(e.dataTransfer);
           if (srcId === null || srcId === row.machine.id) return;
           e.preventDefault();
           swapMachine.mutate({ machineAId: srcId, machineBId: row.machine.id });
         }}
         className={cn(
-          "group flex h-14 w-full flex-col items-center justify-center gap-0.5 border border-[#D4DFE5]/70 bg-[#FBFCFD] text-center transition-all",
-          isStaff && !isDragSource && "cursor-grab hover:border-[#7684A0] hover:bg-[#E8EFF1]",
-          isDragSource && "cursor-grabbing border-[#2E9A9B] bg-[#E8F4F4] opacity-70",
-          swapMachine.isPending && "pointer-events-none opacity-60"
+          "group relative flex h-14 w-full flex-col items-center justify-center gap-0.5 border border-[#D4DFE5]/70 bg-[#FBFCFD] text-center transition-all",
+          isStaff && !isDragSource && !isDragOver && !isPending && "cursor-grab hover:border-[#7684A0] hover:bg-[#E8EFF1]",
+          isDragOver && !isDragSource && "border-2 border-dashed border-[#2E9A9B] bg-[#E8F4F4]/90 scale-[1.03] z-10 shadow-sm",
+          isDragSource && "cursor-grabbing border-2 border-[#2E9A9B] bg-[#E8F4F4] opacity-60 ring-2 ring-[#2E9A9B]/40 scale-95",
+          isPending && "pointer-events-none opacity-80"
         )}
       >
-        <span className="font-display text-lg leading-none text-[#1F2A52]">
-          {row.machine.label.replace("HD-", "")}
-        </span>
-        <span className="smallcaps-detail text-[9px] tracking-[0.15em] text-[#7684A0]">
-          Vacant
-        </span>
+        {isPending ? (
+          <div className="flex flex-col items-center justify-center gap-0.5">
+            <Loader2 className="h-4 w-4 animate-spin text-[#2E9A9B]" />
+            <span className="smallcaps-detail text-[8px] tracking-wider text-[#2E9A9B]">
+              Updating…
+            </span>
+          </div>
+        ) : (
+          <>
+            <span className="font-display text-lg leading-none text-[#1F2A52]">
+              {row.machine.label.replace("HD-", "")}
+            </span>
+            <span className="smallcaps-detail text-[9px] tracking-[0.15em] text-[#7684A0]">
+              Vacant
+            </span>
+          </>
+        )}
       </button>
     );
     return (
