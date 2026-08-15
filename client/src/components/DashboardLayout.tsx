@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/sidebar";
 import { startLogin } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { Activity, BellRing, ClipboardList, LogOut, PanelLeft, LayoutGrid, Layers } from "lucide-react";
+import { Activity, BellRing, ClipboardList, LogOut, PanelLeft, LayoutGrid, Layers, Wrench } from "lucide-react";
 import { CSSProperties, useRef } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
@@ -31,6 +31,7 @@ import { Button } from "./ui/button";
 const menuItems: { icon: typeof Activity; label: string; path: string }[] = [
   { icon: Activity, label: "Occupancy Board", path: "/" },
   { icon: BellRing, label: "Urgent Cases", path: "/urgent" },
+  { icon: Wrench, label: "Backup & Repair", path: "/backup" },
   { icon: LayoutGrid, label: "Rooms", path: "/rooms" },
   { icon: ClipboardList, label: "End of Day Report", path: "/report" },
 ];
@@ -167,7 +168,7 @@ function DashboardLayoutContent({
   // Read-only viewers (guest, logged-out staff page) don't manage rooms.
   const visibleMenuItems =
     staffRole === "guest"
-      ? menuItems.filter(item => item.path !== "/rooms" && item.path !== "/report")
+      ? menuItems.filter(item => item.path !== "/rooms" && item.path !== "/report" && item.path !== "/backup")
       : menuItems;
   const activeMenuItem = menuItems.find(item => item.path === location) ??
     floorBoardItems.find(item => location.startsWith("/floor/"));

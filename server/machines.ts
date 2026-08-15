@@ -2,8 +2,10 @@ import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { getDb } from "./db";
 import { floors, machines, sessions, waitingList } from "../drizzle/schema";
 
+export type MachineStatus = "active" | "backup" | "repair";
+
 export type MachineWithSession = {
-  machine: { id: number; label: string; location: string; floorId: number | null; sortOrder: number };
+  machine: { id: number; label: string; location: string; floorId: number | null; sortOrder: number; status: MachineStatus; statusNote: string | null };
   session: {
     id: number;
     machineId: number;
@@ -25,6 +27,9 @@ export async function listMachines(): Promise<MachineWithSession[]> {
 
   const allMachines = await db.select().from(machines).orderBy(machines.floorId, machines.sortOrder, machines.id);
 
+  // Floor boards only show machines with status 'active'. Backup/repair machines
+  // live on the dedicated Backup & Repair board instead.
+
   const rows = await db
     .select()
     .from(sessions)
@@ -33,8 +38,9 @@ export async function listMachines(): Promise<MachineWithSession[]> {
   const byMachine = new Map<number, (typeof rows)[number]>();
   for (const row of rows) byMachine.set(row.machineId, row);
 
-  return allMachines.map(m => ({
-    machine: { id: m.id, label: m.label, location: m.location, floorId: m.floorId, sortOrder: m.sortOrder },
+  return allMachines
+    .map(m => ({
+    machine: { id: m.id, label: m.label, location: m.location, floorId: m.floorId, sortOrder: m.sortOrder, status: m.status, statusNote: m.statusNote },
     session: (() => {
       const s = byMachine.get(m.id);
       if (!s) return null;
@@ -52,7 +58,8 @@ export async function listMachines(): Promise<MachineWithSession[]> {
         assignedNurse: s.assignedNurse,
       };
     })(),
-  }));
+  }))
+    .filter(r => r.machine.status === "active");
 }
 
 export async function assignSession(input: {
@@ -244,6 +251,121 @@ export async function updateMachineLabel(input: { machineId: number; label: stri
     .update(machines)
     .set({ label: newLabel })
     .where(eq(machines.id, input.machineId));
+}
+
+/** Non-floor machines for the Backup & Repair board, grouped by status. */
+export type OffboardedMachine = {
+  id: number;
+  label: string;
+  location: string;
+  status: MachineStatus;
+  statusNote: string | null;
+  floorId: number | null;
+  createdAt: Date;
+};
+
+export async function listOffboardedMachines(): Promise<OffboardedMachine[]> {
+  const db = await getDb();
+  if (!db) return [];
+  const rows = await db
+    .select({
+      id: machines.id,
+      label: machines.label,
+      location: machines.location,
+      status: machines.status,
+      statusNote: machines.statusNote,
+      floorId: machines.floorId,
+      createdAt: machines.createdAt,
+    })
+    .from(machines)
+    .where(sql`${machines.status} <> 'active'`)
+    .orderBy(machines.status, machines.sortOrder, machines.id);
+  return rows;
+}
+
+/**
+ * Move a machine to backup/repair (off the floor) or back to active on a
+ * floor. Throws MACHINE_IN_TREATMENT when the machine has an active session.
+ * Scoping (which floors the caller may touch) is enforced in the router.
+ */
+export async function setMachineStatus(input: {
+  machineId: number;
+  status: MachineStatus;
+  /** Required when status === "active": floor to return the machine to. */
+  floorId?: number | null;
+  statusNote?: string | null;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const machine = await getMachineById(input.machineId);
+  if (!machine) throw new Error("MACHINE_NOT_FOUND");
+
+  // Reject moving a machine mid-treatment; staff must end the session first.
+  const active = await db
+    .select({ id: sessions.id })
+    .from(sessions)
+    .where(and(eq(sessions.machineId, input.machineId), eq(sessions.status, "active")))
+    .limit(1);
+  if (active.length > 0) {
+    throw new Error("MACHINE_IN_TREATMENT");
+  }
+
+  if (input.status === "active") {
+    if (input.floorId === undefined || input.floorId === null) {
+      throw new Error("FLOOR_REQUIRED");
+    }
+    const floor = await db.select({ id: floors.id }).from(floors).where(eq(floors.id, input.floorId)).limit(1);
+    if (floor.length === 0) throw new Error("FLOOR_NOT_FOUND");
+  }
+
+  const note = input.statusNote?.trim() || null;
+
+  await db
+    .update(machines)
+    .set({
+      status: input.status,
+      statusNote: note,
+      floorId: input.status === "active" ? input.floorId! : machine.floorId,
+    })
+    .where(eq(machines.id, input.machineId));
+}
+
+/**
+ * Drag-and-drop swap: exchange two machines between different floors.
+ * Both machines must be free of active sessions. Scoping is enforced in the
+ * router (nurses may swap only when both floors are theirs or supervisor).
+ */
+export async function swapMachines(input: { machineAId: number; machineBId: number }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const a = await getMachineById(input.machineAId);
+  const b = await getMachineById(input.machineBId);
+  if (!a || !b) throw new Error("MACHINE_NOT_FOUND");
+  if (a.id === b.id) throw new Error("SAME_MACHINE");
+  if (a.floorId === b.floorId) throw new Error("SAME_FLOOR");
+  if (!a.floorId || !b.floorId) throw new Error("FLOOR_REQUIRED");
+  // Only active floor machines participate in swaps.
+  if (a.status !== "active" || b.status !== "active") throw new Error("MACHINE_OFFBOARD");
+
+  const active = await db
+    .select({ id: sessions.id })
+    .from(sessions)
+    .where(
+      and(sql`${sessions.machineId} IN (${input.machineAId}, ${input.machineBId})`, eq(sessions.status, "active")),
+    )
+    .limit(1);
+  if (active.length > 0) throw new Error("MACHINE_IN_TREATMENT");
+
+  await db
+    .update(machines)
+    .set({ floorId: b.floorId })
+    .where(eq(machines.id, a.id));
+  await db
+    .update(machines)
+    .set({ floorId: a.floorId })
+    .where(eq(machines.id, b.id));
 }
 
 export async function removeMachine(input: { machineId: number }) {

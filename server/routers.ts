@@ -143,6 +143,109 @@ export const appRouter = router({
           throw error;
         }
       }),
+
+    /**
+     * Send a floor machine to Backup or Repair (off the floor), or return a
+     * backup/repair machine to a floor. Nurses may move machines of their own
+     * board only; supervisors and OAuth users may move anything.
+     */
+    setStatus: staffOrAdminProcedure
+      .input(
+        z.object({
+          machineId: z.number().int().positive(),
+          status: z.enum(["active", "backup", "repair"]),
+          /** Required when status === "active": floor to return the machine to. */
+          floorId: z.number().int().positive().nullable().default(null),
+          statusNote: z.string().trim().max(120).nullable().default(null),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const machine = await machineDb.getMachineById(input.machineId);
+        if (!machine) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Machine not found." });
+        }
+        // Leaving the floor: scope check on the machine's current floor.
+        if (input.status !== "active" && machine.floorId) {
+          requireFloorAccess(ctx.staff, machine.floorId, ctx.user);
+        }
+        // Returning to the floor: scope check on the target floor.
+        if (input.status === "active" && input.floorId) {
+          requireFloorAccess(ctx.staff, input.floorId, ctx.user);
+        }
+        try {
+          await machineDb.setMachineStatus({
+            machineId: input.machineId,
+            status: input.status,
+            floorId: input.status === "active" ? input.floorId : undefined,
+            statusNote: input.statusNote,
+          });
+          return { success: true } as const;
+        } catch (error) {
+          const msg = (error as Error)?.message;
+          if (msg === "MACHINE_IN_TREATMENT") {
+            throw new TRPCError({
+              code: "CONFLICT",
+              message: "Cannot move a machine that is currently in treatment. End the session first.",
+            });
+          }
+          if (msg === "FLOOR_NOT_FOUND") {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "The selected board no longer exists." });
+          }
+          if (msg === "MACHINE_NOT_FOUND") {
+            throw new TRPCError({ code: "NOT_FOUND", message: "Machine not found." });
+          }
+          if (msg === "FLOOR_REQUIRED") {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "Choose the board this machine returns to." });
+          }
+          throw error;
+        }
+      }),
+
+    /**
+     * Drag-and-drop swap: exchange two machines between different boards.
+     * Both machines must be vacant. Nurses may swap only within their own
+     * board (effectively a no-op), so cross-board swaps are supervisor-only.
+     */
+    swap: staffOrAdminProcedure
+      .input(
+        z.object({
+          machineAId: z.number().int().positive(),
+          machineBId: z.number().int().positive(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const a = await machineDb.getMachineById(input.machineAId);
+        const b = await machineDb.getMachineById(input.machineBId);
+        if (a?.floorId) requireFloorAccess(ctx.staff, a.floorId, ctx.user);
+        if (b?.floorId) requireFloorAccess(ctx.staff, b.floorId, ctx.user);
+        try {
+          await machineDb.swapMachines(input);
+          return { success: true } as const;
+        } catch (error) {
+          const msg = (error as Error)?.message;
+          if (msg === "MACHINE_IN_TREATMENT") {
+            throw new TRPCError({
+              code: "CONFLICT",
+              message: "One of the machines is in treatment. End the session first.",
+            });
+          }
+          if (msg === "SAME_FLOOR") {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "Both machines are on the same board." });
+          }
+          if (msg === "SAME_MACHINE") {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "A machine cannot be swapped with itself." });
+          }
+          if (msg === "MACHINE_OFFBOARD") {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "Only machines on the floor boards can be swapped." });
+          }
+          throw error;
+        }
+      }),
+
+    /** Backup & Repair inventory: machines off the floors, with their status. */
+    offboarded: router({
+      list: publicProcedure.query(() => machineDb.listOffboardedMachines()),
+    }),
   }),
 
   rooms: router({

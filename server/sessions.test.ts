@@ -64,8 +64,8 @@ beforeEach(() => {
 describe("machines.list", () => {
   it("returns machines joined with their active sessions", async () => {
     const machineRows = [
-      { id: 1, label: "HD-01", location: "Bay A", sortOrder: 1 },
-      { id: 2, label: "HD-02", location: "Bay A", sortOrder: 2 },
+      { id: 1, label: "HD-01", location: "Bay A", sortOrder: 1, status: "active", statusNote: null },
+      { id: 2, label: "HD-02", location: "Bay A", sortOrder: 2, status: "active", statusNote: null },
     ];
     const sessionRows: Session[] = [
       {
@@ -98,6 +98,19 @@ describe("machines.list", () => {
       insert: vi.fn(),
       update: vi.fn(),
     };
+    // machines.list now also filters to status === 'active', so the first
+    // machines-select result must surface via the orderBy terminal (used
+    // here as the machines query's resolution point).
+    db.select.mockImplementation(() => {
+      selectCall += 1;
+      return {
+        from: vi.fn(() => ({
+          where: vi.fn().mockResolvedValue(selectCall === 1 ? machineRows : sessionRows),
+          orderBy: vi.fn().mockResolvedValue(selectCall === 1 ? machineRows : sessionRows),
+          limit: vi.fn().mockResolvedValue(selectCall === 1 ? machineRows : sessionRows),
+        })),
+      };
+    });
     (getDb as ReturnType<typeof vi.fn>).mockResolvedValue(db);
 
     const caller = appRouter.createCaller(createAuthContext());

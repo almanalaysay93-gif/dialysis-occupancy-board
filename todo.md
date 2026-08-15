@@ -192,12 +192,12 @@
 - [x] Remove temporary migration probes (supabasePing/supabaseMask/supabaseMigrate) and schema base64 from systemRouter.ts; scratch .mjs files deleted; 92/92 tests, tsc clean
 
 ## Backup & Repair board + drag-and-drop machine swap (user request Aug 15)
-- [ ] Schema: machines table gains a status column (active/backup/repair); status 'active' means on a floor; backup and repair machines are removed from floor display
-- [ ] Migration applied to Supabase (existing 160 machines default to active)
-- [ ] Backend: machines.setStatus (move machine to backup/repair — supervisor only, or nurse for own floor with floor-scope guard; active requires picking a floor), machines.list returns status
-- [ ] Backend: machines.swap (drag-and-drop swap between two floors — both floor-scoped nurses or supervisor; blocks if either machine is mid-treatment)
-- [ ] New /backup page: board listing backup machines and repair machines in two sections, with actions to return/activate
-- [ ] UI: tile dropdown option to send machine to Backup or Repair (staff-only); drag-and-drop tile from one floor board to another floor board triggering swap (HTML5 drag+drop with optimistic UI + rollback)
-- [ ] Guest mode: no swap, no status actions; nurse: can only drop into own board (swap restricted) unless supervisor
-- [ ] Sidebar nav entry "Backup & Repair" hidden for guests
-- [ ] Vitest: status swap + repair/backup tests, drag-and-drop swap tests (scoping + mid-treatment guard); tsc clean; screenshots verified; checkpoint saved and auto-published
+- [x] Schema: machines table gains a status column (active/backup/repair); status 'active' means on a floor; backup and repair machines are removed from floor display
+- [x] Migration applied to Supabase (enum + columns applied live; existing 160 machines default to active); temporary migration probe endpoint removed again
+- [x] Backend: machines.setStatus (move machine to backup/repair — supervisor only, or nurse for own floor with floor-scope guard; active requires picking a floor), machines.list returns status; machines.swap (vacant-only swap, RBAC scope enforced); machines.listOffboardedMachines; routers setStatus/swap/offboarded.list with SAME_MACHINE/OFFBOARD/FLOOR errors
+- [x] Backend: machines.swap (vacant-only swap, RBAC scope enforced; supervisor cross-floor, nurse same-floor only)
+- [x] New /backup page: board listing backup machines and repair machines in two sections, with actions to return/activate (Nav entry hidden for guests)
+- [x] UI: FloorMachineChip vacant tiles draggable (staff) + drop target triggering machines.swap with toast; tile dropdown Send to Backup / Send to Repair (staff-only)
+- [x] Guest mode: draggable={isStaff} keeps guests unable to drag/drop; DropdownMenu guarded by isStaff; swap RBAC server-enforced
+- [x] Sidebar nav entry "Backup & Repair" hidden for guests (DashboardLayout isStaff gate)
+- [x] Vitest: 13 new tests in server/machine-swap.test.ts (setStatus RBAC + mid-treatment guard, swap scoping + same-board/offboard/same-machine guards, guest blocks, offboarded.list public), 105/105 passing, tsc clean, screenshots verified (/backup, /, /floor/30001); checkpoint saved and auto-published

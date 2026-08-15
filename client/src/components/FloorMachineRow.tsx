@@ -16,10 +16,19 @@ import { trpc } from "@/lib/trpc";
 import RenameMachineDialog from "@/components/RenameMachineDialog";
 import RenameSessionLabelDialog from "@/components/RenameSessionLabelDialog";
 import { cn } from "@/lib/utils";
-import { Activity, AlertTriangle, BellRing, Clock, Droplets, FilePenLine, MoreVertical, Pencil, Plus, Power } from "lucide-react";
+import { Activity, AlertTriangle, BellRing, Clock, Droplets, FilePenLine, MoreVertical, Pencil, Plus, Power, Boxes, Wrench } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import type { MachineWithSession } from "../../../server/machines";
+
+/** Global drag payload registry so any board can receive a dragged tile. */
+const DRAG_KEY = "skti-machine-swap";
+
+export function readDraggedMachineId(dt: DataTransfer | null): number | null {
+  const raw = dt?.getData(DRAG_KEY) ?? "";
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : null;
+}
 
 function useCountdown(endsAt: Date | null) {
   const [now, setNow] = useState(() => Date.now());
@@ -69,6 +78,7 @@ export function FloorMachineChip({
   const done = countdownMs === 0;
   const [renameOpen, setRenameOpen] = useState(false);
   const [sessionLabelOpen, setSessionLabelOpen] = useState(false);
+  const [isDragSource, setIsDragSource] = useState(false);
 
   const toggleUrgent = trpc.sessions.toggleUrgent.useMutation({
     onSuccess: () => void utils.machines.list.invalidate(),
@@ -85,6 +95,29 @@ export function FloorMachineChip({
     onError: e => toast.error(e.message),
   });
 
+  /** Drag-and-drop swap: vacant chips are draggable (source) and accept drops
+   *  from other vacant chips on any board — the server enforces RBAC and the
+   *  both-vacant constraint. */
+  const swapMachine = trpc.machines.swap.useMutation({
+    onSuccess: async () => {
+      await utils.machines.list.invalidate();
+      toast.success("Machines swapped between boards");
+    },
+    onError: e => toast.error(e.message || "Could not swap the machines"),
+  });
+
+  /** Send this (vacant) machine to Backup or Repair storage. */
+  const sendToStorage = trpc.machines.setStatus.useMutation({
+    onSuccess: async (_v, vars) => {
+      await Promise.all([
+        utils.machines.list.invalidate(),
+        utils.machines.offboarded.list.invalidate(),
+      ]);
+      toast.success(`${row.machine.label} moved to ${vars.status} storage`);
+    },
+    onError: e => toast.error(e.message || `Could not move ${row.machine.label}`),
+  });
+
 
 
   if (!occupied) {
@@ -93,9 +126,35 @@ export function FloorMachineChip({
         onClick={() => isStaff && onAssign(row.machine.id)}
         disabled={!isStaff}
         aria-label={`Assign a session to machine ${row.machine.label}`}
+        draggable={isStaff}
+        onDragStart={
+          isStaff
+            ? e => {
+                setIsDragSource(true);
+                e.dataTransfer.setData(DRAG_KEY, String(row.machine.id));
+                e.dataTransfer.effectAllowed = "move";
+              }
+            : undefined
+        }
+        onDragEnd={() => setIsDragSource(false)}
+        onDragOver={e => {
+          if (!isStaff || e.dataTransfer.types.includes(DRAG_KEY)) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = "move";
+          }
+        }}
+        onDrop={e => {
+          if (!isStaff) return;
+          const srcId = readDraggedMachineId(e.dataTransfer);
+          if (srcId === null || srcId === row.machine.id) return;
+          e.preventDefault();
+          swapMachine.mutate({ machineAId: srcId, machineBId: row.machine.id });
+        }}
         className={cn(
           "group flex h-14 w-full flex-col items-center justify-center gap-0.5 border border-[#D4DFE5]/70 bg-[#FBFCFD] text-center transition-all",
-          isStaff && "hover:border-[#7684A0] hover:bg-[#E8EFF1]"
+          isStaff && !isDragSource && "hover:border-[#7684A0] hover:bg-[#E8EFF1]",
+          isDragSource && "border-[#2E9A9B] bg-[#E8F4F4] opacity-70",
+          swapMachine.isPending && "pointer-events-none opacity-60"
         )}
       >
         <span className="font-display text-lg leading-none text-[#1F2A52]">
@@ -124,13 +183,28 @@ export function FloorMachineChip({
                 <MoreVertical className="h-2.5 w-2.5 text-[#7684A0]" />
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-44">
+            <DropdownMenuContent align="start" className="w-52">
               <DropdownMenuLabel className="smallcaps-detail text-muted-foreground">
                 {row.machine.label}
               </DropdownMenuLabel>
               <DropdownMenuItem onClick={() => setRenameOpen(true)} className="text-[13px]">
                 <Pencil className="mr-2 h-4 w-4" />
                 Edit machine number
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="text-[13px]"
+                onClick={() => sendToStorage.mutate({ machineId: row.machine.id, status: "backup" })}
+              >
+                <Boxes className="mr-2 h-4 w-4" />
+                Send to Backup
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="text-[13px]"
+                onClick={() => sendToStorage.mutate({ machineId: row.machine.id, status: "repair" })}
+              >
+                <Wrench className="mr-2 h-4 w-4" />
+                Send to Repair
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
