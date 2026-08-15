@@ -141,8 +141,17 @@ export const appRouter = router({
           if ((error as Error)?.message === "MACHINE_IN_TREATMENT") {
             throw new TRPCError({
               code: "CONFLICT",
-              message: "Cannot remove a machine that is currently in treatment.",
+              message: "Cannot remove a machine that is currently in treatment. End the session first.",
             });
+          }
+          if ((error as Error)?.message === "MACHINE_OFFBOARD") {
+            throw new TRPCError({
+              code: "CONFLICT",
+              message: "This machine is in Backup or Repair storage. Return it to a board first, then remove it.",
+            });
+          }
+          if ((error as Error)?.message === "MACHINE_NOT_FOUND") {
+            throw new TRPCError({ code: "NOT_FOUND", message: "Machine not found." });
           }
           throw error;
         }

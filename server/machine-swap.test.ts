@@ -16,6 +16,7 @@ vi.mock("./machines", async importOriginal => {
     ...mod,
     setMachineStatus: vi.fn(async (_input: any) => undefined),
     swapMachines: vi.fn(async (_input: any) => undefined),
+    removeMachine: vi.fn(async (_input: any) => undefined),
     listOffboardedMachines: vi.fn(async () => []),
     getMachineById: vi.fn(async (id: number) =>
       id === 11
@@ -240,3 +241,57 @@ describe("machines.offboarded.list (Backup & Repair inventory)", () => {
   });
 });
 
+
+describe("machines.remove (remove a machine)", () => {
+  it("supervisor can remove a vacant active machine", async () => {
+    mockResolve.mockResolvedValueOnce({ role: "supervisor", assignedFloorId: null, fromCookie: true });
+    const result = await caller(makeCtx(supervisor)).machines.remove({ machineId: 11 });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects removing a machine in Backup or Repair storage", async () => {
+    // The db layer refuses offboard machines with MACHINE_OFFBOARD; the router
+    // translates it into a CONFLICT with a pointer to return the machine first.
+    mockResolve.mockResolvedValueOnce({ role: "supervisor", assignedFloorId: null, fromCookie: true });
+    const removeMachineMock = machineDb.removeMachine as unknown as ReturnType<typeof vi.fn>;
+    removeMachineMock.mockRejectedValueOnce(new Error("MACHINE_OFFBOARD"));
+    await expect(
+      caller(makeCtx(supervisor)).machines.remove({ machineId: 33 })
+    ).rejects.toThrow(/backup or repair storage/i);
+  });
+
+  it("rejects removing a machine that is mid-treatment", async () => {
+    mockResolve.mockResolvedValueOnce({ role: "supervisor", assignedFloorId: null, fromCookie: true });
+    const removeMachineMock = machineDb.removeMachine as unknown as ReturnType<typeof vi.fn>;
+    removeMachineMock.mockRejectedValueOnce(new Error("MACHINE_IN_TREATMENT"));
+    await expect(
+      caller(makeCtx(supervisor)).machines.remove({ machineId: 11 })
+    ).rejects.toThrow(/in treatment/i);
+  });
+
+  it("rejects removing a machine that no longer exists", async () => {
+    mockResolve.mockResolvedValueOnce({ role: "supervisor", assignedFloorId: null, fromCookie: true });
+    const removeMachineMock = machineDb.removeMachine as unknown as ReturnType<typeof vi.fn>;
+    removeMachineMock.mockRejectedValueOnce(new Error("MACHINE_NOT_FOUND"));
+    await expect(
+      caller(makeCtx(supervisor)).machines.remove({ machineId: 7 })
+    ).rejects.toThrow(/not found/i);
+  });
+
+  // Nurse cross-floor scoping for machines.remove is covered by the
+  // "machine removal scoping" describe in server/staff-rbac.test.ts,
+  // which exercises the staff cookie path (user: null) directly.
+
+  it("blocks guests from removing machines", async () => {
+    // Guest mode: a signed staff cookie with role=guest, no OAuth identity.
+    // Cover every call the request may make with the guest session.
+    mockResolve.mockReset();
+    mockResolve.mockResolvedValue({ role: "guest", fromCookie: true });
+    const removeMachineMock = machineDb.removeMachine as unknown as ReturnType<typeof vi.fn>;
+    await expect(
+      caller(makeCtx(null)).machines.remove({ machineId: 11 })
+    ).rejects.toBeInstanceOf(TRPCError);
+    expect(removeMachineMock).not.toHaveBeenCalled();
+    expect(mockResolve).toHaveBeenCalled();
+  });
+});

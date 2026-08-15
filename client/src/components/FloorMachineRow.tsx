@@ -10,8 +10,9 @@ import { useCanWrite } from "@/hooks/useCanWrite";
 import { trpc } from "@/lib/trpc";
 import RenameMachineDialog from "@/components/RenameMachineDialog";
 import RenameSessionLabelDialog from "@/components/RenameSessionLabelDialog";
+import RemoveMachineDialog from "@/components/RemoveMachineDialog";
 import { cn } from "@/lib/utils";
-import { Activity, AlertTriangle, BellRing, Clock, Droplets, FilePenLine, MoreVertical, Pause, Play, Pencil, Plus, Power, Boxes, Wrench } from "lucide-react";
+import { Activity, AlertTriangle, BellRing, Clock, Droplets, FilePenLine, MoreVertical, Pause, Play, Pencil, Plus, Power, Trash2, Boxes, Wrench } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import type { MachineWithSession } from "../../../server/machines";
@@ -80,6 +81,7 @@ export function FloorMachineChip({
   const done = countdownMs === 0;
   const [renameOpen, setRenameOpen] = useState(false);
   const [sessionLabelOpen, setSessionLabelOpen] = useState(false);
+  const [removeOpen, setRemoveOpen] = useState(false);
   const [isDragSource, setIsDragSource] = useState(false);
 
   const toggleUrgent = trpc.sessions.toggleUrgent.useMutation({
@@ -235,6 +237,14 @@ export function FloorMachineChip({
                 <Wrench className="mr-2 h-4 w-4" />
                 Send to Repair
               </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="text-[13px] text-destructive focus:text-destructive"
+                onClick={() => setRemoveOpen(true)}
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                Remove machine
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         )}
@@ -243,6 +253,12 @@ export function FloorMachineChip({
           machineId={row.machine.id}
           machineLabel={row.machine.label}
           onClose={() => setRenameOpen(false)}
+        />
+        <RemoveMachineDialog
+          open={removeOpen}
+          machineId={row.machine.id}
+          machineLabel={row.machine.label}
+          onClose={() => setRemoveOpen(false)}
         />
       </div>
     );

@@ -785,6 +785,18 @@ export async function removeMachine(input: { machineId: number }) {
     throw new Error("MACHINE_IN_TREATMENT");
   }
 
+  // Machines in Backup/Repair storage are off the floor — return them to a
+  // board first; this keeps the machine count on each board accurate.
+  const machine = await db
+    .select({ status: machines.status })
+    .from(machines)
+    .where(eq(machines.id, input.machineId))
+    .limit(1);
+  if (machine.length === 0) throw new Error("MACHINE_NOT_FOUND");
+  if (machine[0].status !== "active") {
+    throw new Error("MACHINE_OFFBOARD");
+  }
+
   await db.delete(sessions).where(eq(sessions.machineId, input.machineId));
   await db.delete(machines).where(eq(machines.id, input.machineId));
 }

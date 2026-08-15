@@ -291,3 +291,8 @@
 - [x] Seed auditor account (auditor/Auditor1234) via same seeding path as other staff
 - [x] Edit History viewer on /report page visible only when staff role === auditor; shows per-narrative change log — verified end-to-end: nurse created a narrative on SKTI Main Session 1, updated it, auditor saw both CREATE and UPDATE rows in the Narrative Edit History table (time/area/period/change/made-by/content columns); test data cleaned from Supabase after verification
 - [x] Tests + tsc: 119/119 vitest passing, tsc clean; checkpoint saved (auto-publish); push GitHub; deliver
+
+## Remove machine option (user request Aug 15)
+- [x] Backend: machines.remove procedure (RBAC: supervisor/auditor any machine; nurse own floor only via requireFloorAccess; guest UNAUTHORIZED) with safety guards: refuse if machine has an active session (MACHINE_IN_TREATMENT → CONFLICT), refuse if status backup/repair (MACHINE_OFFBOARD → CONFLICT, must return to active floor first), MACHINE_NOT_FOUND → NOT_FOUND
+- [x] UI: Remove Machine action on vacant machine tile menu — staff only, destructive confirmation dialog (RemoveMachineDialog.tsx) explaining in-treatment/backup-repair restrictions; in-treatment tiles keep the end-session path
+- [x] Vitest coverage: remove guards tests in machine-swap.test.ts (supervisor remove, backup reject, in-treatment reject, not-found, guest blocked); nurse cross-floor scoping covered in staff-rbac.test.ts "machine removal scoping"; 124/124 passing, tsc clean; live end-to-end verified on Supabase (removed HD-012 on SKTI Main, confirmed deletion, restored to keep 100 machines); checkpoint saved (auto-publish); push GitHub; deliver
