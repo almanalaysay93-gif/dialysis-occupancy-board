@@ -236,3 +236,8 @@
 - [x] Fix root cause: none needed in repair logic; production cookie/stale-session handling already patched; repair flow re-verified end-to-end live
 - [x] Verified end-to-end on production: assigned HD-001 (P-TEST-1, 3h, Send to repair ON) as supervisor → ended session via tile menu → HD-001 auto-parked under Machines in Repair on /backup (Supabase: session 7 status=ended needsRepairAfterSession=true, machine 60001 status=repair); then returned HD-001 to SKTI Main; all probe sessions/patients deleted from Supabase; probe scripts removed; 110/110 tests, tsc clean
 - [x] Tests pass (110/110), tsc clean, checkpoint saved and auto-published, pushed to GitHub, final delivery to user
+
+## Remove repair toggle from assign dialog (user request Aug 15)
+- [x] Remove "Needs Repair" Send to repair toggle button + helper text from AssignSessionDialog
+- [x] Tile-menu Flag for repair / Clear repair flag flow kept working (repair flag still functional; backend unchanged)
+- [x] 110/110 tests pass, tsc clean, checkpoint saved (auto-publish), push GitHub, deliver

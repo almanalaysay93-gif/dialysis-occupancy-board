@@ -49,8 +49,6 @@ export default function AssignSessionDialog({
   const [editLabelOpen, setEditLabelOpen] = useState(false);
   const [displayLabel, setDisplayLabel] = useState("");
   const [nurse, setNurse] = useState("");
-  const [needsRepair, setNeedsRepair] = useState(false);
-
 
   const assign = trpc.sessions.assign.useMutation({
     onSuccess: () => {
@@ -59,12 +57,11 @@ export default function AssignSessionDialog({
           ? (Number(customHours) || 0) * 60 + (Number(customMinutes) || 0)
           : duration;
       toast.success(`Session started on ${machineLabel}`, {
-        description: `Patient ${patientId} · ${formatDurationSummary(minutes)} · ${tag}${needsRepair ? " · marked for repair after session" : ""}`,
+        description: `Patient ${patientId} · ${formatDurationSummary(minutes)} · ${tag}`,
       });
       setPatientId("");
       setUrgent(false);
       setNurse("");
-      setNeedsRepair(false);
       void utils.machines.list.invalidate();
       onAssigned();
     },
@@ -93,7 +90,6 @@ export default function AssignSessionDialog({
       urgent,
       displayLabel: displayLabel.trim() || null,
       assignedNurse: nurse.trim() || null,
-      needsRepairAfterSession: needsRepair,
     });
   };
 
@@ -336,32 +332,6 @@ export default function AssignSessionDialog({
               aria-label="Mark as urgent case"
             />
           </label>
-
-          <div className="flex flex-col gap-2">
-            <Label className="smallcaps-detail text-[#556680]">
-              Needs Repair
-            </Label>
-            <button
-              type="button"
-              onClick={() => setNeedsRepair((v) => !v)}
-              aria-pressed={needsRepair}
-              className={`flex items-center justify-center gap-2 border p-3 transition-colors ${
-                needsRepair
-                  ? "border-[#A9542C] bg-[#A9542C]/10"
-                  : "border-[#D4DFE5] bg-[#F4F7F8] hover:bg-[#E8EFF1]"
-              }`}
-            >
-              <Wrench className={`h-4 w-4 ${needsRepair ? "text-[#A9542C]" : "text-[#7684A0]"}`} />
-              <span className={`smallcaps-detail ${needsRepair ? "text-[#A9542C]" : "text-[#1F2A52]"}`}>
-                {needsRepair ? "Send to repair — on" : "Send to repair"}
-              </span>
-            </button>
-            <p className="text-[11px] leading-relaxed text-[#7684A0]">
-              When selected, the machine moves to the Backup &amp; Repair area as
-              Machines in Repair after the session ends. Tap again to turn it
-              off.
-            </p>
-          </div>
 
           <div className="flex items-center gap-3 pt-1">
             <Button
