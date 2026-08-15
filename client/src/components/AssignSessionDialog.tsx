@@ -341,34 +341,25 @@ export default function AssignSessionDialog({
             <Label className="smallcaps-detail text-[#556680]">
               Needs Repair
             </Label>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => setNeedsRepair(false)}
-                className={`flex items-center justify-center gap-2 border p-3 transition-colors ${
-                  !needsRepair
-                    ? "border-[#D4DFE5] bg-[#F4F7F8]"
-                    : "border-[#D4DFE5] bg-[#F4F7F8] hover:bg-[#E8EFF1]"
-                }`}
-              >
-                <span className="smallcaps-detail text-[#1F2A52]">No</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setNeedsRepair(true)}
-                className={`flex items-center justify-center gap-2 border p-3 transition-colors ${
-                  needsRepair
-                    ? "border-[#A9542C] bg-[#A9542C]/10"
-                    : "border-[#D4DFE5] bg-[#F4F7F8] hover:bg-[#E8EFF1]"
-                }`}
-              >
-                <Wrench className="h-4 w-4 text-[#A9542C]" />
-                <span className="smallcaps-detail text-[#1F2A52]">Yes — send to repair</span>
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => setNeedsRepair((v) => !v)}
+              aria-pressed={needsRepair}
+              className={`flex items-center justify-center gap-2 border p-3 transition-colors ${
+                needsRepair
+                  ? "border-[#A9542C] bg-[#A9542C]/10"
+                  : "border-[#D4DFE5] bg-[#F4F7F8] hover:bg-[#E8EFF1]"
+              }`}
+            >
+              <Wrench className={`h-4 w-4 ${needsRepair ? "text-[#A9542C]" : "text-[#7684A0]"}`} />
+              <span className={`smallcaps-detail ${needsRepair ? "text-[#A9542C]" : "text-[#1F2A52]"}`}>
+                {needsRepair ? "Send to repair — on" : "Send to repair"}
+              </span>
+            </button>
             <p className="text-[11px] leading-relaxed text-[#7684A0]">
-              When flagged, the machine moves to the Backup &amp; Repair area as
-              Machines in Repair after the session ends.
+              When selected, the machine moves to the Backup &amp; Repair area as
+              Machines in Repair after the session ends. Tap again to turn it
+              off.
             </p>
           </div>
 

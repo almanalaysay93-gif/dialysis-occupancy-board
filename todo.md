@@ -227,3 +227,6 @@
 
 ## Repair button (user request Aug 15)
 - [x] Convert "Needs Repair" from a Switch toggle to a selectable Button (like Clean/Dirty isolation buttons) in AssignSessionDialog — verified in browser, checkpoint f5b05f10 saved (auto-published)
+
+## Single repair button (user request Aug 15)
+- [x] Remove the "No" button; single "Send to repair" button that toggles on click (tap once to flag → "Send to repair — on" in rust, tap again to unflag) — verified in browser, tsc clean, 110/110 tests
