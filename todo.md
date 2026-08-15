@@ -265,3 +265,10 @@
 - [x] Narrative Report duplicate removed (single mount in OccupancyBoard in Home.tsx; FloorBoard's own mount deleted — the two mounts plus FloorBoard setting floorId caused doubling)
 - [x] Narrative Report repositioned directly below the machines grid (above Waiting List and the Add Machine / Assign Next Vacant footer)
 - [x] Bonus fix: anonymous/guest sessions now read narratives + end-of-day report (staffReadProcedure added; writes stay staff-only); isError fallback added; 118/118 tests pass, tsc clean; checkpoint saved (auto-publish); push GitHub; deliver
+
+## Supervisor vs nurse narrative split (Aug 15)
+- [x] Board-level narrative card: supervisors become view-only (no write/edit/delete controls); nurses + charge nurses keep write access (Subtitle "supervisors view only"; write gating by staff role)
+- [x] Schema: supervisor shift periods (supShift1 07-15, supShift2 15-23, supShift3 23-07) added as SUPERVISOR_PERIODS in server/machines.ts — same narrative_reports table, periodKey namespace, only supervisor can write
+- [x] Backend: createNarrative role guard — supervisor cannot write board periods (session/transition), only supervisor periods; nurse cannot write supervisor periods; router reports the writer's real staff role server-authoritatively
+- [x] End of Day Report: SupervisorNarrativeSection added with the three 7-3/3-11/11-7 periods per floor — writable by supervisors only, read-only for nurses/guests
+- [x] Tests + tsc: 119/119 vitest passing (supervisor-nurse split spec verifies role-gated period validation), tsc clean; checkpoint saved (auto-publish); push GitHub; deliver

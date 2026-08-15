@@ -53,10 +53,45 @@ vi.mock("./machines", () => ({
     pauseSummary: { totalPausedMinutes: 0, machinesPaused: 0 },
   })),
   listNarratives: vi.fn(async () => []),
-  createNarrative: vi.fn(async () => ({ id: 99 })),
+  // Mirrors the role-based period validation rules of the real createNarrative
+  // in server/machines.ts so the tRPC procedure's FORBIDDEN flow is exercised
+  // without a live database (the real implementation needs getDb()).
+  createNarrative: vi.fn(async (input: { periodKey: string; authorRole: string }) => {
+    assertValidNarrativePeriod(input.periodKey, input.authorRole);
+    return { id: 99 };
+  }),
   deleteNarrative: vi.fn(async () => undefined),
 }));
 import * as machineDb from "./machines";
+
+// Local copies of the period-key sets defined in server/machines.ts
+// (the machines module is mocked, so the real exports are not available).
+// These must stay in sync with REPORT_PERIODS / SUPERVISOR_PERIODS.
+const BOARD_PERIOD_KEYS = new Set([
+  "session1",
+  "transition1",
+  "session2",
+  "transition2",
+  "session3",
+  "transition3",
+  "session4",
+]);
+const SUPERVISOR_PERIOD_KEYS = new Set(["supShift1", "supShift2", "supShift3"]);
+
+// Replay of the role-based period validation in server/machines.ts:
+//   supervisor periods -> only supervisors may write
+//   board periods (sessions/transitions) -> nurses (not supervisors)
+//   anything else -> invalid
+function assertValidNarrativePeriod(periodKey: string, role: string) {
+  const isSupervisorPeriod = SUPERVISOR_PERIOD_KEYS.has(periodKey);
+  if (isSupervisorPeriod) {
+    if (role !== "supervisor") throw new Error("FORBIDDEN_PERIOD");
+  } else if (!BOARD_PERIOD_KEYS.has(periodKey)) {
+    throw new Error("INVALID_PERIOD");
+  } else if (role === "supervisor") {
+    throw new Error("FORBIDDEN_PERIOD");
+  }
+}
 
 const { mockDb } = vi.hoisted(() => ({ mockDb: vi.fn() }));
 vi.mock("./db", async importOriginal => {
@@ -173,18 +208,79 @@ describe("narrative reports", () => {
     expect(machineDb.createNarrative).not.toHaveBeenCalled();
   });
 
-  it("supervisor can create narratives for any floor; guest cannot", async () => {
-    const ctx = makeCtx(); // supervisor via staff cookie + OAuth user still passes
-    const created = await caller(ctx).narratives.create({
+  it("supervisor narrative split: supervisors cannot write board periods, nurses cannot write supervisor periods", async () => {
+    // Supervisors are view-only on the board (session/transition) narratives.
+    mockResolve.mockResolvedValue({
+      accountId: 0,
+      username: "supervisor",
+      displayName: "SKTI Supervisor",
+      role: "supervisor" as const,
+      assignedFloorId: null,
+    });
+    const ctx = makeCtx();
+    await expect(
+      caller(ctx).narratives.create({
+        floorId: 2,
+        reportDate: "2026-08-15",
+        periodKey: "transition1",
+        shiftKey: "07-15",
+        author: "Supervisor",
+        body: "Board narratives are nurse-only.",
+      })
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    // The validation runs inside the (DB-stubbed) db function, so it is
+    // invoked once with the supervisor role and throws FORBIDDEN_PERIOD.
+    expect(machineDb.createNarrative).toHaveBeenCalledOnce();
+    expect(
+      (machineDb.createNarrative as ReturnType<typeof vi.fn>).mock.calls[0][0].authorRole
+    ).toBe("supervisor");
+
+    // A nurse cannot claim a supervisor shift period either.
+    (machineDb.createNarrative as ReturnType<typeof vi.fn>).mockClear();
+    mockResolve.mockResolvedValue({
+      accountId: 0,
+      username: "nurse.sk",
+      displayName: "SKTI Nurse",
+      role: "nurse" as const,
+      assignedFloorId: 1,
+    });
+    const nurseCtx = makeCtx();
+    await expect(
+      caller(nurseCtx).narratives.create({
+        floorId: 1,
+        reportDate: "2026-08-15",
+        periodKey: "supShift1",
+        author: "SKTI Nurse",
+        body: "Not my reporting scope.",
+      })
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(machineDb.createNarrative).toHaveBeenCalledOnce();
+    expect(
+      (machineDb.createNarrative as ReturnType<typeof vi.fn>).mock.calls[0][0].authorRole
+    ).toBe("nurse");
+
+    // Supervisors write only their own shift periods.
+    (machineDb.createNarrative as ReturnType<typeof vi.fn>).mockClear();
+    mockResolve.mockResolvedValue({
+      accountId: 0,
+      username: "supervisor",
+      displayName: "SKTI Supervisor",
+      role: "supervisor" as const,
+      assignedFloorId: null,
+    });
+    const supCtx = makeCtx();
+    const created = await caller(supCtx).narratives.create({
       floorId: 2,
       reportDate: "2026-08-15",
-      periodKey: "transition1",
+      periodKey: "supShift1",
       shiftKey: "07-15",
       author: "Supervisor",
       body: "Two patients admitted from waiting list.",
     });
     expect(created.success).toBe(true);
+  });
 
+  it("guest cannot write narratives; may view them read-only", async () => {
     mockResolve.mockResolvedValue({
       accountId: 0,
       username: "guest",

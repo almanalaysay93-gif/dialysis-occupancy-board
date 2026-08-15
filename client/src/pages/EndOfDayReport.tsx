@@ -17,6 +17,16 @@ const REPORT_PERIODS: { key: string; label: string }[] = [
   { key: "session4", label: "Session 4 · 6:00 – 10:00 PM" },
 ];
 
+const SUPERVISOR_PERIODS: { key: string; label: string }[] = [
+  { key: "supShift1", label: "Supervisor Shift · 7:00 AM – 3:00 PM" },
+  { key: "supShift2", label: "Supervisor Shift · 3:00 – 11:00 PM" },
+  { key: "supShift3", label: "Supervisor Shift · 11:00 PM – 7:00 AM" },
+];
+const SUPERVISOR_SHIFTS: { key: string; label: string }[] = [
+  { key: "07-15", label: "7:00 AM – 3:00 PM" },
+  { key: "15-23", label: "3:00 – 11:00 PM" },
+  { key: "23-07", label: "11:00 PM – 7:00 AM" },
+];
 const REPORT_SHIFTS: { key: string; label: string }[] = [
   { key: "05-13", label: "5:00 AM – 1:00 PM" },
   { key: "13-21", label: "1:00 – 9:00 PM" },
@@ -277,10 +287,235 @@ export default function EndOfDayReport() {
               staff={staff}
             />
           ))}
+
+        {isMulti &&
+          (floors ?? []).map(f => (
+            <SupervisorNarrativeSection
+              key={`sup-narrative-${f.id}`}
+              floorId={f.id}
+              floorName={f.name}
+              date={date}
+              staff={staff}
+            />
+          ))}
+
+        {!isMulti && singleQuery.data && singleQuery.data.floorName && (
+          <SupervisorNarrativeSection
+            floorId={(floors ?? []).find(f => f.name === singleQuery.data.floorName)?.id ?? 0}
+            floorName={singleQuery.data.floorName}
+            date={date}
+            staff={staff}
+          />
+        )}
       </div>
         </>
       )}
     </DashboardLayout>
+  );
+}
+
+function SupervisorNarrativeSection({
+  floorId,
+  floorName,
+  date,
+  staff,
+}: {
+  floorId: number;
+  floorName: string | null;
+  date: string;
+  staff: { role: string; displayName?: string } | null;
+}) {
+  const utils = trpc.useUtils();
+  const listQuery = trpc.narratives.list.useQuery(
+    { floorId, reportDate: date },
+    { retry: false }
+  );
+  const narratives = listQuery.data;
+  const isLoading = listQuery.isLoading;
+  const isError = listQuery.isError;
+  const error = listQuery.error;
+  // Only the supervisor writes; everyone else (nurses, guests, OAuth users)
+  // views these supervisor narratives read-only.
+  const canWriteSupervisor = staff?.role === "supervisor";
+
+  const [openPeriod, setOpenPeriod] = useState<string | null>(null);
+  const [openAuthor, setOpenAuthor] = useState(() => staff?.displayName ?? "");
+  const [openBody, setOpenBody] = useState("");
+
+  const createMutation = trpc.narratives.create.useMutation({
+    onSuccess: () => void utils.narratives.list.invalidate({ floorId, reportDate: date }),
+  });
+  const removeMutation = trpc.narratives.remove.useMutation({
+    onSuccess: () => void utils.narratives.list.invalidate({ floorId, reportDate: date }),
+  });
+
+  const entriesByPeriod = useMemo(() => {
+    const map = new Map<string, { id: number; shiftKey?: string | null; author: string; body: string; updatedAt: Date }>();
+    for (const entry of narratives ?? []) {
+      if (
+        entry.periodKey &&
+        SUPERVISOR_PERIODS.some(p => p.key === entry.periodKey)
+      ) {
+        map.set(entry.periodKey, entry);
+      }
+    }
+    return map;
+  }, [narratives]);
+
+  return (
+    <Card className="mt-5 border border-[#1F2A52]/15 bg-[#1F2A52]/[0.03] print:break-inside-avoid">
+      <CardHeader className="border-b border-[#D4DFE5]/70 pb-4">
+        <CardTitle className="font-display text-base text-[#1F2A52]">
+          Supervisor Narrative Report{floorName ? ` · ${floorName}` : ""}
+        </CardTitle>
+        <p className="text-xs text-[#556680]">
+          {canWriteSupervisor
+            ? "Supervisor shift handover notes — 7 AM–3 PM, 3 PM–11 PM, and 11 PM–7 AM. Write one per shift on duty."
+            : "Supervisor shift handover notes recorded for this day — supervisors write, everyone else views."}
+        </p>
+      </CardHeader>
+      <CardContent className="space-y-2 pt-4">
+        {isLoading ? (
+          <div className="space-y-2">
+            <Skeleton className="h-40 w-full" />
+          </div>
+        ) : isError ? (
+          <p className="px-3.5 py-3 text-xs text-[#9E1F2B]">
+            Supervisor narratives could not be loaded ({String(error?.message ?? "network error")}) — try signing in as staff or refresh the page.
+          </p>
+        ) : (
+          SUPERVISOR_PERIODS.map(period => {
+            const entry = entriesByPeriod.get(period.key);
+            return (
+              <div
+                key={period.key}
+                className="rounded-sm border border-[#D4DFE5] bg-[#FBFCFD]"
+              >
+                {entry ? (
+                  <div className="flex items-start justify-between gap-3 px-3.5 py-3">
+                    <div>
+                      <p className="font-serif-light text-[13px] font-semibold text-[#1F2A52]">
+                        {period.label}
+                      </p>
+                      <p className="mt-1 whitespace-pre-wrap text-xs leading-relaxed text-[#556680]">
+                        {entry.body}
+                      </p>
+                      <p className="mt-1.5 text-[10px] text-[#7684A0]">
+                        by {entry.author} · updated{" "}
+                        {new Date(entry.updatedAt).toLocaleString([], {
+                          timeZone: "Asia/Manila",
+                          month: "short",
+                          day: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </p>
+                    </div>
+                    {canWriteSupervisor && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 shrink-0 border-[#D4DFE5] text-[#1F2A52]"
+                        onClick={() => void removeMutation.mutate({ id: entry.id, floorId })}
+                        title="Delete this narrative"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between gap-3 px-3.5 py-3">
+                    <p className="text-[13px] font-serif-light text-[#7684A0]">{period.label}</p>
+                    {canWriteSupervisor ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 shrink-0 border-[#2E9A9B]/50 text-[#1d6b6c]"
+                        onClick={() => {
+                          setOpenPeriod(period.key);
+                          setOpenBody("");
+                          setOpenAuthor(staff?.displayName ?? "");
+                        }}
+                      >
+                        Write narrative
+                      </Button>
+                    ) : (
+                      <span className="text-[10px] uppercase tracking-[0.12em] text-[#9E1F2B]/70">No entry</span>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })
+        )}
+
+        {canWriteSupervisor && openPeriod && (
+          <div className="rounded-sm border border-[#2E9A9B]/40 bg-[#EFF8F8] p-4">
+            <p className="text-[11px] uppercase tracking-[0.18em] text-[#1d6b6c]">
+              {SUPERVISOR_PERIODS.find(p => p.key === openPeriod)?.label}
+            </p>
+            <div className="mt-3 grid gap-3">
+              <div>
+                <label className="text-[10px] uppercase tracking-[0.14em] text-[#556680]">Your name</label>
+                <input
+                  value={openAuthor}
+                  onChange={e => setOpenAuthor(e.target.value)}
+                  className="mt-1 h-9 w-full rounded-sm border border-[#D4DFE5] bg-white px-2 text-sm text-[#1F2A52] outline-none focus:border-[#2E9A9B]"
+                  placeholder="e.g., Al John Manalaysay"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] uppercase tracking-[0.14em] text-[#556680]">Narrative</label>
+                <textarea
+                  value={openBody}
+                  onChange={e => setOpenBody(e.target.value)}
+                  rows={4}
+                  maxLength={4000}
+                  className="mt-1 w-full resize-y rounded-sm border border-[#D4DFE5] bg-white px-2.5 py-2 text-sm leading-relaxed text-[#1F2A52] outline-none focus:border-[#2E9A9B]"
+                  placeholder="Write the supervisor shift narrative for this period…"
+                />
+              </div>
+            </div>
+            <div className="mt-3 flex items-center justify-end gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-[#D4DFE5] text-[#556680]"
+                onClick={() => setOpenPeriod(null)}
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                className="bg-[#2E9A9B] text-white hover:bg-[#278788] disabled:opacity-60"
+                disabled={!openBody.trim() || createMutation.isPending}
+                onClick={() => {
+                  if (!openBody.trim() || !openAuthor.trim() || !openPeriod) return;
+                  createMutation.mutate(
+                    {
+                      floorId,
+                      reportDate: date,
+                      periodKey: openPeriod,
+                      shiftKey: SUPERVISOR_PERIODS.find(p => p.key === openPeriod)?.label ? null : null,
+                      author: openAuthor.trim(),
+                      body: openBody.trim(),
+                    },
+                    {
+                      onSuccess: () => {
+                        setOpenPeriod(null);
+                        setOpenBody("");
+                      },
+                    }
+                  );
+                }}
+              >
+                {createMutation.isPending ? "Saving…" : "Save narrative"}
+              </Button>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -482,6 +717,9 @@ export function NarrativeReport({
     onSuccess: () => void utils.narratives.list.invalidate({ floorId, reportDate: date }),
   });
 
+  // Charge nurses write the board narratives; supervisors only view them.
+  const canWriteBoard = editable && staff?.role !== "supervisor";
+
   const [openPeriod, setOpenPeriod] = useState<string | null>(null);
   const [openShift, setOpenShift] = useState<string>("05-13");
   const [openAuthor, setOpenAuthor] = useState(() => staff?.displayName ?? "");
@@ -506,9 +744,9 @@ export function NarrativeReport({
           </CardTitle>
         </div>
         <p className="text-xs text-[#556680]">
-          {editable
+          {canWriteBoard
             ? "Charge nurse narratives for each session and hooking/terminating transition of the day — write during the shift."
-            : "Charge nurse narratives recorded for this day."}
+            : "Charge nurse narratives recorded for this day — supervisors view only."}
         </p>
       </CardHeader>
       <CardContent className="space-y-2 pt-4">
@@ -518,7 +756,8 @@ export function NarrativeReport({
           <p className="px-3.5 py-3 text-xs text-[#9E1F2B]">
             Narratives could not be loaded ({String(error?.message ?? "network error")}) — try signing in as clinical staff or refresh the page.
           </p>
-        ) : (
+        ) : !canWriteBoard && narratives !== undefined ? (
+          // Read-only rendering for supervisors / anyone without write rights.
           REPORT_PERIODS.map(period => {
             const entry = entriesByPeriod.get(period.key);
             return (
@@ -545,7 +784,7 @@ export function NarrativeReport({
                         {new Date(entry.updatedAt).toLocaleString([], { timeZone: "Asia/Manila", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
                       </p>
                     </div>
-                    {editable && (
+                    {canWriteBoard && (
                       <Button
                         size="sm"
                         variant="outline"
@@ -560,7 +799,7 @@ export function NarrativeReport({
                 ) : (
                   <div className="flex items-center justify-between gap-3 px-3.5 py-3">
                     <p className="text-[13px] font-serif-light text-[#7684A0]">{period.label}</p>
-                    {editable ? (
+                    {canWriteBoard ? (
                       <Button
                         size="sm"
                         variant="outline"
@@ -582,9 +821,68 @@ export function NarrativeReport({
               </div>
             );
           })
-        )}
+        ) : canWriteBoard ? (
+          // Writable rendering for charge nurses on the board pages.
+          REPORT_PERIODS.map(period => {
+            const entry = entriesByPeriod.get(period.key);
+            return (
+              <div
+                key={period.key}
+                className="rounded-sm border border-[#D4DFE5] bg-[#FBFCFD]"
+              >
+                {entry ? (
+                  <div className="flex items-start justify-between gap-3 px-3.5 py-3">
+                    <div>
+                      <p className="font-serif-light text-[13px] font-semibold text-[#1F2A52]">
+                        {period.label}
+                      </p>
+                      {entry.shiftKey && (
+                        <p className="mt-0.5 text-[10px] uppercase tracking-[0.12em] text-[#7684A0]">
+                          Shift {REPORT_SHIFTS.find(s => s.key === entry.shiftKey)?.label ?? entry.shiftKey}
+                        </p>
+                      )}
+                      <p className="mt-1 whitespace-pre-wrap text-xs leading-relaxed text-[#556680]">
+                        {entry.body}
+                      </p>
+                      <p className="mt-1.5 text-[10px] text-[#7684A0]">
+                        by {entry.author} · updated{" "}
+                        {new Date(entry.updatedAt).toLocaleString([], { timeZone: "Asia/Manila", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 shrink-0 border-[#D4DFE5] text-[#1F2A52]"
+                      onClick={() => void removeMutation.mutate({ id: entry.id, floorId })}
+                      title="Delete this narrative"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between gap-3 px-3.5 py-3">
+                    <p className="text-[13px] font-serif-light text-[#7684A0]">{period.label}</p>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 shrink-0 border-[#2E9A9B]/50 text-[#1d6b6c]"
+                      onClick={() => {
+                        setOpenPeriod(period.key);
+                        setOpenBody("");
+                        setOpenAuthor(authorName);
+                        setOpenShift("05-13");
+                      }}
+                    >
+                      Write narrative
+                    </Button>
+                  </div>
+                )}
+              </div>
+            );
+          })
+        ) : null}
 
-        {editable && openPeriod && (
+        {canWriteBoard && openPeriod && (
           <div className="rounded-sm border border-[#2E9A9B]/40 bg-[#EFF8F8] p-4">
             <p className="text-[11px] uppercase tracking-[0.18em] text-[#1d6b6c]">
               {REPORT_PERIODS.find(p => p.key === openPeriod)?.label}

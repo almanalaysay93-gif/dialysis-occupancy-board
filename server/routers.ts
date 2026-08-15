@@ -751,12 +751,19 @@ export const appRouter = router({
           shiftKey: z.string().max(16).nullable().default(null),
           author: z.string().trim().min(1, "Author name is required").max(64),
           body: z.string().trim().min(1, "The narrative cannot be empty").max(4000),
+          authorRole: z.enum(["supervisor", "nurse"]).default("nurse"),
         })
       )
       .mutation(async ({ ctx, input }) => {
         requireFloorAccess(ctx.staff, input.floorId, ctx.user);
+        // Report the writer's real role from the staff session — the role is
+        // server-authoritative for the board/supervisor narrative split.
+        const writerRole =
+          ctx.staff?.role === "supervisor"
+            ? ("supervisor" as const)
+            : ("nurse" as const);
         try {
-          const result = await machineDb.createNarrative(input);
+          const result = await machineDb.createNarrative({ ...input, authorRole: writerRole });
           return { success: true, id: result.id } as const;
         } catch (error) {
           const msg = (error as Error)?.message;
@@ -765,6 +772,9 @@ export const appRouter = router({
           }
           if (msg === "EMPTY_BODY") {
             throw new TRPCError({ code: "BAD_REQUEST", message: "The narrative cannot be empty." });
+          }
+          if (msg === "FORBIDDEN_PERIOD") {
+            throw new TRPCError({ code: "FORBIDDEN", message: "This period is not part of your reporting scope." });
           }
           throw error;
         }

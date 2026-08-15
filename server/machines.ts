@@ -514,6 +514,17 @@ async function reorderMachines(machineAId: number, machineBId: number) {
  * windows; transitions are the hooking/terminating windows that overlap
  * session boundaries (patients leaving and arriving).
  */
+/**
+ * Supervisor shift narratives (written in the End of Day Report, 7-3 / 3-11 /
+ * 11-7). Stored in the same narrative_reports table with a namespaced key so
+ * the board-level NarrativeReport ignores them (it renders only session*/
+/** transition keys). */
+export const SUPERVISOR_PERIODS = [
+  { key: "supShift1", label: "Supervisor Shift · 7:00 AM – 3:00 PM", hours: [7, 15] },
+  { key: "supShift2", label: "Supervisor Shift · 3:00 – 11:00 PM", hours: [15, 23] },
+  { key: "supShift3", label: "Supervisor Shift · 11:00 PM – 7:00 AM", hours: [23, 7] },
+] as const;
+
 export const REPORT_PERIODS = [
   { key: "session1", label: "Session 1 (5:00 AM – 10:00 AM)", hours: [5, 10] },
   { key: "transition1", label: "Transition 1 · Hooking & Terminating (9:00 – 11:00 AM)", hours: [9, 11] },
@@ -534,19 +545,33 @@ export const REPORT_SHIFTS = [
   { key: "23-07", label: "11:00 PM – 7:00 AM" },
 ] as const;
 
+export const BOARD_PERIOD_KEYS: ReadonlySet<string> = new Set(REPORT_PERIODS.map(p => p.key));
+export const SUPERVISOR_PERIOD_KEYS: ReadonlySet<string> = new Set(SUPERVISOR_PERIODS.map(p => p.key));
+
 export async function createNarrative(input: {
   floorId: number;
   reportDate: string;
   periodKey: string;
   shiftKey?: string | null;
   author: string;
+  authorRole: string;
   body: string;
 }) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
-  const period = REPORT_PERIODS.find(p => p.key === input.periodKey);
-  if (!period) throw new Error("INVALID_PERIOD");
+  const isSupervisorPeriod = SUPERVISOR_PERIOD_KEYS.has(input.periodKey);
+  // Board-level periods (sessions + transitions) are written by charge nurses;
+  // supervisors are viewers only there. Supervisor shift narratives are written
+  // in the End of Day Report by supervisors only.
+  const role = input.authorRole ?? null;
+  if (isSupervisorPeriod) {
+    if (role !== "supervisor") throw new Error("FORBIDDEN_PERIOD");
+  } else if (!BOARD_PERIOD_KEYS.has(input.periodKey)) {
+    throw new Error("INVALID_PERIOD");
+  } else if (role === "supervisor") {
+    throw new Error("FORBIDDEN_PERIOD");
+  }
   const body = input.body.trim();
   if (!body) throw new Error("EMPTY_BODY");
 
