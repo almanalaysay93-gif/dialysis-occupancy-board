@@ -478,9 +478,7 @@ function SupervisorNarrativeSection({
                             <p className="text-[10px] uppercase tracking-[0.14em] text-[#7684A0]">
                               {f.name}
                             </p>
-                            {idx > 0 ? (
-                              <span className="text-[10px] uppercase tracking-[0.12em] text-[#9E1F2B]/70">No entry</span>
-                            ) : null}
+                            <span className="text-[10px] uppercase tracking-[0.12em] text-[#9E1F2B]/70">No entry</span>
                           </div>
                         )}
                       </div>

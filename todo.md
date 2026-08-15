@@ -280,4 +280,4 @@
 - [x] Write form (Area picker, Your name, Narrative textarea, Cancel/Save) opens in a Dialog popup modal instead of an inline panel inside the Supervisor Narrative Report card — verified end-to-end as supervisor in browser (dialog opens from any shift/area row, save lands entry in correct shift-area slot with delete icon, probe cleaned); 119/119 tests, tsc clean
 
 ## Supervisor narrative missing NO ENTRY marker (Aug 15, user report)
-- [x] Every empty shift/area slot in the Supervisor Narrative Report renders the "NO ENTRY" marker; fixed the conditional that suppressed the marker on the last area row (idx guard instead of hasAnyEntry logic); verified all 9 slots show NO ENTRY as supervisor; 119/119 tests, tsc clean
+- [x] Every empty shift/area slot in the Supervisor Narrative Report renders the "NO ENTRY" marker; first attempt suppressed it on the first row instead — marker now renders unconditionally on every empty slot; verified all 9 slots show NO ENTRY as supervisor; 119/119 tests, tsc clean
