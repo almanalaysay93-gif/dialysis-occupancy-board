@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Switch } from "@/components/ui/switch";
+
 import { trpc } from "@/lib/trpc";
 import { BellRing, Clock, Droplets, Pencil, Wrench } from "lucide-react";
 import { useState } from "react";
@@ -336,22 +337,40 @@ export default function AssignSessionDialog({
             />
           </label>
 
-          <label className="flex items-center justify-between border border-[#A9542C]/40 bg-[#A9542C]/5 p-3">
-            <div className="flex items-center gap-2.5">
-              <Wrench className="h-4 w-4 text-[#A9542C]" />
-              <div className="flex flex-col">
-                <span className="smallcaps-detail text-[#1F2A52]">Needs Repair</span>
-                <span className="mt-0.5 text-[11px] text-[#7684A0]">
-                  After the session ends, the machine moves to the Backup &amp; Repair area as Machines in Repair
-                </span>
-              </div>
+          <div className="flex flex-col gap-2">
+            <Label className="smallcaps-detail text-[#556680]">
+              Needs Repair
+            </Label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setNeedsRepair(false)}
+                className={`flex items-center justify-center gap-2 border p-3 transition-colors ${
+                  !needsRepair
+                    ? "border-[#D4DFE5] bg-[#F4F7F8]"
+                    : "border-[#D4DFE5] bg-[#F4F7F8] hover:bg-[#E8EFF1]"
+                }`}
+              >
+                <span className="smallcaps-detail text-[#1F2A52]">No</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setNeedsRepair(true)}
+                className={`flex items-center justify-center gap-2 border p-3 transition-colors ${
+                  needsRepair
+                    ? "border-[#A9542C] bg-[#A9542C]/10"
+                    : "border-[#D4DFE5] bg-[#F4F7F8] hover:bg-[#E8EFF1]"
+                }`}
+              >
+                <Wrench className="h-4 w-4 text-[#A9542C]" />
+                <span className="smallcaps-detail text-[#1F2A52]">Yes — send to repair</span>
+              </button>
             </div>
-            <Switch
-              checked={needsRepair}
-              onCheckedChange={setNeedsRepair}
-              aria-label="Flag machine for repair after this session"
-            />
-          </label>
+            <p className="text-[11px] leading-relaxed text-[#7684A0]">
+              When flagged, the machine moves to the Backup &amp; Repair area as
+              Machines in Repair after the session ends.
+            </p>
+          </div>
 
           <div className="flex items-center gap-3 pt-1">
             <Button

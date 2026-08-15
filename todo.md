@@ -223,4 +223,7 @@
 - [x] UI: tile menu items + wrench indicator near End session; Backup & Repair already visually distinguishes Repair (wrench, pink) vs Backup (boxes, teal); Return button still works
 - [x] Vitest: 5 new repair-flag tests in sessions.test.ts — 110/110 passing; tsc clean
 - [x] Browser verified as SKTI Supervisor: assigned HD-005 (P-REPAIR-TEST, 3h, clean, Needs Repair ON) → toast "marked for repair after session"; ended session → HD-005 appeared under Machines in Repair on /backup with Return action
-- [ ] Final: cleanup, checkpoint (auto-publish), push GitHub, deliver
+- [x] Final: demo data cleaned (HD-005 returned to SKTI Main board), 110/110 tests + tsc clean, checkpoint d9509601 saved and auto-published, pushed to GitHub (d950960), delivered
+
+## Repair button (user request Aug 15)
+- [ ] Convert "Needs Repair" from a Switch toggle to a selectable Button (like Clean/Dirty isolation buttons) in AssignSessionDialog
