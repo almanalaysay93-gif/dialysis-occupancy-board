@@ -241,3 +241,9 @@
 - [x] Remove "Needs Repair" Send to repair toggle button + helper text from AssignSessionDialog
 - [x] Tile-menu Flag for repair / Clear repair flag flow kept working (repair flag still functional; backend unchanged)
 - [x] 110/110 tests pass, tsc clean, checkpoint saved (auto-publish), push GitHub, deliver
+
+## Pause time option (user request Aug 15)
+- [x] Schema: sessions.pausedAt/pausedSeconds columns added to Supabase (pausedAt timestamp + cumulative pausedSeconds) and drizzle schema
+- [x] Backend: sessions.togglePause (pause sets pausedAt; resume shifts endsAt by elapsed pause into pausedSeconds); endSession pause-aware — shifts endsAt by live pause, clears pause state, keeps repair flag
+- [x] UI: Pause timer / Resume timer menu item in FloorMachineRow tile menu; paused tile shows pulsing "⏸ Paused" badge and frozen countdown (uses endsAt + pausedSeconds while paused)
+- [x] Vitest: 3 pause tests (pause freeze, resume shift, end-of-paused-session shift) — 113/113 passing; tsc clean; checkpoint saved (auto-publish); push GitHub; deliver

@@ -377,10 +377,10 @@ describe("sessions.repair flag (needsRepairAfterSession)", () => {
   });
 
   it("ending a flagged session parks the machine in repair storage", async () => {
-    // End session: first select reads the flag, then update ends the session,
-    // then (flag set) setMachineStatus is invoked (getMachineById select +
-    // in-treatment guard select + machines update) → machines update.
-    const sessionWithFlag = [{ needsRepairAfterSession: true, machineId: 2 }];
+    // End session: first select reads the flag + pause state, then update ends
+    // the session, then (flag set) setMachineStatus is invoked (getMachineById
+    // select + in-treatment guard select + machines update) → machines update.
+    const sessionWithFlag = [{ needsRepairAfterSession: true, machineId: 2, pausedAt: null, pausedSeconds: 0, endsAt: new Date() }];
     const machineRow = { id: 2, label: "HD-02", status: "active", floorId: 1 };
     let selectCalls = 0;
     const db = {
@@ -429,7 +429,7 @@ describe("sessions.repair flag (needsRepairAfterSession)", () => {
         from: vi.fn(() => ({
           where: vi.fn(() => ({
             limit: vi.fn().mockResolvedValue([
-              { needsRepairAfterSession: false, machineId: 2 },
+              { needsRepairAfterSession: false, machineId: 2, pausedAt: null, pausedSeconds: 0, endsAt: new Date() },
             ]),
           })),
         })),
@@ -446,7 +446,114 @@ describe("sessions.repair flag (needsRepairAfterSession)", () => {
     const caller = appRouter.createCaller(createAuthContext());
     const result = await caller.sessions.end({ sessionId: 7 });
     expect(result.success).toBe(true);
+    // The pause-aware end path always writes once (ends the session).
     expect(db.update).toHaveBeenCalledTimes(1);
+    const endSet = (((db.update as ReturnType<typeof vi.fn>).mock.results[0].value.set as ReturnType<typeof vi.fn>).mock.calls[0][0]) as Record<string, unknown>;
+    expect(endSet.status).toBe("ended");
+    expect(endSet.pausedAt).toBeNull();
+  });
+});
+
+describe("sessions.togglePause", () => {
+  it("pausing an active session freezes the countdown by setting pausedAt", async () => {
+    const pausedNow = new Date();
+    const db = {
+      select: vi.fn(() => ({
+        from: vi.fn(() => ({
+          where: vi.fn(() => ({
+            limit: vi.fn().mockResolvedValue([
+              { pausedAt: null, pausedSeconds: 0, endsAt: new Date() },
+            ]),
+          })),
+        })),
+      })),
+      insert: vi.fn(),
+      update: vi.fn(() => ({
+        set: vi.fn(() => ({
+          where: vi.fn().mockResolvedValue(undefined),
+        })),
+      })),
+    };
+    (getDb as ReturnType<typeof vi.fn>).mockResolvedValue(db);
+
+    const caller = appRouter.createCaller(createAuthContext());
+    const result = await caller.sessions.togglePause({ sessionId: 7, paused: true });
+    expect(result.success).toBe(true);
+    expect(db.update).toHaveBeenCalledTimes(1);
+    const setCall = (db.update as ReturnType<typeof vi.fn>).mock.results[0].value.set as ReturnType<typeof vi.fn>;
+    const set = setCall.mock.calls[0][0] as Record<string, unknown>;
+    expect(set.pausedAt).toBeInstanceOf(Date);
+    expect(set.pausedSeconds).toBeUndefined();
+  });
+
+  it("resuming a paused session shifts endsAt by the elapsed pause and clears pausedAt", async () => {
+    const now = new Date();
+    const pausedAt = new Date(now.getTime() - 5 * 60 * 1000); // paused 5 min ago
+    const endsAt = new Date();
+    const db = {
+      select: vi.fn(() => ({
+        from: vi.fn(() => ({
+          where: vi.fn(() => ({
+            limit: vi.fn().mockResolvedValue([
+              { pausedAt, pausedSeconds: 0, endsAt },
+            ]),
+          })),
+        })),
+      })),
+      insert: vi.fn(),
+      update: vi.fn(() => ({
+        set: vi.fn(() => ({
+          where: vi.fn().mockResolvedValue(undefined),
+        })),
+      })),
+    };
+    (getDb as ReturnType<typeof vi.fn>).mockResolvedValue(db);
+
+    const caller = appRouter.createCaller(createAuthContext());
+    const result = await caller.sessions.togglePause({ sessionId: 7, paused: false });
+    expect(result.success).toBe(true);
+    const set = (((db.update as ReturnType<typeof vi.fn>).mock.results[0].value.set as ReturnType<typeof vi.fn>).mock.calls[0][0]) as Record<string, unknown>;
+    expect(set.pausedAt).toBeNull();
+    expect((set.pausedSeconds as number)).toBeGreaterThanOrEqual(299);
+    expect((set.endsAt as Date).getTime()).toBeCloseTo(endsAt.getTime() + 5 * 60 * 1000, -2);
+  });
+
+  it("ending a paused session shifts endsAt before ending and clears the pause", async () => {
+    const now = new Date();
+    const pausedAt = new Date(now.getTime() - 10 * 60 * 1000); // paused 10 min ago
+    const endsAt = new Date(now.getTime() - 30 * 60 * 1000); // ended early
+    let selectCalls = 0;
+    const db = {
+      select: vi.fn(() => ({
+        from: vi.fn(() => ({
+          where: vi.fn(() => ({
+            limit: vi.fn().mockImplementation(async () => {
+              selectCalls += 1;
+              if (selectCalls === 1) {
+                return [{ needsRepairAfterSession: false, machineId: 2, pausedAt, pausedSeconds: 0, endsAt }];
+              }
+              return [];
+            }),
+          })),
+        })),
+      })),
+      insert: vi.fn(),
+      update: vi.fn(() => ({
+        set: vi.fn(() => ({
+          where: vi.fn().mockResolvedValue(undefined),
+        })),
+      })),
+    };
+    (getDb as ReturnType<typeof vi.fn>).mockResolvedValue(db);
+
+    const caller = appRouter.createCaller(createAuthContext());
+    const result = await caller.sessions.end({ sessionId: 7 });
+    expect(result.success).toBe(true);
+    const set = (((db.update as ReturnType<typeof vi.fn>).mock.results[0].value.set as ReturnType<typeof vi.fn>).mock.calls[0][0]) as Record<string, unknown>;
+    expect(set.status).toBe("ended");
+    expect(set.pausedAt).toBeNull();
+    // endsAt must be shifted by the 10-minute pause so elapsed treatment time is preserved.
+    expect((set.endsAt as Date).getTime()).toBeCloseTo(endsAt.getTime() + 10 * 60 * 1000, -2);
   });
 });
 

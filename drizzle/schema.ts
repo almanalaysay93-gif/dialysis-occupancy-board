@@ -111,6 +111,10 @@ export const sessions = pgTable("sessions", {
   assignedNurse: varchar("assignedNurse", { length: 64 }),
   /** When true, ending this session automatically parks the machine in repair storage. */
   needsRepairAfterSession: boolean("needsRepairAfterSession").notNull().default(false),
+  /** UTC timestamp when the session was paused (NULL means not currently paused). */
+  pausedAt: timestamp("pausedAt", { mode: "date" }),
+  /** Cumulative seconds paused during the session; the effective end time is endsAt + pausedSeconds. */
+  pausedSeconds: integer("pausedSeconds").notNull().default(0),
   status: sessionStatusEnum("status").notNull().default("active"),
   endedAt: timestamp("endedAt", { mode: "date" }),
   endedBy: text("endedBy"),

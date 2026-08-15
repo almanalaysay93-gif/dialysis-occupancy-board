@@ -19,6 +19,10 @@ export type MachineWithSession = {
     displayLabel: string | null;
     assignedNurse: string | null;
     needsRepairAfterSession: boolean;
+    /** UTC timestamp when the session was paused (NULL = running). */
+    pausedAt: Date | null;
+    /** Cumulative seconds paused; effective end time = endsAt + pausedSeconds. */
+    pausedSeconds: number;
   } | null;
 };
 
@@ -58,6 +62,8 @@ export async function listMachines(): Promise<MachineWithSession[]> {
         displayLabel: s.displayLabel,
         assignedNurse: s.assignedNurse,
         needsRepairAfterSession: s.needsRepairAfterSession,
+        pausedAt: s.pausedAt,
+        pausedSeconds: s.pausedSeconds,
       };
     })(),
   }))
@@ -120,20 +126,50 @@ export async function endSession(input: {
   if (!db) throw new Error("Database not available");
 
   const now = new Date();
-  // Fetch the repair flag before ending so we can act on it afterwards
+  // Fetch the pause state + repair flag before ending so we can act on them afterwards.
+  // If the session is currently paused, resume it first so pausedSeconds is finalized
+  // and the machine isn't left with a stale pausedAt.
   const session = await db
     .select({
       needsRepairAfterSession: sessions.needsRepairAfterSession,
       machineId: sessions.machineId,
+      pausedAt: sessions.pausedAt,
+      pausedSeconds: sessions.pausedSeconds,
+      endsAt: sessions.endsAt,
     })
     .from(sessions)
     .where(eq(sessions.id, input.sessionId))
     .limit(1);
 
-  await db
-    .update(sessions)
-    .set({ status: "ended", endedAt: now, endedBy: input.endedBy })
-    .where(and(eq(sessions.id, input.sessionId), eq(sessions.status, "active")));
+  const row = session[0];
+  if (row) {
+    // Cumulative paused time across the whole session. While currently paused,
+    // the live pause still counts (from pausedAt until this end call); otherwise
+    // the stored pausedSeconds is final.
+    const elapsedPausedSeconds = row.pausedAt
+      ? Math.round((now.getTime() - row.pausedAt.getTime()) / 1000)
+      : 0;
+    const totalPausedSeconds = row.pausedSeconds + elapsedPausedSeconds;
+    // The stored endsAt was already shifted by previously-completed pauses, so
+    // only the live (just-closed) pause shifts it further.
+    const shiftedEndsAt = new Date(row.endsAt.getTime() + elapsedPausedSeconds * 1000);
+    await db
+      .update(sessions)
+      .set({
+        pausedAt: null,
+        pausedSeconds: row.pausedAt ? Math.max(0, totalPausedSeconds) : row.pausedSeconds,
+        endsAt: shiftedEndsAt,
+        status: "ended",
+        endedAt: now,
+        endedBy: input.endedBy,
+      })
+      .where(and(eq(sessions.id, input.sessionId), eq(sessions.status, "active")));
+  } else {
+    await db
+      .update(sessions)
+      .set({ status: "ended", endedAt: now, endedBy: input.endedBy })
+      .where(and(eq(sessions.id, input.sessionId), eq(sessions.status, "active")));
+  }
 
   // If the session was flagged for repair, park the machine in repair storage
   if (session[0]?.needsRepairAfterSession) {
@@ -152,6 +188,48 @@ export async function toggleUrgent(input: { sessionId: number }) {
     .update(sessions)
     .set({ urgent: sql`NOT urgent` })
     .where(eq(sessions.id, input.sessionId));
+}
+
+/**
+ * Pause or resume an active session. While paused the countdown stops and the
+ * effective end time shifts forward by the paused duration; resuming records the
+ * elapsed pause into pausedSeconds so every client computes the same end time.
+ */
+export async function togglePause(input: { sessionId: number; paused: boolean }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const now = new Date();
+  const rows = await db
+    .select({ pausedAt: sessions.pausedAt, pausedSeconds: sessions.pausedSeconds, endsAt: sessions.endsAt })
+    .from(sessions)
+    .where(and(eq(sessions.id, input.sessionId), eq(sessions.status, "active")))
+    .limit(1);
+  const row = rows[0];
+  if (!row) throw new Error("NO_ACTIVE_SESSION");
+
+  if (input.paused) {
+    // Start a pause — freeze the end time until resumed.
+    if (row.pausedAt) return; // already paused
+    await db
+      .update(sessions)
+      .set({ pausedAt: now })
+      .where(eq(sessions.id, input.sessionId));
+  } else {
+    // Resume — fold the elapsed pause into pausedSeconds and shift endsAt.
+    if (!row.pausedAt) return; // not paused
+    const pausedMs = now.getTime() - row.pausedAt.getTime();
+    const addedSeconds = Math.round(pausedMs / 1000);
+    const newEndsAt = new Date(row.endsAt.getTime() + addedSeconds * 1000);
+    await db
+      .update(sessions)
+      .set({
+        pausedAt: null,
+        pausedSeconds: Math.max(0, row.pausedSeconds + addedSeconds),
+        endsAt: newEndsAt,
+      })
+      .where(eq(sessions.id, input.sessionId));
+  }
 }
 
 /** Set or clear the repair-after-session flag on an active session. */

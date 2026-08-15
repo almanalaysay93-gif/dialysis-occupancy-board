@@ -11,7 +11,7 @@ import { trpc } from "@/lib/trpc";
 import RenameMachineDialog from "@/components/RenameMachineDialog";
 import RenameSessionLabelDialog from "@/components/RenameSessionLabelDialog";
 import { cn } from "@/lib/utils";
-import { Activity, AlertTriangle, BellRing, Clock, Droplets, FilePenLine, MoreVertical, Pencil, Plus, Power, Boxes, Wrench } from "lucide-react";
+import { Activity, AlertTriangle, BellRing, Clock, Droplets, FilePenLine, MoreVertical, Pause, Play, Pencil, Plus, Power, Boxes, Wrench } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import type { MachineWithSession } from "../../../server/machines";
@@ -68,7 +68,14 @@ export function FloorMachineChip({
   const { canWrite: isStaff } = useCanWrite();
   const occupied = row.session !== null;
   const urgent = row.session?.urgent ?? false;
-  const countdownMs = useCountdown(row.session?.endsAt ?? null);
+  const isPaused = Boolean(row.session?.pausedAt);
+  // While paused the countdown is frozen at the remaining time snapshot; the
+  // server shifts endsAt on resume so all clients stay consistent.
+  const effectiveEndsAt =
+    isPaused && row.session?.pausedAt
+      ? new Date((row.session.endsAt.getTime() + row.session.pausedSeconds * 1000))
+      : row.session?.endsAt ?? null;
+  const countdownMs = useCountdown(effectiveEndsAt);
   const totalMs = (row.session?.durationMinutes ?? 0) * 60 * 1000;
   const done = countdownMs === 0;
   const [renameOpen, setRenameOpen] = useState(false);
@@ -86,6 +93,11 @@ export function FloorMachineChip({
   });
 
   const updateTag = trpc.sessions.updateTag.useMutation({
+    onSuccess: () => void utils.machines.list.invalidate(),
+    onError: e => toast.error(e.message),
+  });
+
+  const togglePause = trpc.sessions.togglePause.useMutation({
     onSuccess: () => void utils.machines.list.invalidate(),
     onError: e => toast.error(e.message),
   });
@@ -263,7 +275,7 @@ export function FloorMachineChip({
         </span>
       )}
       <span className="flex items-center gap-1 text-[9px] leading-tight">
-        <span className="font-mono tabular-nums">
+        <span className={cn("font-mono tabular-nums", isPaused && "animate-pulse text-[#F3D9DA]")}>
           {countdownMs === null ? "--:--" : formatHMS(countdownMs)}
         </span>
         {session.isolationTag === "dirty" && (
@@ -271,6 +283,11 @@ export function FloorMachineChip({
         )}
         {urgent && <BellRing className="h-2.5 w-2.5" />}
       </span>
+      {isPaused && (
+        <span className="absolute left-1 top-0.5 flex items-center gap-0.5 text-[8px] uppercase tracking-[0.1em] text-[#F3D9DA]">
+          <Pause className="h-2 w-2" /> Paused
+        </span>
+      )}
 
       {isStaff && (
         <>
@@ -339,6 +356,22 @@ export function FloorMachineChip({
               >
                 <Droplets className="mr-2 h-4 w-4" />
                 Toggle {session.isolationTag === "clean" ? "dirty" : "clean"} tag
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => togglePause.mutate({ sessionId: session.id, paused: !isPaused })}
+                className="text-[13px]"
+              >
+                {isPaused ? (
+                  <>
+                    <Play className="mr-2 h-4 w-4" />
+                    Resume timer
+                  </>
+                ) : (
+                  <>
+                    <Pause className="mr-2 h-4 w-4" />
+                    Pause timer
+                  </>
+                )}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem

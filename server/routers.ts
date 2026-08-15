@@ -424,6 +424,31 @@ export const appRouter = router({
         return { success: true } as const;
       }),
 
+    /** Pause or resume an active session's countdown (treatment break window). */
+    togglePause: staffOrAdminProcedure
+      .input(
+        z.object({ sessionId: z.number().int().positive(), paused: z.boolean() })
+      )
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.staff && ctx.staff.role === "nurse") {
+          const floorId = await machineDb.getSessionFloorId(input.sessionId);
+          if (floorId) requireFloorAccess(ctx.staff, floorId, ctx.user);
+        }
+        try {
+          await machineDb.togglePause({ sessionId: input.sessionId, paused: input.paused });
+          return { success: true } as const;
+        } catch (error) {
+          const msg = (error as Error)?.message;
+          if (msg === "NO_ACTIVE_SESSION") {
+            throw new TRPCError({
+              code: "CONFLICT",
+              message: "This machine has no active session.",
+            });
+          }
+          throw error;
+        }
+      }),
+
     updateTag: staffOrAdminProcedure
       .input(
         z.object({
