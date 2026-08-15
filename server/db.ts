@@ -31,8 +31,12 @@ export async function getDb() {
           max: 8,
           idleTimeoutMillis: 30_000,
           connectionTimeoutMillis: 15_000,
-          ssl: url.includes("pooler.supabase.com")
-            ? { rejectUnauthorized: true }
+          // Always negotiate TLS. Supabase pooler connections (including those
+          // routed through the platform proxy) present a certificate chain that
+          // node-postgres does not trust by default, so self-signed intermediates
+          // must be accepted to avoid SELF_SIGNED_CERT_IN_CHAIN.
+          ssl: url.startsWith("postgresql") || url.startsWith("postgres")
+            ? { rejectUnauthorized: false }
             : undefined,
         });
         await pool.query("SELECT 1");
