@@ -243,3 +243,8 @@ True fix options: (a) Remove the DashboardLayout wrapper from OccupancyBoardCont
 - The user's GitHub pushes also include this Dockerfile. My `webdev_save_checkpoint` can't redeploy "no changes" — working copy unchanged.
 - Fix options: (a) remove the custom Dockerfile from the project and push so the default template handles deploy (default template copies all files); (b) fix the Dockerfile to also `COPY patches/ ./patches/`. Option (b) is safest if the user wants to keep the custom Dockerfile. The custom Dockerfile also uses node:20-slim (default is 22?) — check skill webdev-custom-dockerfile contract first.
 - Live site currently returning 200 per curl (may be stale serving) but manus-webdev-logs says cloudrun service not found → deployment rollback in progress; need successful redeploy.
+
+## User update sync (Aug 15, 11:13)
+User pushed commit bd06470 "Enlarge buttons and action tap targets for mobile devices" to github/main. Merged into working copy (bd06470). Changes: h-16 sm:h-14 machine tiles, always-visible larger actions menu button on mobile (opacity-100 sm:opacity-0), h-10 waiting list Admit/Priority buttons, button.tsx size tweaks. Tests 124/124 pass, tsc clean.
+Screenshot right after restart froze mid-HMR (green blocks only) — a transient artifact, NOT a rendering bug (previous screenshots before restart were fine; classes unchanged structurally). Plan: screenshot again after settling, then webdev_save_checkpoint + git push github main.
+Note: earlier Node v22 log line in devserver.log coincided with failed screenshots; restart cleared it.
