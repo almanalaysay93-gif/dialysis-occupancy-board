@@ -262,6 +262,6 @@
 - [x] tsc clean, 117/117 vitest; screenshots verified on all three boards; checkpoint saved (auto-publish); push GitHub; deliver
 
 ## Fix narrative doubling and reposition (Aug 15)
-- [ ] Narrative Report appears twice on floor boards (double-mounted) — find duplicate mount point and remove it
-- [ ] Reposition Narrative Report directly below the machines grid (above Waiting List / Add Machine footer)
-- [ ] Verify on /floor/30001-30003 and scoped board; tests + tsc; checkpoint (auto-publish); push GitHub; deliver
+- [x] Narrative Report duplicate removed (single mount in OccupancyBoard in Home.tsx; FloorBoard's own mount deleted — the two mounts plus FloorBoard setting floorId caused doubling)
+- [x] Narrative Report repositioned directly below the machines grid (above Waiting List and the Add Machine / Assign Next Vacant footer)
+- [x] Bonus fix: anonymous/guest sessions now read narratives + end-of-day report (staffReadProcedure added; writes stay staff-only); isError fallback added; 118/118 tests pass, tsc clean; checkpoint saved (auto-publish); push GitHub; deliver
