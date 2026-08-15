@@ -79,7 +79,7 @@ export const systemRouter = router({
     }),
 });
 
-async function runSupabaseMigration(): Promise<{ ok: boolean; log?: string[]; error?: string }> {
+async function runSupabaseMigration(): Promise<{ ok: boolean; log?: string[]; error?: string; ver?: string }> {
   const url =
     (process.env.SUPABASE_DATABASE_URL_B64
       ? Buffer.from(process.env.SUPABASE_DATABASE_URL_B64, "base64").toString("utf8")
