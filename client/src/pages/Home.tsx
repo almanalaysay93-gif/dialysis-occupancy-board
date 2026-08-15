@@ -316,19 +316,6 @@ export function OccupancyBoard({ floorId }: { floorId?: number }) {
           )}
         </section>
 
-        {/* Charge nurse narrative report directly below the machines —
-            written on the board during the shift; the End of Day Report
-            reflects it read-only */}
-        {waitingFloorId !== undefined && (
-          <NarrativeReport
-            floorId={waitingFloorId}
-            floorName={floorNameForScope ?? ""}
-            date={todayKey()}
-            staff={staff ?? null}
-            editable={canWrite}
-          />
-        )}
-
         {/* Per-board waiting list (visible on each floor's board) */}
         {waitingFloorId !== undefined && (
           <WaitingListPanel floorId={waitingFloorId} />
@@ -375,6 +362,19 @@ export function OccupancyBoard({ floorId }: { floorId?: number }) {
               )}
             </div>
           </div>
+        )}
+
+        {/* Charge nurse narrative report at the bottom of the board —
+            written on the board during the shift; the End of Day Report
+            reflects it read-only */}
+        {waitingFloorId !== undefined && (
+          <NarrativeReport
+            floorId={waitingFloorId}
+            floorName={floorNameForScope ?? ""}
+            date={todayKey()}
+            staff={staff ?? null}
+            editable={canWrite}
+          />
         )}
       </div>
 
