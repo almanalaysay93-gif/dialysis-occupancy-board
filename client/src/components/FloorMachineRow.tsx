@@ -6,11 +6,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { useCanWrite } from "@/hooks/useCanWrite";
 import { trpc } from "@/lib/trpc";
 import RenameMachineDialog from "@/components/RenameMachineDialog";
@@ -123,31 +118,29 @@ export function FloorMachineChip({
   if (!occupied) {
     const chipContent = (
       <button
+        type="button"
         onClick={() => isStaff && onAssign(row.machine.id)}
         disabled={!isStaff}
         aria-label={`Assign a session to machine ${row.machine.label}`}
+        title={`${row.machine.label} · ${row.machine.location}`}
         draggable={isStaff}
-        onDragStart={
-          isStaff
-            ? e => {
-                setIsDragSource(true);
-                // text/plain guarantees Chrome/Firefox/Safari all register the
-                // payload in e.dataTransfer.types; the custom key lets us tell
-                // our own tiles apart from ordinary text drags.
-                e.dataTransfer.setData("text/plain", String(row.machine.id));
-                e.dataTransfer.setData(DRAG_KEY, String(row.machine.id));
-                e.dataTransfer.effectAllowed = "move";
-              }
-            : undefined
-        }
+        onDragStart={e => {
+          if (!isStaff) return;
+          setIsDragSource(true);
+          // text/plain guarantees Chrome/Firefox/Safari all register the
+          // payload in e.dataTransfer.types; the custom key lets us tell
+          // our own tiles apart from ordinary text drags.
+          e.dataTransfer.setData("text/plain", String(row.machine.id));
+          e.dataTransfer.setData(DRAG_KEY, String(row.machine.id));
+          e.dataTransfer.effectAllowed = "move";
+        }}
         onDragEnd={() => setIsDragSource(false)}
         onDragOver={e => {
           if (!isStaff) return;
-          const isOurTile = e.dataTransfer.types.includes(DRAG_KEY);
-          if (isOurTile) {
-            e.preventDefault();
-            e.dataTransfer.dropEffect = "move";
-          }
+          // Accept our own tiles unconditionally — the server still enforces
+          // RBAC and the both-vacant constraint on the actual swap.
+          e.preventDefault();
+          e.dataTransfer.dropEffect = "move";
         }}
         onDrop={e => {
           if (!isStaff) return;
@@ -158,8 +151,8 @@ export function FloorMachineChip({
         }}
         className={cn(
           "group flex h-14 w-full flex-col items-center justify-center gap-0.5 border border-[#D4DFE5]/70 bg-[#FBFCFD] text-center transition-all",
-          isStaff && !isDragSource && "hover:border-[#7684A0] hover:bg-[#E8EFF1]",
-          isDragSource && "border-[#2E9A9B] bg-[#E8F4F4] opacity-70",
+          isStaff && !isDragSource && "cursor-grab hover:border-[#7684A0] hover:bg-[#E8EFF1]",
+          isDragSource && "cursor-grabbing border-[#2E9A9B] bg-[#E8F4F4] opacity-70",
           swapMachine.isPending && "pointer-events-none opacity-60"
         )}
       >
@@ -173,12 +166,7 @@ export function FloorMachineChip({
     );
     return (
       <div className="group relative h-14">
-        <Tooltip>
-          <TooltipTrigger asChild>{chipContent}</TooltipTrigger>
-          <TooltipContent side="bottom">
-            {row.machine.label} · {row.machine.location}
-          </TooltipContent>
-        </Tooltip>
+        {chipContent}
         {isStaff && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

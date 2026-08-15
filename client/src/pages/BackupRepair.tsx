@@ -103,13 +103,19 @@ export default function BackupRepair() {
               count={backupMachines.length}
               active={dragTarget === "backup"}
               onDragOver={e => {
-                if (e.dataTransfer.types.includes("skti-machine-swap")) {
-                  e.preventDefault();
-                  e.dataTransfer.dropEffect = "move";
-                  setDragTarget("backup");
-                }
+                // Accept any drag — the server still enforces RBAC and the
+                // vacant-machine constraint on the actual move.
+                e.preventDefault();
+                e.dataTransfer.dropEffect = "move";
+                setDragTarget("backup");
               }}
-              onDragLeave={() => setDragTarget(null)}
+              onDragLeave={e => {
+                // relatedTarget inside the card keeps firing leave — only
+                // clear when leaving the whole section.
+                const sec = (e.currentTarget as HTMLElement).closest("section");
+                const related = e.relatedTarget as Node | null;
+                if (!sec?.contains(related)) setDragTarget(null);
+              }}
               onDrop={e => {
                 e.preventDefault();
                 setDragTarget(null);
@@ -134,13 +140,17 @@ export default function BackupRepair() {
               count={repairMachines.length}
               active={dragTarget === "repair"}
               onDragOver={e => {
-                if (e.dataTransfer.types.includes("skti-machine-swap")) {
-                  e.preventDefault();
-                  e.dataTransfer.dropEffect = "move";
-                  setDragTarget("repair");
-                }
+                // Accept any drag — the server still enforces RBAC and the
+                // vacant-machine constraint on the actual move.
+                e.preventDefault();
+                e.dataTransfer.dropEffect = "move";
+                setDragTarget("repair");
               }}
-              onDragLeave={() => setDragTarget(null)}
+              onDragLeave={e => {
+                const sec = (e.currentTarget as HTMLElement).closest("section");
+                const related = e.relatedTarget as Node | null;
+                if (!sec?.contains(related)) setDragTarget(null);
+              }}
               onDrop={e => {
                 e.preventDefault();
                 setDragTarget(null);

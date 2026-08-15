@@ -208,3 +208,9 @@
 - [x] BackupRepair page: DropCard zones on both cards — drag-over shows teal dashed highlight + "Drop here" banner; drop calls setStatus backup/repair with toast + invalidation
 - [x] Within-board reorder: same-board vacant-drop exchanges sortOrder via reorderMachines; occupied tiles remain non-droppable
 - [x] Vitest updated (same-board = rearranges, 105/105 passing), tsc clean, screenshots verified (/backup drop zones, /floor/30001), checkpoint saved (auto-published), pushed to GitHub
+
+## Drag-and-drop round 3 (user: still not able to drag and drop)
+- [x] Root-cause diagnose: stale dev-server module cache (served old routers.ts throwing SAME_FLOOR/SAME_BOARD) — dev server restarted; also confirmed Tooltip wrapper removed (native title attribute used) and staff passwords were broken in Supabase because direct SQL execution tool writes to the default TiDB, not Supabase — passwords reset via the app's own DB client (supervisor/Supervisor1234, nurse.*\:Nurse1234)
+- [x] Rework chip drag: Tooltip wrapper already removed (native title attribute on the chip), explicit onDragStart/onDragOver/onDrop handlers with unconditional preventDefault; grab/grabbing cursor + teal highlight + opacity feedback while dragging; BackupRepair DropCard unconditional accept with onDragLeave relatedTarget guard
+- [x] Verify end-to-end in the automated browser as SKTI Supervisor: same-board reorder 60001→60002 (200 OK, tiles reordered), offboard 60003 via drop onto Backup card (200 OK, appears with Return action), return-to-board (200 OK, count back to 0); guest draggable=false, RBAC 105/105 tests green
+- [x] Vitest 105/105 + tsc clean, checkpoint saved (auto-published), pushed to GitHub, delivered
