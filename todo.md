@@ -181,12 +181,23 @@
 - [x] Rewrite drizzle/schema.ts to pg-core (serial ids, pgEnum, pg timestamps; machines matches live MySQL without isolationTag/urgent/displayLabel)
 - [x] Rewrite server/db.ts to node-postgres pool via SUPABASE_DATABASE_URL_B64 (b64-decoded) with DATABASE_URL fallback; upsertUser now uses onConflictDoUpdate
 - [x] $returningId (MySQL) replaced with .returning({id}) in machines.ts + seed.ts; sessions.test.ts mock updated (returning/onConflictDoUpdate chain) — 92/92 vitest passing, tsc clean
-- [ ] Live verification: guest/nurse/supervisor logins, board reads/writes, end-of-day report
-- [ ] Checkpoint + publish
+- [x] Live verification: guest/nurse/supervisor logins, board reads/writes, end-of-day report (supervisor login + staff.me fromCookie:true, waiting add/remove, endOfDay.summary, guest write 401)
+- [x] Checkpoint + publish (c75ce84b — SSL rejectUnauthorized:false fix; auto-published to dialysisdash-dn9aztnn.manus.space)
 
 ## User request: push latest code to GitHub (Aug 14)
 - [x] Save a checkpoint with the latest code state (checkpoint 7cf0fd33)
-- [x] Push to almanalaysay93-gif/dialysis-occupancy-board on GitHub (8f5505f -> 7cf0fd3)
+- [x] Push to almanalaysay93-gif/dialysis-occupancy-board on GitHub (7cf0fd3 -> c75ce84: SSL fix; 92/92 tests passing)
 
 ## Supabase rewrite — cleanup (Aug 15)
 - [x] Remove temporary migration probes (supabasePing/supabaseMask/supabaseMigrate) and schema base64 from systemRouter.ts; scratch .mjs files deleted; 92/92 tests, tsc clean
+
+## Backup & Repair board + drag-and-drop machine swap (user request Aug 15)
+- [ ] Schema: machines table gains a status column (active/backup/repair); status 'active' means on a floor; backup and repair machines are removed from floor display
+- [ ] Migration applied to Supabase (existing 160 machines default to active)
+- [ ] Backend: machines.setStatus (move machine to backup/repair — supervisor only, or nurse for own floor with floor-scope guard; active requires picking a floor), machines.list returns status
+- [ ] Backend: machines.swap (drag-and-drop swap between two floors — both floor-scoped nurses or supervisor; blocks if either machine is mid-treatment)
+- [ ] New /backup page: board listing backup machines and repair machines in two sections, with actions to return/activate
+- [ ] UI: tile dropdown option to send machine to Backup or Repair (staff-only); drag-and-drop tile from one floor board to another floor board triggering swap (HTML5 drag+drop with optimistic UI + rollback)
+- [ ] Guest mode: no swap, no status actions; nurse: can only drop into own board (swap restricted) unless supervisor
+- [ ] Sidebar nav entry "Backup & Repair" hidden for guests
+- [ ] Vitest: status swap + repair/backup tests, drag-and-drop swap tests (scoping + mid-treatment guard); tsc clean; screenshots verified; checkpoint saved and auto-published

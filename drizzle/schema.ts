@@ -28,6 +28,13 @@ export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
 /**
+ * Physical status of a machine. "active" machines sit on a floor and appear
+ * on the occupancy boards; "backup" machines are spare units available for
+ * loan to any floor; "repair" machines are out of service for maintenance.
+ */
+export const machineStatusEnum = pgEnum("machine_status", ["active", "backup", "repair"]);
+
+/**
  * Hemodialysis machines on the unit floor.
  * Each machine row is a persistent physical machine; occupancy is driven by
  * the sessions table (one active session per machine).
@@ -42,8 +49,12 @@ export const machines = pgTable("machines", {
   label: varchar("label", { length: 32 }).notNull(),
   /** Physical location within the unit, e.g. "Bay A". */
   location: varchar("location", { length: 64 }).notNull(),
-  /** Floor this machine belongs to (nullable for legacy/unassigned machines). */
+  /** Floor this machine belongs to (NULL for legacy machines). */
   floorId: integer("floorId"),
+  /** Physical status: active (on a floor) | backup (spare) | repair (out of service). */
+  status: machineStatusEnum("status").notNull().default("active"),
+  /** Reason recorded when the machine was moved to backup/repair. */
+  statusNote: varchar("statusNote", { length: 256 }),
   /** Sort/display order. */
   sortOrder: integer("sortOrder").notNull().default(0),
   createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
