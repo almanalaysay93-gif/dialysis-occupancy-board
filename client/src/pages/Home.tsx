@@ -51,7 +51,7 @@ function WaitingCount({ floorId }: { floorId: number }) {
  * boards (/floor/:id). When floorId is provided, only that floor's
  * machines are shown and page scope is limited to it.
  */
-export function OccupancyBoard({ floorId }: { floorId?: number }) {
+export function OccupancyBoardContent({ floorId }: { floorId?: number }) {
   const { canWrite } = useCanWrite();
   const { data, isLoading } = trpc.machines.list.useQuery(undefined, {
     // Cross-device real-time sync: re-sync board state every 5 seconds
@@ -159,8 +159,7 @@ export function OccupancyBoard({ floorId }: { floorId?: number }) {
   };
 
   return (
-    <DashboardLayout>
-      <div className="w-full px-4 sm:px-6 py-6">
+    <div className="w-full px-4 sm:px-6 py-6">
         {/* Editorial masthead */}
         <header className="flex flex-col gap-2">
           <div className="flex items-center justify-between border-b border-[#1F2A52]/80 pb-3">
@@ -376,33 +375,36 @@ export function OccupancyBoard({ floorId }: { floorId?: number }) {
             editable={canWrite}
           />
         )}
+
+        <AddMachineDialog
+          open={addOpen}
+          onClose={() => setAddOpen(false)}
+          initialFloorId={addInitialFloor}
+        />
+
+        <AssignSessionDialog
+          open={assignTarget !== null}
+          machineId={assignTarget}
+          machineLabel={assignMachine?.machine.label ?? ""}
+          onClose={() => setAssignTarget(null)}
+          onAssigned={() => setAssignTarget(null)}
+        />
+
+        <EndSessionDialog
+          open={endTarget !== null}
+          sessionId={endTarget?.sessionId ?? null}
+          machineLabel={endMachine?.machine.label ?? ""}
+          onClose={() => setEndTarget(null)}
+          onEnded={() => setEndTarget(null)}
+        />
       </div>
-
-      <AddMachineDialog
-        open={addOpen}
-        onClose={() => setAddOpen(false)}
-        initialFloorId={addInitialFloor}
-      />
-
-      <AssignSessionDialog
-        open={assignTarget !== null}
-        machineId={assignTarget}
-        machineLabel={assignMachine?.machine.label ?? ""}
-        onClose={() => setAssignTarget(null)}
-        onAssigned={() => setAssignTarget(null)}
-      />
-
-      <EndSessionDialog
-        open={endTarget !== null}
-        sessionId={endTarget?.sessionId ?? null}
-        machineLabel={endMachine?.machine.label ?? ""}
-        onClose={() => setEndTarget(null)}
-        onEnded={() => setEndTarget(null)}
-      />
-    </DashboardLayout>
   );
 }
 
+export function OccupancyBoard({ floorId }: { floorId?: number }) {
+  return <OccupancyBoardContent floorId={floorId} />;
+}
+
 export default function Home() {
-  return <OccupancyBoard />;
+  return <DashboardLayout><OccupancyBoardContent /></DashboardLayout>;
 }

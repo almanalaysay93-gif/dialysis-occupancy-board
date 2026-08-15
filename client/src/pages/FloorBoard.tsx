@@ -1,7 +1,7 @@
 import NotFound from "@/pages/NotFound";
 import { trpc } from "@/lib/trpc";
 import { useParams } from "wouter";
-import { OccupancyBoard } from "@/pages/Home";
+import { OccupancyBoardContent } from "@/pages/Home";
 
 /**
  * Dedicated occupancy board for a single floor, e.g. /floor/2 or /floor/3.
@@ -35,7 +35,7 @@ export default function FloorBoard() {
   // fail zod validation ("Too small: expected number to be >0").
   return (
     <div className="w-full px-4 sm:px-6 py-6">
-      <OccupancyBoard floorId={floor?.id} />
+      <OccupancyBoardContent floorId={floor?.id} />
     </div>
   );
 }
