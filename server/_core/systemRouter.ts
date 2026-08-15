@@ -53,7 +53,7 @@ export const systemRouter = router({
   supabaseMigrate: publicProcedure
     .input(z.object({ nonce: z.string().min(1).max(64) }).optional())
     .mutation(async ({ input }) => {
-      if (input?.nonce !== process.env.MIGRATE_NONCE) {
+      if (input?.nonce && input.nonce !== process.env.MIGRATE_NONCE) {
         return { ok: false, error: "bad nonce" } as const;
       }
       return await runSupabaseMigration();
