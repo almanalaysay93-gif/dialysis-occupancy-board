@@ -70,7 +70,7 @@ export default function Rooms() {
 
   return (
     <DashboardLayout>
-      <div className="px-6 py-8 lg:px-12 lg:py-10">
+      <div className="w-full px-4 sm:px-6 py-6">
         <header className="flex flex-wrap items-end justify-between gap-4 border-b border-[#1F2A52]/80 pb-4">
           <div>
             <p className="smallcaps-detail text-[#7684A0]">

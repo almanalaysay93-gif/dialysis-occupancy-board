@@ -34,7 +34,7 @@ export default function FloorBoard() {
   // passing an invalid floor id, which would make the waiting-panel queries
   // fail zod validation ("Too small: expected number to be >0").
   return (
-    <div className="px-4 py-6 sm:px-6 lg:px-10 lg:py-8">
+    <div className="w-full px-4 sm:px-6 py-6">
       <OccupancyBoard floorId={floor?.id} />
     </div>
   );
