@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: dialysis-occupancy-board
+    env: node
+    plan: free
+    buildCommand: pnpm install && pnpm run build
+    startCommand: pnpm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+      - key: JWT_SECRET
+        generateValue: true
+      - key: SUPABASE_DATABASE_URL_B64
+        sync: false
+        description: "Base64 encoded Supabase PostgreSQL connection string (preferred to prevent URI character mangling)"
+      - key: DATABASE_URL
+        sync: false
+        description: "Fallback PostgreSQL connection string (plain-text)"
