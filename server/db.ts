@@ -1,18 +1,46 @@
 import { eq } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/mysql2";
+import { drizzle } from "drizzle-orm/node-postgres";
+import { Pool } from "pg";
 import { InsertUser, users } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
+function resolveUrl(): string | null {
+  // Supabase Postgres URL is stored base64-encoded (SUPABASE_DATABASE_URL_B64)
+  // so that the platform's secret storage cannot mangle the "postgresql://" URI.
+  const raw = process.env.SUPABASE_DATABASE_URL_B64;
+  if (raw) {
+    try {
+      return Buffer.from(raw, "base64").toString("utf-8");
+    } catch {
+      // fall through to DATABASE_URL below
+    }
+  }
+  return process.env.DATABASE_URL ?? null;
+}
+
 // Lazily create the drizzle instance so local tooling can run without a DB.
 export async function getDb() {
-  if (!_db && process.env.DATABASE_URL) {
-    try {
-      _db = drizzle(process.env.DATABASE_URL);
-    } catch (error) {
-      console.warn("[Database] Failed to connect:", error);
-      _db = null;
+  if (!_db) {
+    const url = resolveUrl();
+    if (url) {
+      try {
+        const pool = new Pool({
+          connectionString: url,
+          max: 8,
+          idleTimeoutMillis: 30_000,
+          connectionTimeoutMillis: 15_000,
+          ssl: url.includes("pooler.supabase.com")
+            ? { rejectUnauthorized: true }
+            : undefined,
+        });
+        await pool.query("SELECT 1");
+        _db = drizzle(pool);
+      } catch (error) {
+        console.warn("[Database] Failed to connect:", error);
+        _db = null;
+      }
     }
   }
   return _db;
@@ -68,7 +96,8 @@ export async function upsertUser(user: InsertUser): Promise<void> {
       updateSet.lastSignedIn = new Date();
     }
 
-    await db.insert(users).values(values).onDuplicateKeyUpdate({
+    await db.insert(users).values(values).onConflictDoUpdate({
+      target: [users.openId],
       set: updateSet,
     });
   } catch (error) {

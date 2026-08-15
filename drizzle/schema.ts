@@ -1,18 +1,27 @@
-import { boolean, int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
+import {
+  boolean,
+  integer,
+  pgEnum,
+  pgTable,
+  serial,
+  text,
+  timestamp,
+  varchar,
+} from "drizzle-orm/pg-core";
 
 /**
  * Core user table backing auth flow.
  */
-export const users = mysqlTable("users", {
-  id: int("id").autoincrement().primaryKey(),
+export const users = pgTable("users", {
+  id: serial("id").primaryKey(),
   openId: varchar("openId", { length: 64 }).notNull().unique(),
   name: text("name"),
   email: varchar("email", { length: 320 }),
   loginMethod: varchar("loginMethod", { length: 64 }),
-  role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
+  role: varchar("role", { length: 16 }).default("user").notNull(),
+  createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt", { mode: "date" }).defaultNow().notNull(),
+  lastSignedIn: timestamp("lastSignedIn", { mode: "date" }).defaultNow().notNull(),
 });
 
 export type User = typeof users.$inferSelect;
@@ -22,19 +31,23 @@ export type InsertUser = typeof users.$inferInsert;
  * Hemodialysis machines on the unit floor.
  * Each machine row is a persistent physical machine; occupancy is driven by
  * the sessions table (one active session per machine).
+ *
+ * NOTE: the live MySQL machines table (post merged commit 8f5505f) does not
+ * have isolationTag/urgent/displayLabel — those columns were removed by the
+ * merge. Keep the drizzle schema in sync with the actual database.
  */
-export const machines = mysqlTable("machines", {
-  id: int("id").autoincrement().primaryKey(),
+export const machines = pgTable("machines", {
+  id: serial("id").primaryKey(),
   /** Display label, e.g. "HD-01". */
   label: varchar("label", { length: 32 }).notNull(),
   /** Physical location within the unit, e.g. "Bay A". */
   location: varchar("location", { length: 64 }).notNull(),
   /** Floor this machine belongs to (nullable for legacy/unassigned machines). */
-  floorId: int("floorId"),
+  floorId: integer("floorId"),
   /** Sort/display order. */
-  sortOrder: int("sortOrder").notNull().default(0),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  sortOrder: integer("sortOrder").notNull().default(0),
+  createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt", { mode: "date" }).defaultNow().notNull(),
 });
 
 export type Machine = typeof machines.$inferSelect;
@@ -45,79 +58,86 @@ export type InsertMachine = typeof machines.$inferInsert;
  * floor-based rows on the occupancy board (e.g. Floor 1 · 100 machines,
  * Floor 2 · 36 machines, Floor 3 · 24 machines).
  */
-export const floors = mysqlTable("floors", {
-  id: int("id").autoincrement().primaryKey(),
+export const floors = pgTable("floors", {
+  id: serial("id").primaryKey(),
   /** Floor identifier, e.g. "F1". */
   code: varchar("code", { length: 16 }).notNull().unique(),
   /** Display name, e.g. "Floor 1". */
   name: varchar("name", { length: 64 }).notNull(),
   /** Sort/display order. */
-  sortOrder: int("sortOrder").notNull().default(0),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  sortOrder: integer("sortOrder").notNull().default(0),
+  createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
 });
 
 export type Floor = typeof floors.$inferSelect;
 export type InsertFloor = typeof floors.$inferInsert;
+
+export const sessionIsolationTagEnum = pgEnum("isolation_tag", ["clean", "dirty"]);
+export const sessionStatusEnum = pgEnum("session_status", ["active", "ended"]);
 
 /**
  * Active treatment session on a machine. A machine has at most one session
  * with status other than "ended". End time is stored as a UTC timestamp so
  * every connected client can compute an identical countdown.
  */
-export const sessions = mysqlTable("sessions", {
-  id: int("id").autoincrement().primaryKey(),
-  machineId: int("machineId").notNull(),
+export const sessions = pgTable("sessions", {
+  id: serial("id").primaryKey(),
+  machineId: integer("machineId").notNull(),
   patientId: varchar("patientId", { length: 64 }).notNull(),
-  /** Duration in minutes: 180 (3h), 360 (6h), or 480 (8h). */
-  durationMinutes: int("durationMinutes").notNull(),
+  /** Duration in minutes: 180 (3h), 240 (4h), 360 (6h), or 480 (8h). */
+  durationMinutes: integer("durationMinutes").notNull(),
   /** UTC epoch ms when the session started. */
-  startedAt: timestamp("startedAt").notNull(),
+  startedAt: timestamp("startedAt", { mode: "date" }).notNull(),
   /** UTC epoch ms = startedAt + durationMinutes (planned end time). */
-  endsAt: timestamp("endsAt").notNull(),
+  endsAt: timestamp("endsAt", { mode: "date" }).notNull(),
   /** Isolation tag derived from patient diagnosis. */
-  isolationTag: mysqlEnum("isolationTag", ["clean", "dirty"]).notNull().default("clean"),
+  isolationTag: sessionIsolationTagEnum("isolationTag").notNull().default("clean"),
   /** Urgent/priority flag for critical cases. */
   urgent: boolean("urgent").notNull().default(false),
   /** Optional staff-set display alias shown on the machine tile instead of the patient id. */
   displayLabel: varchar("displayLabel", { length: 64 }),
   /** Nurse assigned to this patient during the session, shown in the floor's nurse roster. */
   assignedNurse: varchar("assignedNurse", { length: 64 }),
-  status: mysqlEnum("status", ["active", "ended"]).notNull().default("active"),
-  endedAt: timestamp("endedAt"),
+  status: sessionStatusEnum("status").notNull().default("active"),
+  endedAt: timestamp("endedAt", { mode: "date" }),
   endedBy: text("endedBy"),
   startedBy: text("startedBy"),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt", { mode: "date" }).defaultNow().notNull(),
 });
 
 export type Session = typeof sessions.$inferSelect;
 export type InsertSession = typeof sessions.$inferInsert;
+
+export const waitingPriorityEnum = pgEnum("waiting_priority", ["normal", "urgent", "veryUrgent"]);
+export const waitingIsolationTagEnum = pgEnum("waiting_isolation_tag", ["clean", "dirty"]);
+export const waitingStatusEnum = pgEnum("waiting_status", ["waiting", "admitted"]);
 
 /**
  * Patient waiting list per floor. Patients queue for a machine on a given
  * floor; very-urgent patients are sorted to the top of the list and shown
  * with a distinct high-priority marker on the board.
  */
-export const waitingList = mysqlTable("waiting_list", {
-  id: int("id").autoincrement().primaryKey(),
+export const waitingList = pgTable("waiting_list", {
+  id: serial("id").primaryKey(),
   /** Patient identifier entered by staff, e.g. "P-4821". */
   patientId: varchar("patientId", { length: 64 }).notNull(),
   /** Floor this patient is waiting for a machine on. */
-  floorId: int("floorId").notNull(),
+  floorId: integer("floorId").notNull(),
   /** Waiting priority tier. */
-  priority: mysqlEnum("priority", ["normal", "urgent", "veryUrgent"]).notNull().default("normal"),
+  priority: waitingPriorityEnum("priority").notNull().default("normal"),
   /** Planned treatment length, captured when the patient joins the queue. */
-  durationMinutes: int("durationMinutes").notNull().default(240),
+  durationMinutes: integer("durationMinutes").notNull().default(240),
   /** Isolation tag from the patient's diagnosis, captured on the queue. */
-  isolationTag: mysqlEnum("isolationTag", ["clean", "dirty"]).notNull().default("clean"),
+  isolationTag: waitingIsolationTagEnum("isolationTag").notNull().default("clean"),
   /** Nurse who will handle this patient; shown in the floor's nurse roster. */
   assignedNurse: varchar("assignedNurse", { length: 64 }),
   addedBy: text("addedBy"),
-  joinedAt: timestamp("joinedAt").defaultNow().notNull(),
+  joinedAt: timestamp("joinedAt", { mode: "date" }).defaultNow().notNull(),
   /** When the patient was admitted onto a machine (leaves the list). */
-  admittedAt: timestamp("admittedAt"),
-  status: mysqlEnum("status", ["waiting", "admitted"]).notNull().default("waiting"),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  admittedAt: timestamp("admittedAt", { mode: "date" }),
+  status: waitingStatusEnum("status").notNull().default("waiting"),
+  createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
 });
 
 export type WaitingEntry = typeof waitingList.$inferSelect;
@@ -130,21 +150,23 @@ export type InsertWaitingEntry = typeof waitingList.$inferInsert;
  * Guest users browse without a staff account (no session cookie).
  * Local auth is independent of the Manus OAuth user table.
  */
-export const staffAccounts = mysqlTable("staff_accounts", {
-  id: int("id").autoincrement().primaryKey(),
+export const staffRoleEnum = pgEnum("staff_role", ["nurse", "supervisor", "guest"]);
+
+export const staffAccounts = pgTable("staff_accounts", {
+  id: serial("id").primaryKey(),
   /** Login username, unique. */
   username: varchar("username", { length: 64 }).notNull().unique(),
   displayName: varchar("displayName", { length: 64 }).notNull(),
-  role: mysqlEnum("role", ["nurse", "supervisor", "guest"]).notNull(),
+  role: staffRoleEnum("role").notNull(),
   /** Board this nurse works on (NULL for supervisors and guests). */
-  assignedFloorId: int("assignedFloorId"),
+  assignedFloorId: integer("assignedFloorId"),
   /** Hex-encoded SHA-256(password + salt) + salt stored alongside. */
   passwordHash: varchar("passwordHash", { length: 128 }).notNull(),
   passwordSalt: varchar("passwordSalt", { length: 32 }).notNull(),
   active: boolean("active").notNull().default(true),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  lastSignedIn: timestamp("lastSignedIn"),
-  tokenVersion: int("tokenVersion").default(1).notNull(),
+  createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
+  lastSignedIn: timestamp("lastSignedIn", { mode: "date" }),
+  tokenVersion: integer("tokenVersion").default(1).notNull(),
 });
 
 export type StaffAccount = typeof staffAccounts.$inferSelect;

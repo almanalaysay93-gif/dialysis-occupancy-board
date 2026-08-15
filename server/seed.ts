@@ -50,7 +50,7 @@ async function main() {
       const inserted = await db
         .insert(floors)
         .values({ code: board.code, name: board.name, sortOrder: board.sortOrder })
-        .$returningId();
+        .returning({ id: floors.id });
       floorId = inserted[0].id;
       console.log(`+ board ${board.name} (${board.code})`);
     } else {

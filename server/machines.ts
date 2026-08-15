@@ -95,7 +95,7 @@ export async function assignSession(input: {
       displayLabel: input.displayLabel ? input.displayLabel.trim() || null : null,
       assignedNurse: input.assignedNurse ? input.assignedNurse.trim() || null : null,
     })
-    .$returningId();
+    .returning({ id: machines.id });
 
   return result[0];
 }
@@ -218,7 +218,7 @@ export async function addMachine(input: {
       floorId: input.floorId,
       sortOrder: nextOrder,
     })
-    .$returningId();
+    .returning({ id: machines.id });
 
   return result[0];
 }
@@ -292,7 +292,7 @@ export async function addRoom(input: { name: string }) {
       name: input.name.trim(),
       sortOrder: (maxOrder[0]?.sortOrder ?? 0) + 1,
     })
-    .$returningId();
+    .returning({ id: machines.id });
 
   return result[0];
 }
@@ -436,7 +436,7 @@ export async function addWaiting(input: {
       assignedNurse: input.assignedNurse?.trim() || null,
       addedBy: input.addedBy,
     })
-    .$returningId();
+    .returning({ id: machines.id });
 
   return result[0];
 }

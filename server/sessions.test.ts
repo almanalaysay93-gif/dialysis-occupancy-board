@@ -18,14 +18,19 @@ function mockDbWith(rows: unknown[]) {
 
   // Each drizzle builder step returns a NEW builder, so each call must
   // return a fresh chainable that records its arguments and still resolves.
-  const chain = (terminal: unknown) => ({
-    from: vi.fn(() => chain(terminal)),
-    where: vi.fn(() => chain(terminal)),
-    orderBy: vi.fn(() => chain(terminal)),
+  // On Postgres, inserts end with .returning(...) which must resolve to the
+  // inserted rows, so the chain carries an explicit resolve value.
+  const chain = (terminal: unknown, resolveValue = rows) => ({
+    from: vi.fn(() => chain(terminal, resolveValue)),
+    where: vi.fn(() => chain(terminal, resolveValue)),
+    orderBy: vi.fn(() => chain(terminal, resolveValue)),
     limit: vi.fn().mockResolvedValue(rows),
-    values: vi.fn(() => chain(terminal)),
-    set: vi.fn(() => chain(terminal)),
-    $returningId: vi.fn().mockResolvedValue([{ id: 99 }]),
+    values: vi.fn(() => chain(terminal, resolveValue)),
+    set: vi.fn(() => chain(terminal, resolveValue)),
+    // Postgres inserts use .returning({ id: <table>.id }) instead of
+    // the MySQL $returningId shortcut; it resolves to the inserted rows.
+    returning: vi.fn(() => Promise.resolve([{ id: 99 }])),
+    onConflictDoUpdate: vi.fn(() => chain(terminal, resolveValue)),
   });
 
   db.select = vi.fn(() => chain(undefined));

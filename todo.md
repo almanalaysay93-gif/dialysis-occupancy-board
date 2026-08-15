@@ -174,16 +174,19 @@
 
 ## Database migration: MySQL/TiDB -> Supabase PostgreSQL (user request Aug 14)
 - [x] Validate connection secret: base64-encoded SUPABASE_DATABASE_URL_B64 decodes cleanly and production ping returns PostgreSQL 17.6 (pooler endpoint works; direct db host unreachable from sandbox but prod egress works)
-- [ ] Audit current MySQL schema and data (tables, columns, enums, data counts)
-- [ ] Create Postgres schema in Supabase: floors, machines, sessions, waiting_list, staff_accounts, end_of_day + MySQL->PG conversions (auto_increment->serial, enum->text/check, timestamps)
-- [ ] Migrate all data: 160 machines, floors, staff accounts (password hashes + salts), waiting list, sessions, end-of-day history (run via production runtime: temporary migrate procedure)
-- [ ] Add pg (postgres) driver, keep drizzle with pg dialect
-- [ ] Rewrite server/db.ts helpers and any raw SQL for Postgres syntax
-- [ ] Update drizzle config/connection to Supabase URL
-- [ ] Vitest suite passes on Postgres (92+ tests), new secret-validation test
+- [x] Audit current MySQL schema and data (merged commit 8f5505f dropped isolationTag/urgent/displayLabel from machines table — accounted for in migration)
+- [x] Create Postgres schema in Supabase via production runtime (schema applied; tables recreated with DROP+CASCADE, BY DEFAULT identity for explicit-ID inserts)
+- [x] Migrate all data via production runtime (temporary migrate procedure): floors 3, machines 160, sessions 5, waiting_list 0, staff_accounts 5 — supabase counts verified equal to MySQL
+- [x] Add pg (postgres) driver: pg v8.23.0 + @types/pg installed, drizzle-orm node-postgres driver used
+- [x] Rewrite drizzle/schema.ts to pg-core (serial ids, pgEnum, pg timestamps; machines matches live MySQL without isolationTag/urgent/displayLabel)
+- [x] Rewrite server/db.ts to node-postgres pool via SUPABASE_DATABASE_URL_B64 (b64-decoded) with DATABASE_URL fallback; upsertUser now uses onConflictDoUpdate
+- [x] $returningId (MySQL) replaced with .returning({id}) in machines.ts + seed.ts; sessions.test.ts mock updated (returning/onConflictDoUpdate chain) — 92/92 vitest passing, tsc clean
 - [ ] Live verification: guest/nurse/supervisor logins, board reads/writes, end-of-day report
 - [ ] Checkpoint + publish
 
 ## User request: push latest code to GitHub (Aug 14)
 - [x] Save a checkpoint with the latest code state (checkpoint 7cf0fd33)
 - [x] Push to almanalaysay93-gif/dialysis-occupancy-board on GitHub (8f5505f -> 7cf0fd3)
+
+## Supabase rewrite — cleanup (Aug 15)
+- [x] Remove temporary migration probes (supabasePing/supabaseMask/supabaseMigrate) and schema base64 from systemRouter.ts; scratch .mjs files deleted; 92/92 tests, tsc clean
