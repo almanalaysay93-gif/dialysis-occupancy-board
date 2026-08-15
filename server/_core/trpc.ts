@@ -73,7 +73,9 @@ export const staffReadProcedure = t.procedure.use(
         ctx: { ...ctx, user: oauthUser, staff, isStaff: true as const },
       });
     }
-    if (staff.role === "nurse" || staff.role === "supervisor") {
+    // Auditors are read-only staff: they never write but may view the
+    // read-only report endpoints alongside nurses and supervisors.
+    if (staff.role === "nurse" || staff.role === "supervisor" || staff.role === "auditor") {
       return next({
         ctx: { ...ctx, user: null, staff, isStaff: true as const },
       });
@@ -106,7 +108,8 @@ export const staffOrAdminProcedure = t.procedure.use(
       });
     }
     // Board staff (nurse/supervisor) may perform write actions.
-    if (staff.role === "nurse" || staff.role === "supervisor") {
+    // Auditors are authenticated as staff but self-gate to read-only views.
+    if (staff.role === "nurse" || staff.role === "supervisor" || staff.role === "auditor") {
       return next({
         ctx: { ...ctx, user: null, staff, isStaff: true as const },
       });

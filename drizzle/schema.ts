@@ -167,7 +167,7 @@ export type InsertWaitingEntry = typeof waitingList.$inferInsert;
  * Guest users browse without a staff account (no session cookie).
  * Local auth is independent of the Manus OAuth user table.
  */
-export const staffRoleEnum = pgEnum("staff_role", ["nurse", "supervisor", "guest"]);
+export const staffRoleEnum = pgEnum("staff_role", ["nurse", "supervisor", "guest", "auditor"]);
 
 export const staffAccounts = pgTable("staff_accounts", {
   id: serial("id").primaryKey(),
@@ -215,3 +215,26 @@ export const narrativeReports = pgTable("narrative_reports", {
 
 export type NarrativeReport = typeof narrativeReports.$inferSelect;
 export type InsertNarrativeReport = typeof narrativeReports.$inferInsert;
+
+/**
+ * Audit trail for narrative changes. Every create, update, and delete on
+ * narrative_reports appends a row here with the actor and a body snapshot.
+ * Readable only by the auditor account (dedicated Audit Viewer login).
+ */
+export const narrativeHistory = pgTable("narrative_history", {
+  id: serial("id").primaryKey(),
+  narrativeId: integer("narrative_id"),
+  floorId: integer("floor_id").notNull(),
+  reportDate: varchar("report_date", { length: 10 }).notNull(),
+  periodKey: varchar("period_key", { length: 16 }).notNull(),
+  /** "create", "update", or "delete". */
+  action: varchar("action", { length: 10 }).notNull(),
+  actor: varchar("actor", { length: 64 }).notNull(),
+  actorRole: varchar("actor_role", { length: 32 }),
+  /** Snapshot of the narrative body (null for deletes). */
+  bodySnapshot: text("body_snapshot"),
+  createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+});
+
+export type NarrativeHistory = typeof narrativeHistory.$inferSelect;
+export type InsertNarrativeHistory = typeof narrativeHistory.$inferInsert;

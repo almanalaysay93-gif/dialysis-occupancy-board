@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "wouter";
 import { ClipboardList, Dumbbell, PenLine, Printer, Trash2, UserRound, Users } from "lucide-react";
 import DashboardLayout from "@/components/DashboardLayout";
@@ -304,6 +304,10 @@ export default function EndOfDayReport() {
             multi={isMulti}
           />
         )}
+
+        {staff?.role === "auditor" && (
+          <NarrativeHistorySection floors={floors} date={date} />
+        )}
       </div>
         </>
       )}
@@ -345,6 +349,15 @@ function SupervisorNarrativeSection({
   const [openPeriod, setOpenPeriod] = useState<string | null>(null);
   const [openFloorId, setOpenFloorId] = useState<number | null>(null);
   const [openAuthor, setOpenAuthor] = useState(() => staff?.displayName ?? "");
+  // Entry being edited — when set the dialog pre-fills and updates it instead
+  // of creating a new one.
+  const [editEntry, setEditEntry] = useState<{
+    id: number;
+    floorId: number;
+    author: string;
+    body: string;
+    periodKey: string;
+  } | null>(null);
   const dialogOpen = openPeriod !== null && openFloorId !== null;
 
   const createMutation = trpc.narratives.create.useMutation({
@@ -389,10 +402,16 @@ function SupervisorNarrativeSection({
             floorId={openFloorId!}
             date={date}
             authorName={openAuthor}
+            existing={
+              editEntry
+                ? { id: editEntry.id, floorId: editEntry.floorId, author: editEntry.author, body: editEntry.body }
+                : null
+            }
             onOpenChange={open => {
               if (!open) {
                 setOpenPeriod(null);
                 setOpenFloorId(null);
+                setEditEntry(null);
               }
             }}
           />
@@ -462,15 +481,37 @@ function SupervisorNarrativeSection({
                               </p>
                             </div>
                             {canWriteSupervisor && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="h-7 shrink-0 border-[#D4DFE5] text-[#1F2A52]"
-                                onClick={() => void removeMutation.mutate({ id: entry.id, floorId: f.id })}
-                                title="Delete this narrative"
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </Button>
+                              <div className="flex shrink-0 items-center gap-1.5">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 border-[#2E9A9B]/50 text-[#1d6b6c]"
+                                  onClick={() => {
+                                    setOpenPeriod(entry.periodKey);
+                                    setOpenFloorId(entry.floorId);
+                                    setEditEntry({
+                                      id: entry.id,
+                                      floorId: entry.floorId,
+                                      author: entry.author,
+                                      body: entry.body,
+                                      periodKey: entry.periodKey,
+                                    });
+                                    setOpenAuthor(entry.author);
+                                  }}
+                                  title="Edit this narrative"
+                                >
+                                  <PenLine className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 border-[#D4DFE5] text-[#1F2A52]"
+                                  onClick={() => void removeMutation.mutate({ id: entry.id, floorId: f.id })}
+                                  title="Delete this narrative"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
                             )}
                           </div>
                         ) : (
@@ -503,6 +544,7 @@ function SupervisorNarrativeDialog({
   floorId,
   date,
   authorName,
+  existing,
   onOpenChange,
 }: {
   visibleFloors: { id: number; name: string }[];
@@ -510,14 +552,49 @@ function SupervisorNarrativeDialog({
   floorId: number;
   date: string;
   authorName: string;
+  /** Existing entry when editing a saved narrative. */
+  existing?: { id: number; floorId: number; author: string; body: string } | null;
   onOpenChange: (open: boolean) => void;
 }) {
   const utils = trpc.useUtils();
-  const [areaId, setAreaId] = useState(floorId);
-  const [author, setAuthor] = useState(authorName);
-  const [body, setBody] = useState("");
+  // Draft auto-save key: a draft survives dialog close, refresh, and device
+  // restarts — clearing it only on a successful save.
+  const draftKey = useMemo(
+    () =>
+      `narrative-supervisor-draft:${date}:${periodKey}:${floorId}`,
+    [date, periodKey, floorId]
+  );
+  const [areaId, setAreaId] = useState(() => existing?.floorId ?? floorId);
+  const [author, setAuthor] = useState(() => existing?.author ?? authorName);
+  const [body, setBody] = useState(() => {
+    if (existing) return existing.body;
+    try {
+      return localStorage.getItem(draftKey) ?? "";
+    } catch {
+      return "";
+    }
+  });
+  const draftSaved = useRef(false);
+  const lastBody = useRef(body);
+  useEffect(() => {
+    lastBody.current = body;
+    // Debounce: write the draft 400ms after the last keystroke so typing
+    // doesn't thrash localStorage.
+    const timer = setTimeout(() => {
+      try {
+        localStorage.setItem(draftKey, body);
+        draftSaved.current = true;
+      } catch {
+        draftSaved.current = false;
+      }
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [body, draftKey]);
 
   const createMutation = trpc.narratives.create.useMutation({
+    onSuccess: () => void utils.narratives.list.invalidate({ reportDate: date }),
+  });
+  const updateMutation = trpc.narratives.update.useMutation({
     onSuccess: () => void utils.narratives.list.invalidate({ reportDate: date }),
   });
 
@@ -574,6 +651,11 @@ function SupervisorNarrativeDialog({
             />
           </div>
         </div>
+        {body.trim() && !existing && (
+          <p className="-mt-1 text-[10px] text-[#7684A0]">
+            {draftSaved.current ? "Draft saved — nothing is lost if you close this." : "Draft saving…"}
+          </p>
+        )}
         <DialogFooter>
           <Button
             size="sm"
@@ -586,25 +668,35 @@ function SupervisorNarrativeDialog({
           <Button
             size="sm"
             className="bg-[#2E9A9B] text-white hover:bg-[#278788] disabled:opacity-60"
-            disabled={!body.trim() || !author.trim() || createMutation.isPending}
+            disabled={!body.trim() || !author.trim() || createMutation.isPending || updateMutation.isPending}
             onClick={() => {
               if (!body.trim() || !author.trim()) return;
-              createMutation.mutate(
-                {
-                  floorId: areaId,
-                  reportDate: date,
-                  periodKey,
-                  shiftKey: null,
-                  author: author.trim(),
-                  body: body.trim(),
-                },
-                {
-                  onSuccess: () => onOpenChange(false),
+              const onFinish = () => {
+                try {
+                  localStorage.removeItem(draftKey);
+                } catch {
+                  // localStorage unavailable — keep the draft key harmless.
                 }
-              );
+                onOpenChange(false);
+              };
+              if (existing) {
+                updateMutation.mutate({ id: existing.id, floorId: existing.floorId, body: body.trim() }, { onSuccess: onFinish });
+              } else {
+                createMutation.mutate(
+                  {
+                    floorId: areaId,
+                    reportDate: date,
+                    periodKey,
+                    shiftKey: null,
+                    author: author.trim(),
+                    body: body.trim(),
+                  },
+                  { onSuccess: onFinish }
+                );
+              }
             }}
           >
-            {createMutation.isPending ? "Saving…" : "Save narrative"}
+            {createMutation.isPending || updateMutation.isPending ? "Saving…" : existing ? "Update narrative" : "Save narrative"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -806,6 +898,9 @@ export function NarrativeReport({
   const createMutation = trpc.narratives.create.useMutation({
     onSuccess: () => void utils.narratives.list.invalidate({ floorId, reportDate: date }),
   });
+  const updateMutation = trpc.narratives.update.useMutation({
+    onSuccess: () => void utils.narratives.list.invalidate({ floorId, reportDate: date }),
+  });
   const removeMutation = trpc.narratives.remove.useMutation({
     onSuccess: () => void utils.narratives.list.invalidate({ floorId, reportDate: date }),
   });
@@ -816,7 +911,38 @@ export function NarrativeReport({
   const [openPeriod, setOpenPeriod] = useState<string | null>(null);
   const [openShift, setOpenShift] = useState<string>("05-13");
   const [openAuthor, setOpenAuthor] = useState(() => staff?.displayName ?? "");
-  const [openBody, setOpenBody] = useState("");
+  // Entry being edited in the inline form — updates instead of creating.
+  const [editEntry, setEditEntry] = useState<{
+    id: number;
+    periodKey: string;
+    author: string;
+    body: string;
+  } | null>(null);
+  // Draft auto-save: the writer's draft survives form close, refresh, and
+  // device restarts; cleared only on a successful save.
+  const draftKey = useMemo(
+    () => `narrative-board-draft:${floorId}:${date}`,
+    [floorId, date]
+  );
+  const [openBody, setOpenBody] = useState(() => {
+    try {
+      return localStorage.getItem(draftKey) ?? "";
+    } catch {
+      return "";
+    }
+  });
+  const draftSaved = useRef(false);
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      try {
+        localStorage.setItem(draftKey, openBody);
+        draftSaved.current = true;
+      } catch {
+        draftSaved.current = false;
+      }
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [openBody, draftKey]);
 
   const entriesByPeriod = useMemo(() => {
     const map = new Map<string, { id: number; periodKey: string; shiftKey: string | null; author: string; body: string; updatedAt: Date }>();
@@ -878,15 +1004,32 @@ export function NarrativeReport({
                       </p>
                     </div>
                     {canWriteBoard && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-7 shrink-0 border-[#D4DFE5] text-[#1F2A52]"
-                        onClick={() => void removeMutation.mutate({ id: entry.id, floorId })}
-                        title="Delete this narrative"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
+                      <div className="flex shrink-0 items-center gap-1.5">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 border-[#2E9A9B]/50 text-[#1d6b6c]"
+                          onClick={() => {
+                            setOpenPeriod(period.key);
+                            setEditEntry({ id: entry.id, periodKey: period.key, author: entry.author, body: entry.body });
+                            setOpenBody(entry.body);
+                            setOpenAuthor(entry.author);
+                            setOpenShift(entry.shiftKey ?? "05-13");
+                          }}
+                          title="Edit this narrative"
+                        >
+                          <PenLine className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 border-[#D4DFE5] text-[#1F2A52]"
+                          onClick={() => void removeMutation.mutate({ id: entry.id, floorId })}
+                          title="Delete this narrative"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
                     )}
                   </div>
                 ) : (
@@ -899,7 +1042,12 @@ export function NarrativeReport({
                         className="h-7 shrink-0 border-[#2E9A9B]/50 text-[#1d6b6c]"
                         onClick={() => {
                           setOpenPeriod(period.key);
-                          setOpenBody("");
+                          setEditEntry(null);
+                          try {
+                            setOpenBody(localStorage.getItem(draftKey) ?? "");
+                          } catch {
+                            setOpenBody("");
+                          }
                           setOpenAuthor(authorName);
                           setOpenShift("05-13");
                         }}
@@ -1019,31 +1167,45 @@ export function NarrativeReport({
               rows={4}
               className="mt-1 w-full rounded-sm border border-[#D4DFE5] bg-white px-2 py-1.5 text-sm text-[#1F2A52] outline-none focus:border-[#2E9A9B]"
             />
+            {openBody.trim() && !editEntry && (
+              <p className="mt-1.5 text-[10px] text-[#7684A0]">
+                {draftSaved.current ? "Draft saved — nothing is lost if you close this." : "Draft saving…"}
+              </p>
+            )}
             <div className="mt-3 flex items-center gap-2">
               <Button
                 size="sm"
                 className="bg-[#2E9A9B] text-white hover:bg-[#1d6b6c]"
-                disabled={!openBody.trim() || !openAuthor.trim() || createMutation.isPending}
+                disabled={!openBody.trim() || !openAuthor.trim() || createMutation.isPending || updateMutation.isPending}
                 onClick={() => {
                   if (!openBody.trim() || !openAuthor.trim()) return;
-                  createMutation.mutate(
-                    {
-                      floorId,
-                      reportDate: date,
-                      periodKey: openPeriod,
-                      shiftKey: openShift,
-                      author: openAuthor.trim(),
-                      body: openBody.trim(),
-                    },
-                    {
-                      onSuccess: () => {
-                        setOpenPeriod(null);
-                      },
+                  const onFinish = () => {
+                    try {
+                      localStorage.removeItem(draftKey);
+                    } catch {
+                      // localStorage unavailable — leave the draft key harmless.
                     }
-                  );
+                    setOpenPeriod(null);
+                    setEditEntry(null);
+                  };
+                  if (editEntry) {
+                    updateMutation.mutate({ id: editEntry.id, floorId, body: openBody.trim() }, { onSuccess: onFinish });
+                  } else {
+                    createMutation.mutate(
+                      {
+                        floorId,
+                        reportDate: date,
+                        periodKey: openPeriod,
+                        shiftKey: openShift,
+                        author: openAuthor.trim(),
+                        body: openBody.trim(),
+                      },
+                      { onSuccess: onFinish }
+                    );
+                  }
                 }}
               >
-                {createMutation.isPending ? "Saving…" : "Save narrative"}
+                {createMutation.isPending || updateMutation.isPending ? "Saving…" : editEntry ? "Update narrative" : "Save narrative"}
               </Button>
               <Button
                 size="sm"
@@ -1059,6 +1221,112 @@ export function NarrativeReport({
       </CardContent>
     </Card>
   );
+}
+
+/**
+ * Narrative Edit History: auditor-only view of every narrative change
+ * (create / update / delete), showing who changed it and when.
+ */
+function NarrativeHistorySection({
+  floors,
+  date,
+}: {
+  floors: { id: number; name: string }[] | undefined;
+  date: string;
+}) {
+  const historyQuery = trpc.narratives.history.useQuery(
+    { reportDate: date },
+    { refetchInterval: 10_000 }
+  );
+
+  const floorName = (floorId: number | null) =>
+    (floors ?? []).find(f => f.id === floorId)?.name ?? `Floor ${floorId ?? "?"}`;
+  const periodLabel = (key: string) =>
+    REPORT_PERIODS.find(p => p.key === key)?.label ??
+    SUPERVISOR_PERIODS.find(p => p.key === key)?.label ??
+    key;
+
+  return (
+    <Card className="mt-5 border border-[#1F2A52]/15 bg-[#1F2A52]/[0.03] print:break-inside-avoid">
+      <CardHeader className="border-b border-[#D4DFE5]/70 pb-4">
+        <CardTitle className="font-display text-base text-[#1F2A52]">Narrative Edit History</CardTitle>
+        <p className="text-xs text-[#556680]">
+          Audit trail of every narrative that was written, changed, or removed on {dateLabel(date)}. The auditor
+          account alone can view this.
+        </p>
+      </CardHeader>
+      <CardContent className="pt-4">
+        {historyQuery.isLoading ? (
+          <Skeleton className="h-40 w-full" />
+        ) : historyQuery.isError ? (
+          <p className="py-3 text-xs text-[#9E1F2B]">
+            The edit history could not be loaded ({String(historyQuery.error?.message ?? "network error")}).
+          </p>
+        ) : !(historyQuery.data ?? []).length ? (
+          <p className="py-4 text-center text-xs text-[#7684A0]">
+            No narrative changes were recorded for this date.
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-[#D4DFE5] text-left text-[10px] uppercase tracking-[0.12em] text-[#7684A0]">
+                  <th className="py-2 pr-3">Time</th>
+                  <th className="py-2 pr-3">Area</th>
+                  <th className="py-2 pr-3">Period</th>
+                  <th className="py-2 pr-3">Change</th>
+                  <th className="py-2 pr-3">Made by</th>
+                  <th className="py-2">Content</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(historyQuery.data ?? []).map(row => (
+                  <tr key={row.id} className="border-b border-[#D4DFE5]/60 align-top">
+                    <td className="whitespace-nowrap py-2 pr-3 text-[#556680]">
+                      {new Date(row.createdAt).toLocaleString([], { timeZone: "Asia/Manila", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                    </td>
+                    <td className="py-2 pr-3 font-medium text-[#1F2A52]">{floorName(row.floorId)}</td>
+                    <td className="whitespace-nowrap py-2 pr-3 text-[#556680]">{periodLabel(row.periodKey)}</td>
+                    <td className="py-2 pr-3">
+                      <span
+                        className={
+                          "rounded-sm px-1.5 py-0.5 text-[10px] uppercase tracking-[0.08em] " +
+                          (row.action === "create"
+                            ? "bg-[#2E9A9B]/10 text-[#1d6b6c]"
+                            : row.action === "update"
+                              ? "bg-[#B8860B]/10 text-[#8a6408]"
+                              : "bg-[#9E1F2B]/10 text-[#9E1F2B]")
+                        }
+                      >
+                        {row.action}
+                      </span>
+                    </td>
+                    <td className="whitespace-nowrap py-2 pr-3 text-[#556680]">
+                      {row.actor}
+                      {row.actorRole ? ` · ${row.actorRole}` : ""}
+                    </td>
+                    <td className="max-w-md whitespace-pre-wrap py-2 text-[#556680]">
+                      {row.bodySnapshot ?? (row.action === "delete" ? "(narrative removed)" : "")}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function dateLabel(date: string): string {
+  return new Date(`${date}T00:00:00+08:00`).toLocaleDateString([], {
+    timeZone: "Asia/Manila",
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
 }
 
 function StatTile({

@@ -741,6 +741,33 @@ export const appRouter = router({
         return machineDb.listNarratives({ floorId: input.floorId, reportDate: input.reportDate });
       }),
 
+    /** Rewrite an existing narrative in place (staff only, floor-scoped). */
+    update: staffOrAdminProcedure
+      .input(
+        z.object({
+          id: z.number().int().positive(),
+          floorId: z.number().int().positive(),
+          body: z.string().trim().min(1, "The narrative cannot be empty").max(4000),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        requireFloorAccess(ctx.staff, input.floorId, ctx.user);
+        const staffSession = ctx.staff;
+        const row = await machineDb.getNarrativeById(input.id, input.floorId);
+        if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Narrative not found." });
+        await machineDb.updateNarrativeBody(input.id, input.body);
+        await machineDb.logNarrativeUpdate({
+          narrativeId: row.id,
+          floorId: row.floorId,
+          reportDate: row.reportDate,
+          periodKey: row.periodKey,
+          actor: staffSession?.displayName ?? "(unknown)",
+          actorRole: staffSession?.role === "supervisor" ? "supervisor" : staffSession?.role === "auditor" ? "auditor" : "nurse",
+          body: input.body,
+        });
+        return { success: true } as const;
+      }),
+
     /** Write or update a period narrative (staff only, floor-scoped). */
     create: staffOrAdminProcedure
       .input(
@@ -785,8 +812,32 @@ export const appRouter = router({
       .input(z.object({ id: z.number().int().positive(), floorId: z.number().int().positive() }))
       .mutation(async ({ ctx, input }) => {
         requireFloorAccess(ctx.staff, input.floorId, ctx.user);
-        await machineDb.deleteNarrative({ id: input.id, floorId: input.floorId });
+        await machineDb.deleteNarrative({
+          id: input.id,
+          floorId: input.floorId,
+          actor: ctx.staff?.displayName ?? "(unknown)",
+          actorRole: ctx.staff?.role === "supervisor" ? "supervisor" : ctx.staff?.role === "auditor" ? "auditor" : "nurse",
+        });
         return { success: true } as const;
+      }),
+
+    /** Edit-history audit trail for narratives (auditor only). */
+    history: staffOrAdminProcedure
+      .input(
+        z
+          .object({
+            reportDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+            floorId: z.number().int().positive().optional(),
+          })
+          .default({})
+      )
+      .query(async ({ ctx, input }) => {
+        // Only the dedicated auditor account (Audit Viewer) may read the trail.
+        const staffSession = ctx.staff;
+        if (staffSession?.role !== "auditor") {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Only the auditor account may read the narrative edit history." });
+        }
+        return machineDb.listNarrativeHistory({ reportDate: input.reportDate, floorId: input.floorId });
       }),
   }),
 

@@ -11,7 +11,7 @@ import { getSessionCookieOptions } from "./_core/cookies";
 /** Local staff session cookie name (separate from the OAuth user session). */
 export const STAFF_COOKIE_NAME = "staff_session_id";
 
-export type StaffRole = "nurse" | "supervisor" | "guest";
+export type StaffRole = "nurse" | "supervisor" | "guest" | "auditor";
 
 export interface StaffSession {
   accountId: number;
@@ -135,7 +135,7 @@ export async function verifyStaffSession(
       typeof staff.accountId !== "number" ||
       typeof staff.username !== "string" ||
       typeof staff.displayName !== "string" ||
-      !["nurse", "supervisor", "guest"].includes(String(staff.role))
+      !["nurse", "supervisor", "guest", "auditor"].includes(String(staff.role))
     ) {
       return null;
     }
@@ -204,7 +204,7 @@ export function setStaffSessionCookie(
     if (!headersSent) res.cookie(STAFF_COOKIE_NAME, "", { ...cookieOptions, maxAge: -1 });
     return;
   }
-  if (staff.role !== "nurse" && staff.role !== "supervisor" && staff.role !== "guest") return;
+  if (staff.role !== "nurse" && staff.role !== "supervisor" && staff.role !== "guest" && staff.role !== "auditor") return;
   if ("headersSent" in res && res.headersSent) return;
   void createStaffSessionToken({
     accountId: staff.accountId,
@@ -260,7 +260,7 @@ export async function setStaffSessionCookieSync(
     res.cookie(STAFF_COOKIE_NAME, "", { ...cookieOptions, maxAge: -1 });
     return;
   }
-  if (staff.role !== "nurse" && staff.role !== "supervisor" && staff.role !== "guest") return;
+  if (staff.role !== "nurse" && staff.role !== "supervisor" && staff.role !== "guest" && staff.role !== "auditor") return;
   const token = await createStaffSessionToken(
     {
       accountId: staff.accountId,
@@ -285,7 +285,7 @@ export async function setStaffSessionCookieSync(
  *    enforced client-side; server-side writes still require logged-in staff)
  */
 export function staffAccessedFloors(staff: StaffSession): number[] | null {
-  if (staff.role === "supervisor") return null; // all
+  if (staff.role === "supervisor" || staff.role === "auditor") return null; // all
   if (staff.assignedFloorId) return [staff.assignedFloorId];
   return []; // guest / unassigned nurse sees no floor-scoped data for writes
 }

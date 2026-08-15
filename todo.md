@@ -281,3 +281,13 @@
 
 ## Supervisor narrative missing NO ENTRY marker (Aug 15, user report)
 - [x] Every empty shift/area slot in the Supervisor Narrative Report renders the "NO ENTRY" marker; first attempt suppressed it on the first row instead — marker now renders unconditionally on every empty slot; verified all 9 slots show NO ENTRY as supervisor; 119/119 tests, tsc clean
+
+## Draft auto-save + edit history + auditor account (Aug 15)
+- [x] Draft auto-save (localStorage) on supervisor narrative dialog: restore previous text on open, save on change, clear after successful save
+- [x] Draft auto-save on board-level (charge nurse) narrative writer form
+- [x] narrative_history audit table (narrative id, floor, date, period, action create/update/delete, actor, body snapshot, timestamp)
+- [x] Backend: narratives.create/update/delete append to history; narratives.history procedure readable only by auditor role (procedure switched from protectedProcedure to staffReadProcedure after discovery that auditor lacks an OAuth session); staffReadProcedure + staffAccessedFloors updated so auditor resolves as a valid read staff role
+- [x] Staff role enum: add 'auditor' to staff_accounts role; auditor read-only access to reports; auditor cannot write narratives
+- [x] Seed auditor account (auditor/Auditor1234) via same seeding path as other staff
+- [x] Edit History viewer on /report page visible only when staff role === auditor; shows per-narrative change log — verified end-to-end: nurse created a narrative on SKTI Main Session 1, updated it, auditor saw both CREATE and UPDATE rows in the Narrative Edit History table (time/area/period/change/made-by/content columns); test data cleaned from Supabase after verification
+- [x] Tests + tsc: 119/119 vitest passing, tsc clean; checkpoint saved (auto-publish); push GitHub; deliver

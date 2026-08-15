@@ -28,6 +28,7 @@ export default function StaffBar() {
   const staff = me.data ?? null;
   const isGuest = staff?.role === "guest";
   const isNurse = staff?.role === "nurse";
+  const isAuditor = staff?.role === "auditor";
 
   if (!staff) {
     return (
@@ -51,11 +52,13 @@ export default function StaffBar() {
           className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full ${
             staff.role === "supervisor"
               ? "bg-[#9E1F2B] text-white"
-              : "bg-[#2E9A9B]/15 text-[#1d6b6c]"
+              : isAuditor
+                ? "bg-[#B8860B]/15 text-[#8a6408]"
+                : "bg-[#2E9A9B]/15 text-[#1d6b6c]"
           }`}
         >
           <ShieldCheck className="w-3 h-3" />
-          {isNurse ? `Nurse · ${staff.displayName}` : "SKTI Supervisor"}
+          {isNurse ? `Nurse · ${staff.displayName}` : isAuditor ? "Auditor" : "SKTI Supervisor"}
         </span>
       )}
       <Button

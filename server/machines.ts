@@ -1,6 +1,6 @@
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { getDb } from "./db";
-import { floors, machines, narrativeReports, sessions, waitingList } from "../drizzle/schema";
+import { floors, machines, narrativeHistory, narrativeReports, sessions, waitingList } from "../drizzle/schema";
 
 export type MachineStatus = "active" | "backup" | "repair";
 
@@ -586,7 +586,37 @@ export async function createNarrative(input: {
       body,
     })
     .returning({ id: narrativeReports.id });
+
+  // Audit trail: who created the narrative and when.
+  await db.insert(narrativeHistory).values({
+    narrativeId: result[0].id,
+    floorId: input.floorId,
+    reportDate: input.reportDate,
+    periodKey: input.periodKey,
+    action: "create",
+    actor: input.author,
+    actorRole: input.authorRole ?? null,
+    bodySnapshot: body,
+  });
+
   return result[0];
+}
+
+export async function getNarrativeById(id: number, floorId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const rows = await db
+    .select()
+    .from(narrativeReports)
+    .where(and(eq(narrativeReports.id, id), eq(narrativeReports.floorId, floorId)))
+    .limit(1);
+  return rows[0];
+}
+
+export async function updateNarrativeBody(id: number, body: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(narrativeReports).set({ body }).where(eq(narrativeReports.id, id));
 }
 
 export async function listNarratives(input: { floorId: number; reportDate: string }) {
@@ -599,12 +629,70 @@ export async function listNarratives(input: { floorId: number; reportDate: strin
     .orderBy(narrativeReports.updatedAt);
 }
 
-export async function deleteNarrative(input: { id: number; floorId: number }) {
+export async function deleteNarrative(input: { id: number; floorId: number; actor?: string; actorRole?: string | null }) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
+  // Snapshot the narrative before deleting so the audit trail retains it.
+  const rows = await db
+    .select()
+    .from(narrativeReports)
+    .where(and(eq(narrativeReports.id, input.id), eq(narrativeReports.floorId, input.floorId)));
   await db
     .delete(narrativeReports)
     .where(and(eq(narrativeReports.id, input.id), eq(narrativeReports.floorId, input.floorId)));
+  const row = rows[0];
+  if (row) {
+    await db.insert(narrativeHistory).values({
+      narrativeId: row.id,
+      floorId: row.floorId,
+      reportDate: row.reportDate,
+      periodKey: row.periodKey,
+      action: "delete",
+      actor: input.actor ?? "(unknown)",
+      actorRole: input.actorRole ?? null,
+      bodySnapshot: row.body,
+    });
+  }
+}
+
+/** Audit row for a narrative edit (the router writes the new body itself). */
+export async function logNarrativeUpdate(input: {
+  narrativeId: number;
+  floorId: number;
+  reportDate: string;
+  periodKey: string;
+  actor: string;
+  actorRole: string | null;
+  body: string;
+}) {
+  const db = await getDb();
+  if (!db) return;
+  await db.insert(narrativeHistory).values({
+    narrativeId: input.narrativeId,
+    floorId: input.floorId,
+    reportDate: input.reportDate,
+    periodKey: input.periodKey,
+    action: "update",
+    actor: input.actor,
+    actorRole: input.actorRole,
+    bodySnapshot: input.body,
+  });
+}
+
+/** Edit-history rows for the auditor. Optional floor/date filter. */
+export async function listNarrativeHistory(input: { reportDate?: string; floorId?: number }) {
+  const db = await getDb();
+  if (!db) return [];
+  if (input.floorId !== undefined && input.reportDate) {
+    return db
+      .select()
+      .from(narrativeHistory)
+      .where(
+        and(eq(narrativeHistory.floorId, input.floorId), eq(narrativeHistory.reportDate, input.reportDate))
+      )
+      .orderBy(narrativeHistory.createdAt);
+  }
+  return db.select().from(narrativeHistory).orderBy(narrativeHistory.createdAt);
 }
 
 /**

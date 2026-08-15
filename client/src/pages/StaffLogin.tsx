@@ -74,7 +74,7 @@ export default function StaffLogin() {
             <CardHeader>
               <CardTitle className="font-serif text-xl text-[#1F2A52]">Nurse / Supervisor Sign In</CardTitle>
               <CardDescription>
-                RDU nurses see their assigned board; the SKTI Supervisor sees all boards.
+                RDU nurses see their assigned board; the SKTI Supervisor sees all boards; the auditor reviews the edit history.
               </CardDescription>
             </CardHeader>
             <form onSubmit={submit}>
@@ -158,7 +158,7 @@ export default function StaffLogin() {
               <CardFooter className="flex-col gap-3 border-t border-[#1F2A52]/10 pt-4">
                 <p className="text-xs text-[#4a4a45] leading-relaxed">
                   Guests can view machine occupancy, waiting lists, and nurse assignments on every board. Signing in as
-                  a nurse lets you manage your assigned board; the SKTI Supervisor manages all boards.
+                  a nurse lets you manage your assigned board; the SKTI Supervisor manages all boards; the auditor reviews the edit history.
                 </p>
                 <Button variant="ghost" className="text-[#2E9A9B] hover:text-[#2E9A9B]" onClick={() => startLogin()}>
                   Owner / Admin sign in

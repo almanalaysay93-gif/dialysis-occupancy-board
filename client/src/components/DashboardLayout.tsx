@@ -273,11 +273,13 @@ function DashboardLayoutContent({
                 <p className="text-[11px] text-muted-foreground truncate mt-1.5">
                   {staff?.role === "supervisor"
                     ? "SKTI Supervisor"
-                    : staff?.role === "nurse"
-                      ? `Nurse · ${assignedFloor?.label ?? "assigned board"}`
-                      : staff?.role === "guest"
-                        ? "Guest · view only"
-                        : "Clinical Staff"}
+                    : staff?.role === "auditor"
+                      ? "Auditor · edit history"
+                      : staff?.role === "nurse"
+                        ? `Nurse · ${assignedFloor?.label ?? "assigned board"}`
+                        : staff?.role === "guest"
+                          ? "Guest · view only"
+                          : "Clinical Staff"}
                 </p>
               </div>
               {staff ? (
