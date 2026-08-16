@@ -480,11 +480,11 @@
 - [x] Verify classes served in compiled modules, tests (141) + tsc pass, checkpoint 13b1e83 auto-published, pushed to GitHub (13b1e83)
 
 ## /report still takes ~15 seconds to load (user report Aug 16, after warmup fixes)
-- [ ] Profile live /report end-to-end: measure each tRPC request on the production deployment and find where the 15s is spent (cold start? serverless boot? sequential queries? dashboard layout blockers?)
-- [ ] Apply targeted fix for the real bottleneck
-- [ ] Verify load time, tests + tsc, checkpoint + push + deliver
+- [x] Profile live /report end-to-end: production measurements showed a fixed ~3s per-HTTP-request overhead (serverless cold path + sandbox-to-prod network) plus ~1.3s per pooler round trip; the page's 4-5 requests compounded to 10-15s
+- [x] Apply targeted fix: supervisor /report now uses one endOfDay.reportPage call (staff session + all-board summaries/narratives + end-of-month in one response), and monthReport loads all tables in a single parallel batch instead of per-floor loops
+- [x] Verify load time on production: reportPage median 2.4s warm (staff.me 1.2s + reportPage 2.4s ≈ 3s perceived load, down from 15s), 145/145 tests, tsc clean, checkpoint + push + deliver
 
 ## /report 15s — round 3: round-trip reduction (root cause confirmed Aug 16)
-- [ ] Root cause confirmed: each DB round trip to the Supabase pooler costs ~1.3s even on a warm connection (raw pool ping test 8 runs, 1.24-1.34s each). /report fires 8+ parallel queries => 10-15s. Warmup/retry fixes cannot fix a per-query fixed cost.
-- [ ] Reduce /report round trips: bundle per-board data into fewer bulk endpoints (board summary + narrative + waiting in single calls where possible) and/or add short-TTL in-memory caching for read-only report data (lru-cache, ~10s TTL)
-- [ ] Verify load time on production /report (<5s), tests + tsc, checkpoint + push + deliver
+- [x] Root cause confirmed: each DB round trip to the Supabase pooler costs ~1.3s even on a warm connection (raw pool ping test 8 runs, 1.24-1.34s each); the fixed ~3s per-request overhead is unavoidable, so the only effective fix is fewer requests
+- [x] Round trips reduced: /report supervisor path now fires just 2 requests total (staff.me + reportPage) carrying the full page payload; monthReport (the ~8s outlier) rewritten as one parallel batch of 5 queries with in-memory per-floor splitting
+- [x] Verify load time on production /report (<5s): reportPage median 2.4s warm, monthly 1.9s, bulkSummary 2.0s; 145/145 tests, tsc clean, checkpoint + push + deliver
