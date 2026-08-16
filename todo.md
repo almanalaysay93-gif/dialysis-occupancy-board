@@ -399,5 +399,12 @@
 - [x] Checkpoint 246675ff saved (auto-published); push pending
 
 ## Month print excludes daily report (Aug 16)
-- [ ] Ensure "Export Month PDF" print output contains only the End of Month report — the daily End of Day Report must not print in the same PDF
-- [ ] Verify print output (print CSS / print-mode toggle works in month-only mode), checkpoint, push GitHub, deliver
+- [x] Ensure "Export Month PDF" print output contains only the End of Month report — the daily End of Day Report must not print in the same PDF
+- [x] Verify print output (print CSS / print-mode toggle works in month-only mode), checkpoint c90aafd3 saved, 130/130 tests pass; push pending
+
+## Cinematic footer animation (user request Aug 16)
+- [x] Install GSAP + ScrollTrigger (client-only, dynamic import via ensureGSAP(); GSAP registered once with ScrollTrigger and React context cleanup)
+- [x] Build adapted CinematicFooter component: theme-adaptive glass pills (.footer-glass-pill using shadcn oklch tokens), heartbeat pulse on the ❤ badge, breathing aurora backdrop, grid backdrop, scroll-reveal parallax (giant SPMCKTI background text + staggered content reveal), tilted 40s marquee strip
+- [x] Marquee content adapted to the dialysis board: Real-Time Machine Tracking / Urgent Case Response / Clean-Dirty Isolation / Nurse Floor Assignments / Daily & Monthly Reporting; CTAs point to Occupancy Board, Rooms & Floors, Staff Sign In, End of Day Report, Backup & Repair; "Crafted with ❤ for SPMCKTI" badge
+- [x] Mount footer below the board content in Home.tsx (inside DashboardLayout); GSAP registration is scroll-safe and print-safe
+- [x] Verify visuals: desktop + mobile screenshots, browser scroll check showing heading, pills, heartbeat badge, back-to-top, giant background text, marquee; tsc clean, 130/130 tests pass; checkpoint + push + deliver

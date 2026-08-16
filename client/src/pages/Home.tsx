@@ -12,6 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useCanWrite } from "@/hooks/useCanWrite";
 import { trpc } from "@/lib/trpc";
 import { Activity, Plus } from "lucide-react";
+import { CinematicFooter } from "@/components/CinematicFooter";
 import { useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 import type { MachineWithSession } from "../../../server/machines";
@@ -430,5 +431,10 @@ export function OccupancyBoard({ floorId }: { floorId?: number }) {
 }
 
 export default function Home() {
-  return <DashboardLayout><OccupancyBoardContent /></DashboardLayout>;
+  return (
+    <DashboardLayout>
+      <OccupancyBoardContent />
+      <CinematicFooter />
+    </DashboardLayout>
+  );
 }
