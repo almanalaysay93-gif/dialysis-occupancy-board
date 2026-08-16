@@ -61,14 +61,14 @@ export default function StaffLogin() {
   return (
     <div className="min-h-screen bg-[#f5f4ef] flex items-center justify-center p-4">
       <div className="w-full max-w-md space-y-6">
-        <div className="glass-deep relative overflow-hidden border border-[#1F2A52]/15 px-6 py-5 text-center">
+        <div className="glass-deep relative overflow-hidden border border-[#1F2A52]/15 px-8 py-6 text-center">
           <img
             src="/manus-storage/skti-building_5c90942a.jpg"
             alt="SPMC Kidney & Transplant Institute building"
             className="absolute inset-0 h-full w-full object-cover object-top opacity-[0.16]"
           />
-          <div className="relative">
-            <div className="glass-icon mx-auto mb-3 inline-flex h-14 w-14 p-2.5">
+          <div className="relative flex flex-col items-center gap-2.5">
+            <div className="glass-icon inline-flex h-24 w-24 p-3">
               <img
                 src="/manus-storage/skti-logo_1a83b735.jpg"
                 alt="SKTI seal"
@@ -76,12 +76,7 @@ export default function StaffLogin() {
               />
             </div>
             <h1 className="font-serif text-3xl text-[#1F2A52]">SPMCKTI Occupancy Board</h1>
-            <p className="text-sm text-[#4a4a45] mt-1">SPMC Kidney &amp; Transplant Institute</p>
-            <img
-              src="/manus-storage/skti-hd-machines_584d4e00.jpg"
-              alt="Hemodialysis machines in the SKTI unit"
-              className="glass-photo mx-auto mt-4 h-24 w-40 rounded-md object-cover"
-            />
+            <p className="text-sm text-[#4a4a45]">SPMC Kidney &amp; Transplant Institute</p>
           </div>
         </div>
 

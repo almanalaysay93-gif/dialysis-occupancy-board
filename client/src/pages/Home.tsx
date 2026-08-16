@@ -184,11 +184,6 @@ export function OccupancyBoardContent({ floorId }: { floorId?: number }) {
                 Hemodialysis Unit · SKTI Main Hallway
               </p>
             </div>
-            <img
-              src="/manus-storage/skti-hd-machines_584d4e00.jpg"
-              alt="Hemodialysis machines lined up in the SKTI unit"
-              className="glass-icon glass-photo ml-auto hidden h-12 w-24 shrink-0 rounded-md object-cover sm:block"
-            />
           </div>
         </section>
         {/* Editorial masthead */}

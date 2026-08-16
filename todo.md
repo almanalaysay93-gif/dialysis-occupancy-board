@@ -352,3 +352,10 @@
 - [x] Integrate building image into site identity: frosted backdrop of the institute banner on every board (Home.tsx) and the hero card on the staff login page, with the SKTI seal in a glass disc
 - [x] Integrate HD machines image as a glass-framed vignette on the board banner and the login hero
 - [x] Verify visuals (6-page screenshots), 128/128 tests + tsc pass, checkpoint saved (auto-publish)
+
+## Login page refinement (user request, Aug 16 — /buildme)
+- [ ] Enlarge the SKTI seal/logo on the staff login hero card
+- [ ] Remove blank space: tighten padding around hero imagery
+- [ ] Remove the HD machines photo from the login hero
+- [ ] Also adjust the board banner vignette (remove HD machines photo there too)
+- [ ] Verify visuals, checkpoint, push GitHub, deliver
