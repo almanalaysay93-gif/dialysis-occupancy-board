@@ -71,7 +71,7 @@ export default function NurseAssignmentsPanel({ floorId }: { floorId: number }) 
   const total = rows?.length ?? 0;
 
   return (
-    <section className="mt-8 border border-[#1F2A52]/80 bg-[#FBFCFD]">
+    <section className="glass-panel mt-8 border border-[#1F2A52]/80">
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-[#D4DFE5] px-5 py-4">
         <div className="flex items-center gap-3">
           <Activity className="h-5 w-5 text-[#2E9A9B]" />

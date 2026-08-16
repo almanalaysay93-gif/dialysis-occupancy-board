@@ -61,16 +61,32 @@ export default function StaffLogin() {
   return (
     <div className="min-h-screen bg-[#f5f4ef] flex items-center justify-center p-4">
       <div className="w-full max-w-md space-y-6">
-        <div className="text-center">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-[#1F2A52] text-[#f5f4ef] mb-3">
-            <Activity className="w-7 h-7" strokeWidth={1.5} />
+        <div className="glass-deep relative overflow-hidden border border-[#1F2A52]/15 px-6 py-5 text-center">
+          <img
+            src="/manus-storage/skti-building_5c90942a.jpg"
+            alt="SPMC Kidney & Transplant Institute building"
+            className="absolute inset-0 h-full w-full object-cover object-top opacity-[0.16]"
+          />
+          <div className="relative">
+            <div className="glass-icon mx-auto mb-3 inline-flex h-14 w-14 p-2.5">
+              <img
+                src="/manus-storage/skti-logo_1a83b735.jpg"
+                alt="SKTI seal"
+                className="h-full w-full rounded-full object-cover"
+              />
+            </div>
+            <h1 className="font-serif text-3xl text-[#1F2A52]">SPMCKTI Occupancy Board</h1>
+            <p className="text-sm text-[#4a4a45] mt-1">SPMC Kidney &amp; Transplant Institute</p>
+            <img
+              src="/manus-storage/skti-hd-machines_584d4e00.jpg"
+              alt="Hemodialysis machines in the SKTI unit"
+              className="glass-photo mx-auto mt-4 h-24 w-40 rounded-md object-cover"
+            />
           </div>
-          <h1 className="font-serif text-3xl text-[#1F2A52]">SPMCKTI Occupancy Board</h1>
-          <p className="text-sm text-[#4a4a45] mt-1">SPMC Kidney &amp; Transplant Institute</p>
         </div>
 
         {mode === "staff" ? (
-          <Card className="border-[#1F2A52]/15 shadow-sm">
+          <Card className="glass-deep border-[#1F2A52]/15 shadow-sm">
             <CardHeader>
               <CardTitle className="font-serif text-xl text-[#1F2A52]">Nurse / Supervisor Sign In</CardTitle>
               <CardDescription>
@@ -133,7 +149,7 @@ export default function StaffLogin() {
           </Card>
         ) : (
           <div className="space-y-3">
-            <Card className="border-[#1F2A52]/15 shadow-sm">
+            <Card className="glass-deep border-[#1F2A52]/15 shadow-sm">
               <CardHeader>
                 <CardTitle className="font-serif text-xl text-[#1F2A52]">Welcome</CardTitle>
                 <CardDescription>Choose how you'd like to view the board.</CardDescription>

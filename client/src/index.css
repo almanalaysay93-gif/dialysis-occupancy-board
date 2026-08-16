@@ -123,6 +123,75 @@
   font-weight: 500;
 }
 
+/* Glassmorphism — frosted glass surfaces for panels, cards, and tables.
+   Translucent navy-tinted glass with backdrop blur; machine tile status
+   colors remain solid and fully readable on top of the glass. */
+.glass-panel {
+  background: oklch(0.99 0.003 220 / 0.55);
+  backdrop-filter: blur(14px) saturate(1.15);
+  -webkit-backdrop-filter: blur(14px) saturate(1.15);
+  border: 1px solid oklch(0.99 0.003 220 / 0.65);
+  box-shadow:
+    0 4px 24px -6px oklch(0.275 0.062 262 / 0.12),
+    inset 0 1px 0 oklch(0.99 0.003 220 / 0.8);
+  border-radius: 0.625rem;
+}
+.glass-deep {
+  background: oklch(0.97 0.01 220 / 0.72);
+  backdrop-filter: blur(18px) saturate(1.25);
+  -webkit-backdrop-filter: blur(18px) saturate(1.25);
+  border: 1px solid oklch(0.99 0.003 220 / 0.6);
+  box-shadow:
+    0 8px 32px -8px oklch(0.275 0.062 262 / 0.18),
+    inset 0 1px 0 oklch(0.99 0.003 220 / 0.85);
+  border-radius: 0.625rem;
+}
+/* Glass table: frosted surface with translucent header strip. */
+.glass-table {
+  border-collapse: separate;
+  border-spacing: 0;
+  background: oklch(0.99 0.003 220 / 0.5);
+  backdrop-filter: blur(12px) saturate(1.1);
+  -webkit-backdrop-filter: blur(12px) saturate(1.1);
+  border: 1px solid oklch(0.99 0.003 220 / 0.6);
+  box-shadow:
+    0 4px 20px -6px oklch(0.275 0.062 262 / 0.1),
+    inset 0 1px 0 oklch(0.99 0.003 220 / 0.75);
+  border-radius: 0.5rem;
+  overflow: hidden;
+}
+.glass-table thead th {
+  background: oklch(0.275 0.062 262 / 0.13);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-bottom: 1px solid oklch(0.63 0.085 195 / 0.35);
+}
+.glass-table tbody tr:hover td {
+  background: oklch(0.63 0.085 195 / 0.08);
+}
+/* Glass icons: icons sitting on a frosted disc. */
+.glass-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: oklch(0.99 0.003 220 / 0.6);
+  backdrop-filter: blur(10px) saturate(1.1);
+  -webkit-backdrop-filter: blur(10px) saturate(1.1);
+  border: 1px solid oklch(0.99 0.003 220 / 0.7);
+  box-shadow:
+    0 2px 10px -3px oklch(0.275 0.062 262 / 0.15),
+    inset 0 1px 0 oklch(0.99 0.003 220 / 0.8);
+  border-radius: 9999px;
+}
+/* Glass photo: a photograph in a frosted frame. */
+.glass-photo {
+  border: 1px solid oklch(0.99 0.003 220 / 0.75);
+  box-shadow:
+    0 4px 16px -4px oklch(0.275 0.062 262 / 0.2),
+    inset 0 0 0 4px oklch(0.99 0.003 220 / 0.55),
+    inset 0 1px 0 oklch(0.99 0.003 220 / 0.8);
+}
+
 /* Machine tile states */
 .tile-vacant {
   background: oklch(0.972 0.006 230);

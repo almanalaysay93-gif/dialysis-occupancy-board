@@ -344,3 +344,11 @@
 - [x] Month-only print mode: "Export Month PDF" hides the daily report via a print:screen-only wrapper so the PDF contains only the End of Month report (plain Print still exports the daily report)
 - [x] Performance fix during verification: replaced the per-day machineDayMetrics N+1 loop (~87 s) with a bulk machineRangeMetrics computation (~5 s)
 - [x] Verify end-to-end: supervisor sees month picker + button, monthly data loads, print CSS correct; 128/128 tests pass, tsc clean; checkpoint, push GitHub, deliver
+
+## Glassmorphism theme + imagery (user request, Aug 16 — /buildme)
+- [ ] Upload building image (images.jpg) and HD machines image to webdev static storage and get URLs
+- [ ] Add global glassmorphism utilities to index.css (.glass-panel, .glass-table, glass icons) consistent with SKTI palette
+- [ ] Convert report tables/cards/panels and waiting-list tables to glassmorphism style (machine tile status colors preserved)
+- [ ] Integrate building image into site identity (login page + main board hero/banner)
+- [ ] Integrate HD machines image as subtle background visual on floor boards
+- [ ] Verify visuals (screenshots, all pages), tests + tsc pass, checkpoint, push GitHub, deliver

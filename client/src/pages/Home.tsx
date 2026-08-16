@@ -160,6 +160,37 @@ export function OccupancyBoardContent({ floorId }: { floorId?: number }) {
 
   return (
     <div className="w-full px-4 sm:px-6 py-6">
+        {/* Frosted-glass institute banner — SKTI building imagery */}
+        <section className="glass-deep relative mb-4 overflow-hidden border border-[#1F2A52]/15">
+          <img
+            src="/manus-storage/skti-building_5c90942a.jpg"
+            alt="SPMC Kidney & Transplant Institute building"
+            className="absolute inset-0 h-full w-full object-cover object-top opacity-[0.14]"
+          />
+          <div className="absolute inset-0 bg-gradient-to-r from-[#F7F9FB] via-[#F7F9FB]/70 to-transparent" />
+          <div className="relative flex items-center gap-4 px-5 py-3.5 sm:px-6">
+            <span className="glass-icon h-14 w-14 shrink-0 p-2 sm:h-16 sm:w-16">
+              <img
+                src="/manus-storage/skti-logo_1a83b735.jpg"
+                alt="SKTI seal"
+                className="h-full w-full rounded-full object-cover"
+              />
+            </span>
+            <div className="min-w-0">
+              <p className="font-display text-sm font-semibold tracking-wide text-[#1F2A52] sm:text-base">
+                SPMC Kidney &amp; Transplant Institute
+              </p>
+              <p className="smallcaps-detail mt-0.5 text-[10px] text-[#7684A0] sm:text-[11px]">
+                Hemodialysis Unit · SKTI Main Hallway
+              </p>
+            </div>
+            <img
+              src="/manus-storage/skti-hd-machines_584d4e00.jpg"
+              alt="Hemodialysis machines lined up in the SKTI unit"
+              className="glass-icon glass-photo ml-auto hidden h-12 w-24 shrink-0 rounded-md object-cover sm:block"
+            />
+          </div>
+        </section>
         {/* Editorial masthead */}
         <header className="flex flex-col gap-2">
           <div className="flex items-center justify-between border-b border-[#1F2A52]/80 pb-3">
@@ -259,7 +290,7 @@ export function OccupancyBoardContent({ floorId }: { floorId?: number }) {
 
         {/* Auth gate for actions */}
         {!canWrite && (
-          <div className="mt-5 flex items-center justify-between border border-[#D4DFE5] bg-[#E8EFF1] px-4 py-3 sm:px-5">
+          <div className="glass-panel mt-5 flex items-center justify-between px-4 py-3 sm:px-5">
             <div className="flex items-center gap-3">
               <Activity className="h-5 w-5 text-[#7684A0]" />
               <p className="text-sm text-[#556680]">

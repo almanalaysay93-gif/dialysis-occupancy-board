@@ -111,7 +111,7 @@ function ReportBoardSection({
   if (isLoading) return <Skeleton className="h-72" />;
   if (error) {
     return (
-      <Card className="border-[#9E1F2B]/40 bg-[#FBF5F5]">
+      <Card className="glass-panel border-[#9E1F2B]/40 bg-[#FBF5F5]/80">
         <CardContent className="flex items-center justify-between gap-4 py-5">
           <p className="text-sm text-[#9E1F2B]">
             Could not load this board: {error.message}
@@ -181,7 +181,7 @@ export default function EndOfDayReport() {
     <DashboardLayout>
       {isGuest ? (
         <div className="mx-auto flex max-w-6xl flex-col items-center gap-3 border border-dashed border-[#D4DFE5] bg-[#F4F7F8] px-6 py-16 text-center">
-          <ClipboardList className="h-8 w-8 text-[#7684A0]" />
+          <span className="glass-icon h-12 w-12 p-2.5"><ClipboardList className="h-6 w-6 text-[#7684A0]" /></span>
           <p className="font-serif-light text-lg text-[#556680]">
             End of Day reports are reserved for clinical staff.
           </p>
@@ -279,7 +279,7 @@ export default function EndOfDayReport() {
         )}
 
         {!isLoading && !isMulti && singleQuery.error && (
-          <Card className="mt-8 border-[#9E1F2B]/40 bg-[#FBF5F5]">
+          <Card className="glass-panel mt-8 border-[#9E1F2B]/40 bg-[#FBF5F5]/80">
             <CardContent className="flex items-center justify-between gap-4 py-5">
               <p className="text-sm text-[#9E1F2B]">
                 The report could not be loaded: {singleQuery.error.message}
@@ -296,9 +296,9 @@ export default function EndOfDayReport() {
         )}
 
         {!isLoading && !isMulti && !singleQuery.data && (
-          <Card className="mt-8 border-[#D4DFE5]">
+          <Card className="glass-panel mt-8 border-[#D4DFE5]/70">
             <CardContent className="flex flex-col items-center gap-3 py-10">
-              <Dumbbell className="h-8 w-8 text-[#7684A0]" />
+              <span className="glass-icon h-12 w-12 p-2.5"><Dumbbell className="h-6 w-6 text-[#7684A0]" /></span>
               <p className="font-serif-light text-lg italic text-[#556680]">
                 No sessions were concluded on {dateLabel} — the report stays
                 empty until a treatment ends.
@@ -451,7 +451,7 @@ function SupervisorNarrativeSection({
   }, [listQueries.map(q => q.data)]);
 
   return (
-    <Card className="mt-5 border border-[#1F2A52]/15 bg-[#1F2A52]/[0.03] print:break-inside-avoid">
+    <Card className="glass-deep mt-5 print:bg-white print:backdrop-none print:shadow-none print:border print:border-[#D4DFE5] print:break-inside-avoid">
       <CardHeader className="border-b border-[#D4DFE5]/70 pb-4">
         <CardTitle className="font-display text-base text-[#1F2A52]">Supervisor Narrative Report</CardTitle>
         <p className="text-xs text-[#556680]">
@@ -787,7 +787,7 @@ function ReportBoardCard({ board }: { board: ReportBoard }) {
   const waitingTotal = board.waitingAdds.total;
 
   return (
-    <Card className="border border-[#1F2A52]/15 shadow-sm print:break-inside-avoid">
+    <Card className="glass-panel print:bg-white print:backdrop-none print:shadow-none print:border print:border-[#D4DFE5] print:break-inside-avoid">
       <CardHeader className="border-b border-[#D4DFE5]/70 pb-4">
         <div className="flex items-center justify-between gap-3">
           <CardTitle className="font-display text-xl text-[#1F2A52]">
@@ -886,7 +886,7 @@ function ReportBoardCard({ board }: { board: ReportBoard }) {
               Machine time · pause &amp; idle minutes
             </p>
             <div className="mt-2 max-h-56 overflow-y-auto print:max-h-none">
-              <table className="w-full text-xs">
+              <table className="glass-table w-full text-xs">
                 <thead>
                   <tr className="text-left text-[10px] uppercase tracking-[0.12em] text-[#7684A0]">
                     <th className="py-1.5 pr-2 font-medium">Machine</th>
@@ -1040,7 +1040,7 @@ export function NarrativeReport({
   if (!authorName && openAuthor === "") setOpenAuthor("");
 
   return (
-    <Card className="border border-[#1F2A52]/15 shadow-sm print:break-inside-avoid">
+    <Card className="glass-panel print:bg-white print:backdrop-none print:shadow-none print:border print:border-[#D4DFE5] print:break-inside-avoid">
       <CardHeader className="border-b border-[#D4DFE5]/70 pb-4">
         <div className="flex items-center gap-2">
           <PenLine className="h-4 w-4 text-[#2E9A9B]" />
@@ -1333,7 +1333,7 @@ function NarrativeHistorySection({
     key;
 
   return (
-    <Card className="mt-5 border border-[#1F2A52]/15 bg-[#1F2A52]/[0.03] print:break-inside-avoid">
+    <Card className="glass-deep mt-5 print:bg-white print:backdrop-none print:shadow-none print:border print:border-[#D4DFE5] print:break-inside-avoid">
       <CardHeader className="border-b border-[#D4DFE5]/70 pb-4">
         <CardTitle className="font-display text-base text-[#1F2A52]">Narrative Edit History</CardTitle>
         <p className="text-xs text-[#556680]">
@@ -1354,7 +1354,7 @@ function NarrativeHistorySection({
           </p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-xs">
+            <table className="glass-table w-full text-xs">
               <thead>
                 <tr className="border-b border-[#D4DFE5] text-left text-[10px] uppercase tracking-[0.12em] text-[#7684A0]">
                   <th className="py-2 pr-3">Time</th>
@@ -1532,7 +1532,7 @@ function PrintableMonthReport({
             {board.floorName ?? `Floor ${board.floorId}`}
           </h3>
 
-          <table className="w-full border-collapse text-sm">
+          <table className="glass-table w-full text-sm">
             <thead>
               <tr className="border-b-2 border-[#1F2A52] text-left text-[#1F2A52]">
                 <th className="px-2 py-1.5 font-semibold">Metric</th>
@@ -1594,7 +1594,7 @@ function PrintableMonthReport({
           </table>
 
           <h4 className="mb-2 mt-6 font-semibold text-[#1F2A52]">Daily breakdown</h4>
-          <table className="w-full border-collapse text-sm">
+          <table className="glass-table w-full text-sm">
             <thead>
               <tr className="border-b-2 border-[#1F2A52] text-left text-[#1F2A52]">
                 <th className="px-2 py-1.5 font-semibold">Date</th>

@@ -125,7 +125,7 @@ export default function Urgent() {
         </header>
 
         {!canWrite && (
-          <div className="mt-6 flex items-center justify-between border border-[#D4DFE5] bg-[#E8EFF1] px-5 py-4">
+          <div className="glass-panel mt-6 flex items-center justify-between px-5 py-4">
             <p className="text-sm text-[#556680]">
               Sign in as clinical staff to manage urgent flags.
             </p>
