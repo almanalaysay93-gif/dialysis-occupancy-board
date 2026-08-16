@@ -457,5 +457,9 @@
 - [x] 133/133 tests pass (3 new RBAC tests), tsc clean; verified live as guest on published site: page bottom reached, no Waiting/Nurse/Narrative panels in markdown or DOM; checkpoint fe0362b1 (auto-published) + deliver
 
 ## Remove flow transition from Occupancy Board (user request Aug 16)
-- [ ] Disable the flow/pinning transition on the Occupancy Board so boards stack in one natural scrolling page
-- [ ] Verify layout (desktop), tests + tsc pass, checkpoint + deliver
+- [x] Disabled the flow/pinning transition on the Occupancy Board: FlowArt/FlowSection branch removed from Home.tsx (dead code block deleted, import removed, FlowArt.tsx deleted), boards now stack in one natural scrolling page with gap-8 between floors
+- [x] Verify layout (desktop full-page screenshot of / stacks naturally), tsc clean, 133/133 tests pass; checkpoint 966be6b6 (auto-published) + deliver
+
+## Header Sign out / date overlap fix (mobile, user report Aug 16)
+- [ ] Fix board header: Sign out button overlaps the date on small screens — restructure the header row (wrap to two lines, date below controls)
+- [ ] Verify on 375px mobile viewport, tests + tsc pass, checkpoint + deliver
