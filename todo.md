@@ -445,6 +445,13 @@
 - [x] Verify: browser scroll confirms pinning + 30deg rotation; screenshots of / and /floor/30003 clean; 130/130 tests + tsc pass; checkpoint + deliver
 
 ## Mobile flow-animation fix (user report Aug 16)
-- [ ] Diagnose mobile breakage (pinned FlowArt sections with 100vh+ content overflow on touch; position:fixed pin misbehaves in mobile Safari/Chrome)
-- [ ] Disable the FlowArt pinning/rotation on mobile viewports (fallback to natural stacked scroll), keep flow on desktop
-- [ ] Verify mobile (375px) and desktop both render correctly, tests + tsc pass, checkpoint + deliver
+- [x] Diagnose mobile breakage: fixed-position pin + 30deg rotation misbehaves on touch browsers when slides are taller than the viewport
+- [x] FlowArt now gates the flow behind min-width 1024px (matchMedia listener with cleanup; isMobile in the useGSAP dependency array); mobile falls back to natural stacked scroll, desktop keeps the flow
+- [x] Verify: tsc clean, 130/130 tests pass; mobile 375x812 screenshot stacks naturally; desktop keeps flow; checkpoint 02e6a838 (auto-published) + deliver
+
+## Guest leak re-fix — live site still shows panels (user report Aug 16, screenshot)
+- [ ] Sync working tree with the remote (user pushed newer code in another session) and confirm whether the !isGuest gating exists in the latest HEAD
+- [ ] Determine why the panels render for guests: missing gating in the latest user code, or isGuest deriving wrong (auth cookie not available at render), or gating only in OccupancyBoardContent while user pages bypass it
+- [ ] Frontend fix: ensure Waiting List / Nurse Assignments / Narrative Report panels never render for guests on every entry point (/ main board flow slides, /floor/:id, UrgentCases copy)
+- [ ] Backend fix: server-side guest blocking — the waiting/narrative/nurse read endpoints must return empty/403 for guests regardless of client
+- [ ] Tests + tsc, verify live as guest in browser, checkpoint + deliver

@@ -54,7 +54,7 @@ function WaitingCount({ floorId }: { floorId: number }) {
  * machines are shown and page scope is limited to it.
  */
 export function OccupancyBoardContent({ floorId }: { floorId?: number }) {
-  const { canWrite, isGuest } = useCanWrite();
+  const { canWrite, isClinicalHidden } = useCanWrite();
   const { data, isLoading } = trpc.machines.list.useQuery(undefined, {
     // Cross-device real-time sync: re-sync board state every 5 seconds
     refetchInterval: 5_000,
@@ -258,7 +258,7 @@ export function OccupancyBoardContent({ floorId }: { floorId?: number }) {
                   Isolation
                 </span>
               </div>
-              {waitingFloorId !== undefined && !isGuest && <WaitingCount floorId={waitingFloorId} />}
+              {waitingFloorId !== undefined && !isClinicalHidden && <WaitingCount floorId={waitingFloorId} />}
             </div>
           </div>
         </header>
@@ -392,7 +392,7 @@ export function OccupancyBoardContent({ floorId }: { floorId?: number }) {
                     />
                   </ScrollReveal>
 
-                  {group.id !== null && !isGuest && (
+                  {group.id !== null && !isClinicalHidden && (
                     <div className="mt-6 flex flex-col gap-6">
                       <ScrollReveal yOffset={32}>
                         <WaitingListPanel floorId={group.id} />
@@ -488,14 +488,14 @@ export function OccupancyBoardContent({ floorId }: { floorId?: number }) {
 
         {/* Per-board waiting list (visible on each floor's board;
             in flow mode these are rendered inside each slide instead) */}
-        {!flowEnabled && waitingFloorId !== undefined && !isGuest && (
+        {!flowEnabled && waitingFloorId !== undefined && !isClinicalHidden && (
           <div className="mt-8">
           <ScrollReveal yOffset={32}>
             <WaitingListPanel floorId={waitingFloorId} />
           </ScrollReveal>
           </div>
         )}
-        {!flowEnabled && waitingFloorId !== undefined && !isGuest && (
+        {!flowEnabled && waitingFloorId !== undefined && !isClinicalHidden && (
           <div className="mt-8">
           <ScrollReveal yOffset={32}>
             <NurseAssignmentsPanel floorId={waitingFloorId} />
@@ -506,7 +506,7 @@ export function OccupancyBoardContent({ floorId }: { floorId?: number }) {
         {/* Charge nurse narrative report at the bottom of the board —
             written on the board during the shift; the End of Day Report
             reflects it read-only. Staff only — hidden from guests. */}
-        {!flowEnabled && waitingFloorId !== undefined && !isGuest && (
+        {!flowEnabled && waitingFloorId !== undefined && !isClinicalHidden && (
           <div className="mt-10">
           <ScrollReveal yOffset={32}>
           <NarrativeReport

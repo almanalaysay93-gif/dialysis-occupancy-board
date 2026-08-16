@@ -569,3 +569,74 @@ describe("waiting.nurseAssignments", () => {
     expect(result).toHaveLength(0);
   });
 });
+
+describe("guest viewers never receive clinical panel data", () => {
+  function guestContext(): TrpcContext {
+    return {
+      user: null,
+      req: { protocol: "https", headers: {} } as TrpcContext["req"],
+      res: {} as TrpcContext["res"],
+    };
+  }
+
+  it("waiting.list returns an empty queue for guest cookie sessions", async () => {
+    const { resolveStaffSession } = await import("./staffAuth");
+    vi.mocked(resolveStaffSession).mockResolvedValueOnce({
+      accountId: 0,
+      username: "",
+      displayName: "Guest",
+      role: "guest" as never,
+      assignedFloorId: null,
+      fromCookie: true,
+    });
+    vi.mocked(machineDb.listWaiting).mockResolvedValueOnce([
+      { id: 1, patientId: "P-1", floorId: 30001, priority: "veryUrgent", addedBy: "staff", joinedAt: new Date() },
+    ]);
+
+    const caller = appRouter.createCaller(guestContext());
+    const result = await caller.waiting.list({ floorId: 30001 });
+
+    expect(result).toEqual([]);
+    expect(vi.mocked(machineDb.listWaiting)).not.toHaveBeenCalled();
+  });
+
+  it("waiting.urgentRegister returns empty registers for guest cookie sessions", async () => {
+    const { resolveStaffSession } = await import("./staffAuth");
+    vi.mocked(resolveStaffSession).mockResolvedValueOnce({
+      accountId: 0,
+      username: "",
+      displayName: "Guest",
+      role: "guest" as never,
+      assignedFloorId: null,
+      fromCookie: true,
+    });
+    vi.mocked(machineDb.listMachines).mockResolvedValueOnce([]);
+
+    const caller = appRouter.createCaller(guestContext());
+    const result = await caller.waiting.urgentRegister();
+
+    expect(result).toEqual({ urgentSessions: [], veryUrgentWaiting: [] });
+    expect(vi.mocked(machineDb.listMachines)).not.toHaveBeenCalled();
+  });
+
+  it("waiting.nurseAssignments returns an empty roster for guest cookie sessions", async () => {
+    const { resolveStaffSession } = await import("./staffAuth");
+    vi.mocked(resolveStaffSession).mockResolvedValueOnce({
+      accountId: 0,
+      username: "",
+      displayName: "Guest",
+      role: "guest" as never,
+      assignedFloorId: null,
+      fromCookie: true,
+    });
+    vi.mocked(machineDb.listNurseAssignments).mockResolvedValueOnce([
+      { nurse: "Nurse Ana", machineId: 1, machineLabel: "HD-001", patientId: "P-1", displayLabel: null, endsAt: new Date(), durationMinutes: 180, startedAt: new Date(), urgent: false, isolationTag: "clean" },
+    ]);
+
+    const caller = appRouter.createCaller(guestContext());
+    const result = await caller.waiting.nurseAssignments({ floorId: 30001 });
+
+    expect(result).toEqual([]);
+    expect(vi.mocked(machineDb.listNurseAssignments)).not.toHaveBeenCalled();
+  });
+});

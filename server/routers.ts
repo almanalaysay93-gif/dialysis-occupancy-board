@@ -523,16 +523,25 @@ export const appRouter = router({
   }),
 
   waiting: router({
-    /** Waiting patients per floor. Public so every staff device sees the same queue. */
+    /** Waiting patients per floor. Public so every staff device sees the same queue,
+     *  but guest viewers never receive clinical queue data. */
     list: publicProcedure
       .input(z.object({ floorId: z.number().int().positive() }))
-      .query(({ input }) => machineDb.listWaiting({ floorId: input.floorId })),
+      .query(async ({ ctx, input }) => {
+        const staff = await resolveStaffSession(ctx.req);
+        if (staff.role === "guest" && staff.fromCookie) return [];
+        return machineDb.listWaiting({ floorId: input.floorId });
+      }),
     /**
      * Cross-board urgent register: urgent-flagged active sessions from every
      * floor plus very-urgent patients still waiting anywhere. Public so all
      * staff devices see the same consolidated register.
      */
-    urgentRegister: publicProcedure.query(async () => {
+    urgentRegister: publicProcedure.query(async ({ ctx }) => {
+      const staff = await resolveStaffSession(ctx.req);
+      if (staff.role === "guest" && staff.fromCookie) {
+        return { urgentSessions: [], veryUrgentWaiting: [] };
+      }
       const [sessions, waiting, floors] = await Promise.all([
         machineDb.listMachines(),
         machineDb.listWaitingAll(),
@@ -716,7 +725,11 @@ export const appRouter = router({
     /** Active sessions on a floor grouped for the "Nurse Patient Assignments" list. */
     nurseAssignments: publicProcedure
       .input(z.object({ floorId: z.number().int().positive() }))
-      .query(async ({ input }) => {
+      .query(async ({ ctx, input }) => {
+        // Guest viewers are board viewers only — nurse-patient assignments
+        // never leave the server for a guest session.
+        const staff = await resolveStaffSession(ctx.req);
+        if (staff.role === "guest" && staff.fromCookie) return [];
         return machineDb.listNurseAssignments({ floorId: input.floorId });
       }),
   }),
@@ -796,6 +809,9 @@ export const appRouter = router({
       )
       .query(async ({ ctx, input }) => {
         requireFloorAccess(ctx.staff, input.floorId, ctx.user);
+        // Guests are read-only viewers of the boards — clinical narratives
+        // never leave the server for a guest session.
+        if (ctx.staff.role === "guest" && ctx.staff.fromCookie) return [];
         return machineDb.listNarratives({ floorId: input.floorId, reportDate: input.reportDate });
       }),
 

@@ -23,10 +23,17 @@ export function useCanWrite() {
   const role = staff?.role ?? null;
   const isBoardStaff = role === "nurse" || role === "supervisor";
   const isGuestMode = role === "guest" && staff?.fromCookie === true;
+  // Auth state has resolved — until the staff.me query settles, identity is
+  // unknown and clinical panels must stay hidden to avoid a flash of exposure
+  // for guest viewers (especially on slow/mobile connections).
+  const resolved = staff !== undefined;
 
   return {
     canWrite: isBoardStaff || (isAuthenticated && !isGuestMode),
     isGuest: isGuestMode,
+    /** Panels like Waiting/Nurse Assignments/Narrative must require BOTH:
+     *  the auth query has resolved AND the viewer is not a guest. */
+    isClinicalHidden: !resolved || isGuestMode,
     role,
     staff,
   };
