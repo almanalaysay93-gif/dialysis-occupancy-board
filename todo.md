@@ -346,9 +346,9 @@
 - [x] Verify end-to-end: supervisor sees month picker + button, monthly data loads, print CSS correct; 128/128 tests pass, tsc clean; checkpoint, push GitHub, deliver
 
 ## Glassmorphism theme + imagery (user request, Aug 16 — /buildme)
-- [ ] Upload building image (images.jpg) and HD machines image to webdev static storage and get URLs
-- [ ] Add global glassmorphism utilities to index.css (.glass-panel, .glass-table, glass icons) consistent with SKTI palette
-- [ ] Convert report tables/cards/panels and waiting-list tables to glassmorphism style (machine tile status colors preserved)
-- [ ] Integrate building image into site identity (login page + main board hero/banner)
-- [ ] Integrate HD machines image as subtle background visual on floor boards
-- [ ] Verify visuals (screenshots, all pages), tests + tsc pass, checkpoint, push GitHub, deliver
+- [x] Upload building image (images.jpg) and HD machines image to webdev static storage and get URLs
+- [x] Add global glassmorphism utilities to index.css (.glass-panel, .glass-deep, .glass-table, .glass-icon, .glass-photo) consistent with SKTI palette
+- [x] Convert report tables/cards/panels (ReportBoardCard, NarrativeReport, supervisor narrative, edit history, all 4 report tables, error/empty cards) and panels (auth-gate boxes on Home/Rooms/Urgent, Nurse Assignments section) to glassmorphism style (machine tile status colors preserved)
+- [x] Integrate building image into site identity: frosted backdrop of the institute banner on every board (Home.tsx) and the hero card on the staff login page, with the SKTI seal in a glass disc
+- [x] Integrate HD machines image as a glass-framed vignette on the board banner and the login hero
+- [x] Verify visuals (6-page screenshots), 128/128 tests + tsc pass, checkpoint saved (auto-publish)
