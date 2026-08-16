@@ -30,15 +30,15 @@ export async function listMachines(): Promise<MachineWithSession[]> {
   const db = await getDb();
   if (!db) return [];
 
-  const allMachines = await db.select().from(machines).orderBy(machines.floorId, machines.sortOrder, machines.id);
-
-  // Floor boards only show machines with status 'active'. Backup/repair machines
-  // live on the dedicated Backup & Repair board instead.
-
-  const rows = await db
-    .select()
-    .from(sessions)
-    .where(eq(sessions.status, "active"));
+  // Run both queries concurrently: each round-trip to the remote database
+  // carries its own latency (remote pooler), so parallelizing cuts the wait
+  // for the occupancy board roughly in half on cold-ish connections.
+  const [allMachines, rows] = await Promise.all([
+    db.select().from(machines).orderBy(machines.floorId, machines.sortOrder, machines.id),
+    // Floor boards only show machines with status 'active'. Backup/repair
+    // machines live on the dedicated Backup & Repair board instead.
+    db.select().from(sessions).where(eq(sessions.status, "active")),
+  ]);
 
   const byMachine = new Map<number, (typeof rows)[number]>();
   for (const row of rows) byMachine.set(row.machineId, row);
