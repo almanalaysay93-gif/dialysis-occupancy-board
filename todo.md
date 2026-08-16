@@ -474,7 +474,7 @@
 - [x] Increase vertical spacing between Narrative Report sections
 
 ## End of Day Report (/report) loads too slowly (user report Aug 16)
-- [ ] Profile /report: identify slow queries (many parallel narrative.list / waiting / summary queries, no suspense/skeleton grouping)
-- [ ] Optimize: reduce query count, add query-level Suspense or per-section skeletons, cache where possible
-- [ ] Verify load time improvement, tests + tsc, checkpoint + push + deliver (SKTI Main / RDU Annex / RDU Main) and other panel blocks on the Occupancy Board (mt-10/m-14 wrappers, card mt-6, space-y-3, period rows py-2)
+- [x] Profile /report + board: backend queries fast after warmup (~200-500ms); slow first-paint traced to cold DB-pool TLS handshakes (~1s each), sequential machines/sessions queries in listMachines, and no prefetch on /report
+- [x] Optimize: DB pool warmup at boot (min:1, keepAlive), listMachines Promise.all parallel queries (bff93c8), /report mount prefetch (staff.me, listFloors, summary, monthly) (1750a43d)
+- [x] Verify visually (/ and /report render fully), tests 141/141 + tsc clean, checkpoints auto-published, delivered (SKTI Main / RDU Annex / RDU Main) and other panel blocks on the Occupancy Board (mt-10/m-14 wrappers, card mt-6, space-y-3, period rows py-2)
 - [x] Verify classes served in compiled modules, tests (141) + tsc pass, checkpoint 13b1e83 auto-published, pushed to GitHub (13b1e83)
