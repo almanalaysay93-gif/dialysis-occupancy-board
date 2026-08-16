@@ -35,7 +35,7 @@ export default function StaffBar() {
       <div className="flex items-center gap-2 text-xs">
         <span className="text-[#4a4a45]">Viewing as guest</span>
         <Button variant="outline" size="sm" className="h-7 px-2 border-[#1F2A52]/25 text-[#1F2A52]" onClick={() => navigate("/staff-login")}>
-          Sign in as staff
+          <span className="hidden xs:inline">Sign in </span>as staff
         </Button>
       </div>
     );
@@ -67,8 +67,10 @@ export default function StaffBar() {
         className="h-7 px-2 text-[#4a4a45] hover:text-[#9E1F2B]"
         onClick={() => logoutMut.mutate()}
         disabled={logoutMut.isPending}
+        title="Sign out"
       >
-        <LogOut className="w-3 h-3 mr-1" /> Sign out
+        <LogOut className="w-3 h-3 mr-1 sm:mr-1" />
+        <span className="hidden xs:inline">Sign out</span>
       </Button>
     </div>
   );
