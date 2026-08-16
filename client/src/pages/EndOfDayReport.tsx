@@ -197,8 +197,8 @@ export default function EndOfDayReport() {
         </div>
       ) : (
         <>
-        <div className={`w-full px-4 sm:px-6 py-6 ${printMonthOnly ? "print:screen-only" : ""}`}>
-        <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="w-full px-4 sm:px-6 py-6">
+        <div className={`flex flex-wrap items-start justify-between gap-4 ${printMonthOnly ? "print:screen-only" : ""}`}>
           <div>
             <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.22em] text-[#7684A0]">
               <ClipboardList className="h-3.5 w-3.5" />
@@ -257,7 +257,7 @@ export default function EndOfDayReport() {
             )}
           </div>
         </div>
-        <div className={`mt-4 flex items-center gap-3 ${!isSupervisor ? "print:screen-only" : ""}`}>
+        <div className={`mt-4 flex items-center gap-3 ${!isSupervisor || printMonthOnly ? "print:screen-only" : ""}`}>
           <label
             htmlFor="month-picker"
             className="text-xs font-medium uppercase tracking-[0.18em] text-[#7684A0]"
@@ -276,6 +276,9 @@ export default function EndOfDayReport() {
           />
         </div>
 
+        {/* Daily report content — hidden during a month-only print so the
+            End of Month PDF never includes the End of Day Report. */}
+        <div className={printMonthOnly ? "print:screen-only" : ""}>
         {isLoading && (
           <div className="mt-8 grid gap-5 md:grid-cols-2">
             <Skeleton className="h-72" />
@@ -363,6 +366,7 @@ export default function EndOfDayReport() {
           <NarrativeHistorySection floors={floors} date={date} />
         )}
 
+        </div>
         {/* Month export container: invisible on screen, visible only in the print layout. */}
         <div className="hidden print:block mt-12">
           {monthlyLoading ? (

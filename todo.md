@@ -394,6 +394,10 @@
 - [x] Verified sidebar full brand text (screenshots), 130/130 tests pass, tsc clean; checkpoint 08e16cd7 (auto-published); push pending
 
 ## Full institute name in brand (Aug 16)
-- [ ] Sidebar brand subline: change to "SPMC Kidney & Transplant Institute" (wrap naturally, no truncation)
-- [ ] Check other brand spots (header bar, login page, printable reports) for the same incomplete name and fix consistently
-- [ ] Verify visuals, checkpoint, push GitHub, deliver
+- [x] Sidebar brand subline changed to "SPMC Kidney & Transplant Institute" (wraps to two lines, no truncation — verified in screenshot)
+- [x] Checked other brand spots (header bar user block, login page, banner, printable report): they already carry the full institute name — no changes needed
+- [x] Checkpoint 246675ff saved (auto-published); push pending
+
+## Month print excludes daily report (Aug 16)
+- [ ] Ensure "Export Month PDF" print output contains only the End of Month report — the daily End of Day Report must not print in the same PDF
+- [ ] Verify print output (print CSS / print-mode toggle works in month-only mode), checkpoint, push GitHub, deliver
