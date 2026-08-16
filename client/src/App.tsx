@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
@@ -55,6 +55,16 @@ function Router() {
 // - If you want to make theme switchable, pass `switchable` ThemeProvider and use `useTheme` hook
 
 function App() {
+  useEffect(() => {
+    // Eagerly preload all page chunks in background after initial render
+    void import("./pages/FloorBoard");
+    void import("./pages/BackupRepair");
+    void import("./pages/Rooms");
+    void import("./pages/Urgent");
+    void import("./pages/StaffLogin");
+    void import("./pages/EndOfDayReport");
+  }, []);
+
   return (
     <ErrorBoundary>
       <ThemeProvider

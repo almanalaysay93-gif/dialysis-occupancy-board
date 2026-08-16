@@ -21,10 +21,9 @@ export default function StaffLogin() {
 
   const utils = trpc.useUtils();
   const loginMut = trpc.staff.login.useMutation({
-    onSuccess: async data => {
+    onSuccess: data => {
       // Seed the staff.me cache immediately with the login result so the UI
-      // can never stay stuck on an old role (e.g. a stale guest session) —
-      // then refetch once the fresh staff cookie has been written.
+      // responds in 0ms without waiting for a server roundtrip.
       utils.staff.me.setData(undefined, {
         accountId: data.role === "guest" ? 0 : -1,
         username: data.role === "guest" ? "guest" : username.trim(),
@@ -33,23 +32,33 @@ export default function StaffLogin() {
         assignedFloorId: data.assignedFloorId,
         fromCookie: true,
       });
-      await utils.staff.me.invalidate();
       toast.success(`Welcome, ${data.displayName}`, {
         description: data.role === "supervisor" ? "You have access to every board." : "Opening your assigned board.",
       });
       if (data.role === "supervisor") navigate("/");
       else if (data.assignedFloorId) navigate(`/floor/${data.assignedFloorId}`);
       else navigate("/");
+
+      void utils.staff.me.invalidate();
+      void utils.machines.list.invalidate();
     },
     onError: err => toast.error(err.message || "Login failed."),
   });
 
   // Guest mode sets a marker cookie so the server knows the viewer opted into
-  // read-only browsing — that is what blocks writes even for a signed-in owner.
+  // read-only browsing.
   const guestMut = trpc.staff.guest.useMutation({
-    onSuccess: async () => {
-      await utils.staff.me.invalidate();
+    onSuccess: () => {
+      utils.staff.me.setData(undefined, {
+        accountId: 0,
+        username: "guest",
+        displayName: "Guest",
+        role: "guest",
+        assignedFloorId: null,
+        fromCookie: true,
+      });
       navigate("/");
+      void utils.staff.me.invalidate();
     },
     onError: err => toast.error(err.message || "Could not enter guest mode."),
   });
