@@ -6,6 +6,7 @@ import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
 import { registerStorageProxy } from "./storageProxy";
 import { appRouter } from "../routers";
+import { warmDb } from "../db";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 
@@ -61,6 +62,10 @@ async function startServer() {
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);
   });
+
+  // Warm up the database connection pool eagerly so the first client requests
+  // (e.g. the End of Day Report page) don't stall behind fresh TLS handshakes.
+  void warmDb();
 }
 
 startServer().catch(console.error);

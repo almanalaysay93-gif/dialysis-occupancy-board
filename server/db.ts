@@ -29,8 +29,11 @@ export async function getDb() {
         const pool = new Pool({
           connectionString: url,
           max: 8,
+          min: 1,
           idleTimeoutMillis: 30_000,
           connectionTimeoutMillis: 15_000,
+          keepAlive: true,
+          keepAliveInitialDelayMillis: 10_000,
           // Always negotiate TLS. Supabase pooler connections (including those
           // routed through the platform proxy) present a certificate chain that
           // node-postgres does not trust by default, so self-signed intermediates
@@ -48,6 +51,19 @@ export async function getDb() {
     }
   }
   return _db;
+}
+
+/**
+ * Warm up the connection pool eagerly: establish the minimum pool of
+ * connections at boot so the first report-page requests don't each stall
+ * behind a fresh TLS handshake to the remote database (~1s per connection).
+ */
+export async function warmDb() {
+  try {
+    await getDb();
+  } catch {
+    // getDb already logs and returns null when unavailable.
+  }
 }
 
 export async function upsertUser(user: InsertUser): Promise<void> {

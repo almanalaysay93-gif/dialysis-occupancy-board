@@ -471,5 +471,10 @@
 - [x] Fix: reset nurse.skti-main hash to documented Nurse1234; vitest coverage (141 tests), tsc clean, committed 0131760, pushed to GitHub
 
 ## Add space between the board tables/panels (user request Aug 16)
-- [ ] Increase vertical spacing between Narrative Report sections (SKTI Main / RDU Annex / RDU Main) and other panel blocks on the Occupancy Board
-- [ ] Verify visually at desktop and mobile, tests + tsc pass, checkpoint + deliver
+- [x] Increase vertical spacing between Narrative Report sections
+
+## End of Day Report (/report) loads too slowly (user report Aug 16)
+- [ ] Profile /report: identify slow queries (many parallel narrative.list / waiting / summary queries, no suspense/skeleton grouping)
+- [ ] Optimize: reduce query count, add query-level Suspense or per-section skeletons, cache where possible
+- [ ] Verify load time improvement, tests + tsc, checkpoint + push + deliver (SKTI Main / RDU Annex / RDU Main) and other panel blocks on the Occupancy Board (mt-10/m-14 wrappers, card mt-6, space-y-3, period rows py-2)
+- [x] Verify classes served in compiled modules, tests (141) + tsc pass, checkpoint 13b1e83 auto-published, pushed to GitHub (13b1e83)

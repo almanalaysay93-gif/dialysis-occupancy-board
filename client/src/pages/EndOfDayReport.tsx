@@ -147,6 +147,7 @@ export default function EndOfDayReport() {
   // the single unscoped query.
   const { data: floors } = trpc.machines.listFloors.useQuery(undefined, {
     refetchInterval: 30_000,
+    staleTime: 20_000,
   });
   const singleQuery = trpc.endOfDay.summary.useQuery(
     { date },
@@ -155,6 +156,15 @@ export default function EndOfDayReport() {
   const staffMe = trpc.staff.me.useQuery(undefined, { retry: false });
   const staff = staffMe.data ?? null;
   const utils = trpc.useUtils();
+
+  // Kick all heavy report queries off the moment the page mounts so their
+  // responses are already cached by the time the sections render.
+  useEffect(() => {
+    void utils.staff.me.prefetch();
+    void utils.machines.listFloors.prefetch();
+    void utils.endOfDay.summary.prefetch({ date });
+    void utils.endOfDay.monthly.prefetch({ month });
+  }, [utils, date, month]);
 
   const isMulti = staff?.role === "supervisor";
   const isGuest = staff?.role === "guest";
