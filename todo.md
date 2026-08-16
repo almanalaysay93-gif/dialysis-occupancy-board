@@ -450,8 +450,12 @@
 - [x] Verify: tsc clean, 130/130 tests pass; mobile 375x812 screenshot stacks naturally; desktop keeps flow; checkpoint 02e6a838 (auto-published) + deliver
 
 ## Guest leak re-fix — live site still shows panels (user report Aug 16, screenshot)
-- [ ] Sync working tree with the remote (user pushed newer code in another session) and confirm whether the !isGuest gating exists in the latest HEAD
-- [ ] Determine why the panels render for guests: missing gating in the latest user code, or isGuest deriving wrong (auth cookie not available at render), or gating only in OccupancyBoardContent while user pages bypass it
-- [ ] Frontend fix: ensure Waiting List / Nurse Assignments / Narrative Report panels never render for guests on every entry point (/ main board flow slides, /floor/:id, UrgentCases copy)
-- [ ] Backend fix: server-side guest blocking — the waiting/narrative/nurse read endpoints must return empty/403 for guests regardless of client
-- [ ] Tests + tsc, verify live as guest in browser, checkpoint + deliver
+- [x] Synced working tree with remote; !isGuest gating exists in HEAD (OccupancyBoardContent shared by / and /floor/:id)
+- [x] Root cause: timing window — `useCanWrite`'s isGuest defaulted while the staff.me auth query was still loading, so panels rendered briefly on slow/mobile connections; the served build predated this
+- [x] Frontend fix: new `isClinicalHidden` flag in useCanWrite requires the auth query to resolve before panels render; applied in Home.tsx (WaitingCount, Waiting List, Nurse Assignments, Narrative Report); covers flow slides and single-floor pages via shared component
+- [x] Backend fix: server-side guest blocking — waiting.list, waiting.urgentRegister, waiting.nurseAssignments (routers.ts waiting router) and narratives.list return empty data for guest cookie sessions
+- [x] 133/133 tests pass (3 new RBAC tests), tsc clean; verified live as guest on published site: page bottom reached, no Waiting/Nurse/Narrative panels in markdown or DOM; checkpoint fe0362b1 (auto-published) + deliver
+
+## Remove flow transition from Occupancy Board (user request Aug 16)
+- [ ] Disable the flow/pinning transition on the Occupancy Board so boards stack in one natural scrolling page
+- [ ] Verify layout (desktop), tests + tsc pass, checkpoint + deliver

@@ -13,7 +13,7 @@ import { useCanWrite } from "@/hooks/useCanWrite";
 import { trpc } from "@/lib/trpc";
 import { Activity, Plus } from "lucide-react";
 import { ScrollReveal } from "@/components/ScrollReveal";
-import FlowArt, { FlowSection } from "@/components/FlowArt";
+
 import { useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 import type { MachineWithSession } from "../../../server/machines";
@@ -330,107 +330,6 @@ export function OccupancyBoardContent({ floorId }: { floorId?: number }) {
               </Button>
             )}
           </div>
-        ) : flowEnabled ? (
-          <div className="mt-6">
-            <FlowArt aria-label="Occupancy boards flow">
-              {floorGroups.map((group, idx) => (
-                <FlowSection key={group.id ?? "unassigned"} aria-label={`${group.name} board`}>
-                  {/* Masthead for this board slide */}
-                  <header className="flex flex-wrap items-end justify-between gap-6 border-b border-[#1F2A52]/60 pb-3">
-                    <div>
-                      <h2 className="font-display text-3xl text-[#1F2A52] sm:text-4xl">
-                        {group.name} board
-                      </h2>
-                      <p className="font-serif-light mt-1.5 max-w-xl text-sm italic text-[#556680] sm:text-base">
-                        A live register of the hemodialysis machines on this floor —
-                        which are in treatment, which stand vacant, and which cases
-                        demand immediate attention.
-                      </p>
-                      {idx > 0 && (
-                        <Link
-                          href={`/floor/${group.id}`}
-                          className="mt-2 inline-block text-sm text-[#2E9A9B] underline decoration-[#2E9A9B]/60 underline-offset-4 hover:text-[#1F2A52]"
-                        >
-                          Open {group.name} full board →
-                        </Link>
-                      )}
-                    </div>
-                    <div className="flex flex-col items-stretch gap-3 sm:flex-row">
-                      <div className="flex items-baseline gap-3 border-l border-[#D4DFE5] pl-4">
-                        <span className="font-display text-3xl text-[#3E8A6A]">
-                          {group.machines.length - floorStats(group).occupied}
-                        </span>
-                        <span className="smallcaps-detail text-[#7684A0]">Vacant</span>
-                      </div>
-                      <div className="flex items-baseline gap-3 border-l border-[#D4DFE5] pl-4">
-                        <span className="font-display text-3xl text-[#1F2A52]">
-                          {floorStats(group).occupied}
-                        </span>
-                        <span className="smallcaps-detail text-[#7684A0]">In Use</span>
-                      </div>
-                      <div className="flex items-baseline gap-3 border-l border-[#D4DFE5] pl-4">
-                        <span className="font-display text-3xl text-[#9E1F2B]">
-                          {floorStats(group).urgent}
-                        </span>
-                        <span className="smallcaps-detail text-[#7684A0]">Urgent</span>
-                      </div>
-                      <div className="flex items-baseline gap-3 border-l border-[#D4DFE5] pl-4">
-                        <span className="font-display text-3xl text-[#2E9A9B]">
-                          {floorStats(group).dirty}
-                        </span>
-                        <span className="smallcaps-detail text-[#7684A0]">Isolation</span>
-                      </div>
-                    </div>
-                  </header>
-
-                  <ScrollReveal>
-                    <FloorRow
-                      floorName={group.name}
-                      machines={group.machines}
-                      floorStats={floorStats(group)}
-                      onAssign={handleAssign}
-                    />
-                  </ScrollReveal>
-
-                  {group.id !== null && !isClinicalHidden && (
-                    <div className="mt-6 flex flex-col gap-6">
-                      <ScrollReveal yOffset={32}>
-                        <WaitingListPanel floorId={group.id} />
-                      </ScrollReveal>
-                      <ScrollReveal yOffset={32}>
-                        <NurseAssignmentsPanel floorId={group.id} />
-                      </ScrollReveal>
-                      <ScrollReveal yOffset={32}>
-                        <NarrativeReport
-                          floorId={group.id}
-                          floorName={group.name}
-                          date={todayKey()}
-                          staff={staff ?? null}
-                          editable={canWrite}
-                        />
-                      </ScrollReveal>
-                    </div>
-                  )}
-
-                  {canWrite && group.id === null && (
-                    <div className="mt-6 flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between border-t border-[#D4DFE5] pt-4">
-                      <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => setAddOpen(true)}
-                          className="h-11 sm:h-9 w-full sm:w-auto text-base sm:text-sm border-[#7684A0]/60 text-[#1F2A52] hover:bg-[#E8EFF1]"
-                        >
-                          <Plus className="mr-2 h-4 w-4" />
-                          Add Machine
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-                </FlowSection>
-              ))}
-            </FlowArt>
-          </div>
         ) : (
           <ScrollReveal>
             <section className="mt-6 flex flex-col gap-8">
@@ -446,8 +345,6 @@ export function OccupancyBoardContent({ floorId }: { floorId?: number }) {
             </section>
           </ScrollReveal>
         )}
-
-        {/* Staff footer controls (vacant count + Add Machine / Assign Next Vacant) */}
         {canWrite && !isLoading && !flowEnabled && (
           <div className="mt-6 flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between border-t border-[#D4DFE5] pt-4">
             <p className="font-serif-light italic text-[#556680] text-sm sm:text-base">
