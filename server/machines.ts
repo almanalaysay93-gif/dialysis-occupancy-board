@@ -1771,13 +1771,17 @@ export async function endOfDayReportBulk(opts?: { date?: string }): Promise<{
     };
   }
 
+  const t0 = Date.now();
   const floorList = await db.select().from(floors).orderBy(floors.sortOrder, floors.id);
+  console.log(`[bulk] floors done at ${Date.now() - t0}ms`);
 
   const narrativeEntries = await listNarrativesBulk(db, { reportDate });
+  console.log(`[bulk] narratives done at ${Date.now() - t0}ms`);
 
   // Run the remaining day-wide loads concurrently: one sessions, one waiting,
   // one machines query each, regardless of floor count.
   const range = dayRangeUtc(reportDate);
+  const t1 = Date.now();
   const [allMachines, waitingRows, daySessions] = await Promise.all([
     db.select().from(machines),
     db
@@ -1796,6 +1800,7 @@ export async function endOfDayReportBulk(opts?: { date?: string }): Promise<{
          OR ("status" = 'active' AND "startedAt" >= ${range.from} AND "startedAt" <= ${range.to})
     `),
   ]);
+  console.log(`[bulk] big batch done at ${Date.now() - t1}ms (total ${Date.now() - t0}ms)`);
   type DaySessionRow = {
     machineId: number;
     patientId: string;
