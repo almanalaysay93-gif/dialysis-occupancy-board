@@ -346,7 +346,7 @@ export function OccupancyBoardContent({ floorId }: { floorId?: number }) {
           </ScrollReveal>
         )}
         {canWrite && !isLoading && !flowEnabled && (
-          <div className="mt-6 flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between border-t border-[#D4DFE5] pt-4">
+          <div className="mt-8 mb-4 flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between border-t border-[#D4DFE5] pt-4">
             <p className="font-serif-light italic text-[#556680] text-sm sm:text-base">
               {stats.vacant} machine{stats.vacant === 1 ? "s" : ""} vacant ·{" "}
               {data?.filter(r => floorId !== undefined ? r.machine.floorId === floorId : true).length ?? 0} machine
@@ -386,14 +386,14 @@ export function OccupancyBoardContent({ floorId }: { floorId?: number }) {
         {/* Per-board waiting list (visible on each floor's board;
             in flow mode these are rendered inside each slide instead) */}
         {!flowEnabled && waitingFloorId !== undefined && !isClinicalHidden && (
-          <div className="mt-10">
+          <div className="mt-12">
           <ScrollReveal yOffset={32}>
             <WaitingListPanel floorId={waitingFloorId} />
           </ScrollReveal>
           </div>
         )}
         {!flowEnabled && waitingFloorId !== undefined && !isClinicalHidden && (
-          <div className="mt-10">
+          <div className="mt-12">
           <ScrollReveal yOffset={32}>
             <NurseAssignmentsPanel floorId={waitingFloorId} />
           </ScrollReveal>
@@ -404,7 +404,7 @@ export function OccupancyBoardContent({ floorId }: { floorId?: number }) {
             written on the board during the shift; the End of Day Report
             reflects it read-only. Staff only — hidden from guests. */}
         {!flowEnabled && waitingFloorId !== undefined && !isClinicalHidden && (
-          <div className="mt-14">
+          <div className="mt-16">
           <ScrollReveal yOffset={32}>
           <NarrativeReport
             floorId={waitingFloorId}

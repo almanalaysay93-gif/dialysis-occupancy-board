@@ -344,7 +344,7 @@ export default function EndOfDayReport() {
             End of Month PDF never includes the End of Day Report. */}
         <div className={printMonthOnly ? "print:screen-only" : ""}>
         {isLoading && (
-          <div className="mt-8 grid gap-5 md:grid-cols-2">
+          <div className="mt-8 grid gap-8 md:grid-cols-2">
             <Skeleton className="h-72" />
             <Skeleton className="h-72" />
           </div>
@@ -384,8 +384,8 @@ export default function EndOfDayReport() {
 
         {!isMulti && singleQuery.data && (
           <ScrollReveal>
-          <div className="mt-8 grid gap-5 lg:grid-cols-2 print:grid-cols-1">
-            <div className="flex flex-col gap-5">
+          <div className="mt-8 grid gap-8 lg:grid-cols-2 print:grid-cols-1">
+            <div className="flex flex-col gap-8">
               <ReportBoardCard board={singleQuery.data} />
               {singleQuery.data.floorName && (
                 <NarrativeSection
@@ -402,7 +402,7 @@ export default function EndOfDayReport() {
 
         {isMulti && (
           <ScrollReveal>
-          <div className="mt-8 grid gap-5 lg:grid-cols-2 print:grid-cols-1">
+          <div className="mt-8 grid gap-8 lg:grid-cols-2 print:grid-cols-1">
             {(floors ?? []).map(f => (
               <ReportBoardSection
                 key={f.id}
@@ -416,8 +416,9 @@ export default function EndOfDayReport() {
         )}
 
         <ScrollReveal>
-        {isMulti &&
-          (floors ?? []).map(f => (
+        {isMulti && (
+          <div className="mt-10 grid flex-col gap-10 lg:grid lg:grid-cols-2 print:grid-cols-1">
+          {(floors ?? []).map(f => (
             <NarrativeSection
               key={`narrative-${f.id}`}
               floorId={f.id}
@@ -427,10 +428,13 @@ export default function EndOfDayReport() {
               entries={pageQuery.data?.daily.narratives[String(f.id)]}
             />
           ))}
+          </div>
+        )}
         </ScrollReveal>
 
         <ScrollReveal>
         {(floors ?? []).length > 0 && (
+          <div className="mt-10">
           <SupervisorNarrativeSection
             floors={floors}
             date={date}
@@ -438,10 +442,13 @@ export default function EndOfDayReport() {
             multi={isMulti}
             floorNarratives={pageQuery.data?.daily.narratives}
           />
+          </div>
         )}
 
         {staff?.role === "auditor" && (
+          <div className="mt-10">
           <NarrativeHistorySection floors={floors} date={date} />
+          </div>
         )}
         </ScrollReveal>
 
@@ -550,7 +557,7 @@ function SupervisorNarrativeSection({
   }, [floorNarratives, listQueries.map(q => q.data)]);
 
   return (
-    <Card className="glass-deep mt-5 print:bg-white print:backdrop-none print:shadow-none print:border print:border-[#D4DFE5] print:break-inside-avoid">
+    <Card className="glass-deep print:bg-white print:backdrop-none print:shadow-none print:border print:border-[#D4DFE5] print:break-inside-avoid">
       <CardHeader className="border-b border-[#D4DFE5]/70 pb-4">
         <CardTitle className="font-display text-base text-[#1F2A52]">Supervisor Narrative Report</CardTitle>
         <p className="text-xs text-[#556680]">
@@ -1146,7 +1153,7 @@ export function NarrativeReport({
   if (!authorName && openAuthor === "") setOpenAuthor("");
 
   return (
-    <Card className="glass-panel mt-6 first:mt-0 print:bg-white print:backdrop-none print:shadow-none print:border print:border-[#D4DFE5] print:break-inside-avoid">
+    <Card className="glass-panel print:bg-white print:backdrop-none print:shadow-none print:border print:border-[#D4DFE5] print:break-inside-avoid">
       <CardHeader className="border-b border-[#D4DFE5]/70 pb-4">
         <div className="flex items-center gap-2">
           <PenLine className="h-4 w-4 text-[#2E9A9B]" />
@@ -1439,7 +1446,7 @@ function NarrativeHistorySection({
     key;
 
   return (
-    <Card className="glass-deep mt-5 print:bg-white print:backdrop-none print:shadow-none print:border print:border-[#D4DFE5] print:break-inside-avoid">
+    <Card className="glass-deep print:bg-white print:backdrop-none print:shadow-none print:border print:border-[#D4DFE5] print:break-inside-avoid">
       <CardHeader className="border-b border-[#D4DFE5]/70 pb-4">
         <CardTitle className="font-display text-base text-[#1F2A52]">Narrative Edit History</CardTitle>
         <p className="text-xs text-[#556680]">

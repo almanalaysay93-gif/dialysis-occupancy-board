@@ -496,4 +496,7 @@
 - [x] Verify: 156/156 tests + tsc clean; live production: reportPage cold 3.4s (vs ~15s before), cached repeat 1.7s; nurse and guest both get 403 on reportPage; checkpoint 26f40ea8 deployed and pushed to GitHub (0b611dc..26f40ea)
 
 ## Collapsed sidebar label fix (Aug 16)
-- [ ] "FLOOR BOARDS" group label wraps awkwardly ("FLOO BOAR") when sidebar is collapsed — show "FB" (or hide) when collapsed
+- [x] "FLOOR BOARDS" group label fix: shows "FB" when the sidebar is collapsed (icon mode) and "Floor Boards" when expanded; whitespace-nowrap + overflow-hidden prevent wrapping during the collapse animation; checkpoint c1a311b8 deployed and live
+
+## Panel spacing scan (Aug 16)
+- [ ] Scan all board tables/panels (stats rows, treatment time strip, Waiting List, Nurse Assignments, Narrative Report) and add consistent vertical space where sections sit too close (e.g. "Total treatment time" panel flush against the Narrative Report card)
