@@ -354,8 +354,8 @@
 - [x] Verify visuals (6-page screenshots), 128/128 tests + tsc pass, checkpoint saved (auto-publish)
 
 ## Login page refinement (user request, Aug 16 — /buildme)
-- [ ] Enlarge the SKTI seal/logo on the staff login hero card
-- [ ] Remove blank space: tighten padding around hero imagery
-- [ ] Remove the HD machines photo from the login hero
-- [ ] Also adjust the board banner vignette (remove HD machines photo there too)
-- [ ] Verify visuals, checkpoint, push GitHub, deliver
+- [x] Enlarge the SKTI seal/logo on the staff login hero card (24-unit glass disc)
+- [x] Remove blank space: tightened spacing on the login hero
+- [x] Remove the HD machines photo from the login hero
+- [x] Remove the HD machines photo from the board banner
+- [x] Verify visuals (screenshots), checkpoint saved (auto-published)
