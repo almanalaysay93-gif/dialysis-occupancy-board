@@ -1619,7 +1619,15 @@ export async function monthReport(opts?: {
   };
   const monthEnded: MonthSessionRow[] = ((monthSessions?.rows ?? []) as unknown[]).map(r => r as MonthSessionRow);
   const waitingRows: { floorId: number; joinedAt: Date; priority: string | null }[] = (allWaiting?.rows ?? []) as never;
-  const activeSessionRows: { machineId: number; startedAt: Date; endedAt: Date | null; pausedSeconds: number }[] = (activeRows?.rows ?? []) as never;
+  const activeSessionRows: { machineId: number; startedAt: Date; endedAt: Date | null; pausedSeconds: number }[] = ((activeRows?.rows as object[]) ?? []).map((raw: unknown) => {
+    const r = raw as { machineId: unknown; startedAt: unknown; endedAt: unknown; pausedSeconds: unknown };
+    return {
+      machineId: Number(r.machineId ?? 0),
+      startedAt: r.startedAt instanceof Date ? r.startedAt : new Date(String(r.startedAt ?? 0)),
+      endedAt: r.endedAt instanceof Date ? r.endedAt : (r.endedAt ? new Date(String(r.endedAt)) : null),
+      pausedSeconds: Number(r.pausedSeconds ?? 0),
+    };
+  });
 
   const out: MonthlyBoardReport[] = [];
   for (const floor of floorRows) {
@@ -1689,10 +1697,12 @@ export async function monthReport(opts?: {
     let floorEnd: number | null = null;
     const now = Date.now();
     for (const s of floorSessionSpans) {
+      if (!(s.startedAt instanceof Date)) s.startedAt = new Date(s.startedAt);
+      if (s.endedAt && !(s.endedAt instanceof Date)) s.endedAt = new Date(s.endedAt);
       const start = Math.max(s.startedAt.getTime(), rangeStart.getTime());
       const end = Math.min((s.endedAt ? s.endedAt.getTime() : now), rangeEnd.getTime());
       if (end <= start) continue;
-      if (floorStart === null) { floorStart = start; floorEnd = end; }
+      if (floorStart === null) { floorStart = start; floorEnd = end; } // (range clipped below)
       else { floorStart = Math.min(floorStart, start); floorEnd = Math.max(floorEnd!, end); }
     }
     const pausedByMachine = new Map<number, number>();
