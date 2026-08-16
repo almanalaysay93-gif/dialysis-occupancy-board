@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
@@ -5,33 +6,46 @@ import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
-import FloorBoard from "./pages/FloorBoard";
-import BackupRepair from "./pages/BackupRepair";
-import Rooms from "./pages/Rooms";
-import Urgent from "./pages/Urgent";
-import StaffLogin from "./pages/StaffLogin";
-import EndOfDayReport from "./pages/EndOfDayReport";
 import DashboardLayout from "./components/DashboardLayout";
+import { Skeleton } from "@/components/ui/skeleton";
+
+// Lazy-loaded secondary pages for fast initial bundle load
+const FloorBoard = lazy(() => import("./pages/FloorBoard"));
+const BackupRepair = lazy(() => import("./pages/BackupRepair"));
+const Rooms = lazy(() => import("./pages/Rooms"));
+const Urgent = lazy(() => import("./pages/Urgent"));
+const StaffLogin = lazy(() => import("./pages/StaffLogin"));
+const EndOfDayReport = lazy(() => import("./pages/EndOfDayReport"));
+
+function PageLoader() {
+  return (
+    <div className="w-full p-6 space-y-4 animate-pulse">
+      <Skeleton className="h-10 w-48 bg-[#D4DFE5]/60" />
+      <Skeleton className="h-64 w-full bg-[#D4DFE5]/40" />
+    </div>
+  );
+}
 
 function Router() {
-  // make sure to consider if you need authentication for certain routes
   return (
-    <Switch>
-      <Route path={"/"} component={Home} />
-      <Route path={"/rooms"} component={Rooms} />
-      <Route path={"/backup"} component={BackupRepair} />
-      <Route path={"/urgent"} component={Urgent} />
-      <Route path={"/staff-login"} component={StaffLogin} />
-      <Route path={"/report"} component={EndOfDayReport} />
-      <Route path={"/floor/:id"}>
-        <DashboardLayout>
-          <FloorBoard />
-        </DashboardLayout>
-      </Route>
-      <Route path={"/404"} component={NotFound} />
-      {/* Final fallback route */}
-      <Route component={NotFound} />
-    </Switch>
+    <Suspense fallback={<PageLoader />}>
+      <Switch>
+        <Route path={"/"} component={Home} />
+        <Route path={"/rooms"} component={Rooms} />
+        <Route path={"/backup"} component={BackupRepair} />
+        <Route path={"/urgent"} component={Urgent} />
+        <Route path={"/staff-login"} component={StaffLogin} />
+        <Route path={"/report"} component={EndOfDayReport} />
+        <Route path={"/floor/:id"}>
+          <DashboardLayout>
+            <FloorBoard />
+          </DashboardLayout>
+        </Route>
+        <Route path={"/404"} component={NotFound} />
+        {/* Final fallback route */}
+        <Route component={NotFound} />
+      </Switch>
+    </Suspense>
   );
 }
 
