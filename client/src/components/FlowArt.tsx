@@ -67,18 +67,31 @@ const FlowArt: React.FC<FlowArtProps> = ({
 }) => {
   const containerRef = useRef<HTMLElement>(null);
   const [reducedMotion, setReducedMotion] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
-    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
-    const update = () => setReducedMotion(mq.matches);
-    update();
-    mq.addEventListener('change', update);
-    return () => mq.removeEventListener('change', update);
+    const motionMq = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const setMotion = () => setReducedMotion(motionMq.matches);
+    setMotion();
+    motionMq.addEventListener('change', setMotion);
+
+    // The pinning/rotation flow breaks on touch viewports (fixed-position pin
+    // misbehaves in mobile browsers with tall slides), so fall back to a
+    // natural stacked scroll below 1024px.
+    const widthMq = window.matchMedia('(max-width: 1023px)');
+    const setWidth = () => setIsMobile(widthMq.matches);
+    setWidth();
+    widthMq.addEventListener('change', setWidth);
+
+    return () => {
+      motionMq.removeEventListener('change', setMotion);
+      widthMq.removeEventListener('change', setWidth);
+    };
   }, []);
 
   useGSAP(
     () => {
-      if (!containerRef.current || reducedMotion) return;
+      if (!containerRef.current || reducedMotion || isMobile) return;
 
       const sections = Array.from(
         containerRef.current.querySelectorAll<HTMLElement>('[data-flow-section]'),
@@ -127,7 +140,7 @@ const FlowArt: React.FC<FlowArtProps> = ({
         triggers.forEach(t => t.kill());
       };
     },
-    { scope: containerRef, dependencies: [childCount(children), reducedMotion] },
+    { scope: containerRef, dependencies: [childCount(children), reducedMotion, isMobile] },
   );
 
   return (

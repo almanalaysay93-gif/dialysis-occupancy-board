@@ -443,3 +443,8 @@
 - [x] Restructure OccupancyBoardContent: flowEnabled = no floorId && >1 group; each floor group gets its own FlowSection slide with masthead (board name, description, "Open X full board →" link, per-floor Vacant/In Use/Urgent/Isolation stats), machine grid, and staff-only Waiting/Nurse/Narrative panels inside the slide (guest gating preserved)
 - [x] Single-floor pages (/floor/:id) and one-group pages scroll naturally (no flow), old per-floor panels gated with !flowEnabled
 - [x] Verify: browser scroll confirms pinning + 30deg rotation; screenshots of / and /floor/30003 clean; 130/130 tests + tsc pass; checkpoint + deliver
+
+## Mobile flow-animation fix (user report Aug 16)
+- [ ] Diagnose mobile breakage (pinned FlowArt sections with 100vh+ content overflow on touch; position:fixed pin misbehaves in mobile Safari/Chrome)
+- [ ] Disable the FlowArt pinning/rotation on mobile viewports (fallback to natural stacked scroll), keep flow on desktop
+- [ ] Verify mobile (375px) and desktop both render correctly, tests + tsc pass, checkpoint + deliver
