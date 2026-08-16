@@ -178,7 +178,7 @@ export default function StaffLogin() {
               </CardContent>
               <CardFooter className="flex-col gap-3 border-t border-[#1F2A52]/10 pt-4">
                 <p className="text-xs text-[#4a4a45] leading-relaxed">
-                  Guests can view machine occupancy, waiting lists, and nurse assignments on every board. Signing in as
+                  Guests can view machine occupancy — vacant, in-use, urgent, and isolation status — on every board. Waiting lists, nurse assignments, and narrative reports are staff-only. Signing in as
                   a nurse lets you manage your assigned board; the SKTI Supervisor manages all boards; the auditor reviews the edit history.
                 </p>
                 <Button variant="ghost" className="text-[#2E9A9B] hover:text-[#2E9A9B]" onClick={() => startLogin()}>

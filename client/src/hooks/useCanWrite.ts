@@ -21,8 +21,8 @@ export function useCanWrite() {
   });
 
   const role = staff?.role ?? null;
-  const isBoardStaff = role === "nurse" || role === "supervisor";
-  const isGuestMode = role === "guest" && staff?.fromCookie === true;
+  const isBoardStaff = role === "nurse" || role === "supervisor" || role === "auditor";
+  const isGuestMode = role === "guest";
   // Auth state has resolved — until the staff.me query settles, identity is
   // unknown and clinical panels must stay hidden to avoid a flash of exposure
   // for guest viewers (especially on slow/mobile connections).
@@ -31,8 +31,16 @@ export function useCanWrite() {
   return {
     canWrite: isBoardStaff || (isAuthenticated && !isGuestMode),
     isGuest: isGuestMode,
-    /** Panels like Waiting/Nurse Assignments/Narrative must require BOTH:
-     *  the auth query has resolved AND the viewer is not a guest. */
+    /** Clinical panels (Waiting List, Nurse Assignments, Narrative Report)
+     *  are staff-only. They must stay hidden in every one of these states:
+     *  - the identity query has not settled yet (flash protection), or
+     *  - the viewer is a guest — explicitly entered via the guest entry, or
+     *    an unauthenticated visitor served the guest fallback session. An
+     *    explicit guest role is ALWAYS a viewer, regardless of how the
+     *    session cookie got there (this closes the gap where a missing or
+     *    expired staff cookie made the fallback appear as "resolved, not
+     *    guest" and leaked the clinical panels to viewers with a Guest
+     *    identity). */
     isClinicalHidden: !resolved || isGuestMode,
     role,
     staff,

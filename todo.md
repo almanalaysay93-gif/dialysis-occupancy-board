@@ -509,3 +509,8 @@
 ## Identity chip shows role only (user request Aug 16)
 - [x] Top-right header chip (DashboardLayout) showed "displayName · role" duplicated as "GUEST · GUEST" — now shows only the role label: Guest / Supervisor / Auditor / "SKTI Main Nurse" etc. (area extracted from the nurse displayName, "Nurse" suffix appended)
 - [x] Verified on /, /floor/30001 as guest (chip shows "GUEST"); tsc clean, 156/156 tests; checkpoint deployed and pushed
+
+## Guest must never see Waiting List / Nurse Assignments / Narrative Report (user report Aug 16)
+- [x] Reproduced on production as an anonymous visitor: panels were gated for a cookie guest, but the no-cookie guest fallback (role "guest", fromCookie false) made isClinicalHidden false and leaked the three clinical panels to any viewer with a Guest identity
+- [x] Fix: useCanWrite now treats ANY explicit guest role as a viewer (isGuestMode = role === "guest", independent of fromCookie); isClinicalHidden = !resolved || isGuestMode; auditors count as board staff; StaffLogin copy corrected to say guests see occupancy stats only (waiting lists/nurse assignments/narrative are staff-only)
+- [x] New client gating test server/use-can-write.test.ts (5 cases incl. the leak vector); 161/161 tests, tsc clean; verified on / and /floor/30002 as guest — only machines + stats render, chip "GUEST", sidebar "Guest · view only"
