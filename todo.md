@@ -389,6 +389,11 @@
 - [x] Checkpoint 4666928e saved (auto-published); pushed to GitHub (4666928)
 
 ## Sidebar brand text truncation (Aug 16)
-- [ ] Fix "SPMC KIDNEY & TRANS..." truncation in the sidebar brand block — full text must display
-- [ ] Check other truncated text spots (header wordmark) for the same issue
-- [ ] Verify sidebar renders full brand text, checkpoint, push GitHub, deliver
+- [x] Fixed "SPMC KIDNEY & TRANS..." truncation: removed truncate from sidebar brand subline, added whitespace-normal break-words — the name now wraps to two lines (verified in screenshots)
+- [x] Checked other truncated spots (header bar / user block): no brand truncation found there
+- [x] Verified sidebar full brand text (screenshots), 130/130 tests pass, tsc clean; checkpoint 08e16cd7 (auto-published); push pending
+
+## Full institute name in brand (Aug 16)
+- [ ] Sidebar brand subline: change to "SPMC Kidney & Transplant Institute" (wrap naturally, no truncation)
+- [ ] Check other brand spots (header bar, login page, printable reports) for the same incomplete name and fix consistently
+- [ ] Verify visuals, checkpoint, push GitHub, deliver

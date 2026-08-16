@@ -196,7 +196,7 @@ function DashboardLayoutContent({
                       Dialysis<span className="text-accent">.</span>
                     </span>
                     <span className="text-[9px] uppercase tracking-[0.22em] text-muted-foreground whitespace-normal break-words">
-                      SPMC Kidney &amp; Transplant
+                      SPMC Kidney &amp; Transplant Institute
                     </span>
                   </span>
                 </div>
