@@ -15,9 +15,9 @@ export function useCanWrite() {
   const { isAuthenticated } = useAuth();
   const { data: staff } = trpc.staff.me.useQuery(undefined, {
     retry: false,
-    staleTime: 0,
+    staleTime: 15_000,
     refetchInterval: 30_000,
-    refetchOnWindowFocus: true,
+    refetchOnWindowFocus: false,
   });
 
   const role = staff?.role ?? null;

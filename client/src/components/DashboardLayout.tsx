@@ -146,11 +146,22 @@ function DashboardLayoutContent({
   // Sign out must clear the staff cookie server-side (it also bumps the
   // account's token version), not merely refetch the session.
   const staffLogout = trpc.staff.logout.useMutation({
-    onSettled: async () => {
-      await utils.staff.me.invalidate();
+    onMutate: () => {
+      // Instantly clear local session state and redirect to login page in 0ms
+      utils.staff.me.setData(undefined, undefined);
       setLocation("/staff-login");
     },
+    onSettled: () => {
+      void utils.staff.me.invalidate();
+    },
   });
+  const preloadRoute = (path: string) => {
+    if (path === "/urgent") void import("@/pages/Urgent");
+    else if (path === "/backup") void import("@/pages/BackupRepair");
+    else if (path === "/rooms") void import("@/pages/Rooms");
+    else if (path === "/report") void import("@/pages/EndOfDayReport");
+    else if (path.startsWith("/floor/")) void import("@/pages/FloorBoard");
+  };
   const { state } = useSidebar();
   const isCollapsed = state === "collapsed";
   const sidebarRef = useRef<HTMLDivElement>(null);
@@ -219,6 +230,8 @@ function DashboardLayoutContent({
                     <SidebarMenuButton
                       isActive={isActive}
                       onClick={() => setLocation(item.path)}
+                      onMouseEnter={() => preloadRoute(item.path)}
+                      onTouchStart={() => preloadRoute(item.path)}
                       tooltip={item.label}
                       className="h-11 transition-all font-normal data-[active=true]:bg-primary data-[active=true]:text-primary-foreground data-[active=true]:font-medium rounded-sm"
                     >
@@ -243,6 +256,8 @@ function DashboardLayoutContent({
                     <SidebarMenuButton
                       isActive={isActive}
                       onClick={() => setLocation(item.path)}
+                      onMouseEnter={() => preloadRoute(item.path)}
+                      onTouchStart={() => preloadRoute(item.path)}
                       tooltip={item.label}
                       className="h-11 transition-all font-normal data-[active=true]:bg-primary data-[active=true]:text-primary-foreground data-[active=true]:font-medium rounded-sm"
                     >
