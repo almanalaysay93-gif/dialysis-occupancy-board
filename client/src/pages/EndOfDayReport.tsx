@@ -453,8 +453,9 @@ export default function EndOfDayReport() {
         </ScrollReveal>
 
         </div>
-        {/* Month export container: invisible on screen, visible only in the print layout. */}
-        <div className="hidden print:block mt-12">
+        {/* Month export container: invisible on screen and in the daily PDF —
+            it only prints when the supervisor runs a month-only export. */}
+        <div className={printMonthOnly ? "screen:hidden print:block mt-12" : "hidden"}>
           {monthlyLoading ? (
             <Skeleton className="h-96" />
           ) : monthly ? (

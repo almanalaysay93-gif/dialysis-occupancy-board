@@ -500,3 +500,8 @@
 
 ## Panel spacing scan (Aug 16)
 - [x] Scan all board tables/panels (stats rows, treatment time strip, Waiting List, Nurse Assignments, Narrative Report) and add consistent vertical space where sections sit too close — uniform mt-10 wrappers in Home.tsx (flow and single-floor pages), NurseAssignmentsPanel intrinsic mt-8 removed (caller-controlled), End of Day report grids widened from gap-5 to gap-8; verified via full-page screenshots; checkpoint 5a3c36dd deployed
+
+## Daily report must not include entire-month data (user report Aug 16)
+- [ ] Diagnose why the saved/printable daily report includes the whole month's data
+- [ ] Fix so the daily report shows only the selected day (month data reserved for the End of Month PDF only)
+- [ ] Verify with screenshots (screen + print layout), tests + tsc pass, checkpoint + push + deliver
