@@ -436,3 +436,10 @@
 - [x] Verify Waiting List / Nurse Assignments / Narrative Report panels are hidden from guests on every board — gating intact in HEAD: all three panels gated with `!isGuest` in the shared OccupancyBoardContent (used by / and /floor/:id for all 5 floors)
 - [x] Recent edits did not touch the gating — only spacing wrappers were added inside the gated blocks; additionally gated the "N WAITING" header stat (WaitingCount) for guests
 - [x] Verified live in browser as guest (GUEST · GUEST) on /floor/30003: only machines + header stats shown, no Waiting List / Nurse Assignments / Narrative Report panels; earlier screenshot showing panels was a capture-tool artifact (ScrollReveal opacity snap); 130/130 tests + tsc pass; checkpoint + deliver
+
+## Per-board flow animation (user request Aug 16)
+- [x] Install @gsap/react 2.1.2
+- [x] Create FlowArt + FlowSection components (client/src/components/FlowArt.tsx: pin current slide, next slide rotates in from 30deg bottom-left scrubbed to scroll; prefers-reduced-motion skipped; triggers killed on cleanup)
+- [x] Restructure OccupancyBoardContent: flowEnabled = no floorId && >1 group; each floor group gets its own FlowSection slide with masthead (board name, description, "Open X full board →" link, per-floor Vacant/In Use/Urgent/Isolation stats), machine grid, and staff-only Waiting/Nurse/Narrative panels inside the slide (guest gating preserved)
+- [x] Single-floor pages (/floor/:id) and one-group pages scroll naturally (no flow), old per-floor panels gated with !flowEnabled
+- [x] Verify: browser scroll confirms pinning + 30deg rotation; screenshots of / and /floor/30003 clean; 130/130 tests + tsc pass; checkpoint + deliver

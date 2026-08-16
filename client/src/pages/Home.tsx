@@ -13,6 +13,7 @@ import { useCanWrite } from "@/hooks/useCanWrite";
 import { trpc } from "@/lib/trpc";
 import { Activity, Plus } from "lucide-react";
 import { ScrollReveal } from "@/components/ScrollReveal";
+import FlowArt, { FlowSection } from "@/components/FlowArt";
 import { useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 import type { MachineWithSession } from "../../../server/machines";
@@ -159,6 +160,8 @@ export function OccupancyBoardContent({ floorId }: { floorId?: number }) {
     return { occupied, urgent, dirty };
   };
 
+  const flowEnabled = floorId === undefined && floorGroups.length > 1;
+
   return (
     <div className="w-full px-4 sm:px-6 py-6">
         {/* Frosted-glass institute banner — SKTI building imagery */}
@@ -302,59 +305,161 @@ export function OccupancyBoardContent({ floorId }: { floorId?: number }) {
           </div>
         )}
 
-        {/* Floor rows */}
-        <ScrollReveal>
-        <section className="mt-6 flex flex-col gap-8">
-          {isLoading ? (
-            Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="flex flex-col gap-2">
-                <Skeleton className="h-10 w-72" />
-                <Skeleton className="h-16" />
-              </div>
-            ))
-          ) : floorGroups.length === 0 ? (
-            <div className="flex flex-col items-center gap-3 border border-dashed border-[#D4DFE5] py-16">
-              <p className="font-serif-light text-xl italic text-[#556680]">
-                No machines registered yet.
-              </p>
-              {canWrite && (
-                <Button
-                  size="sm"
-                  onClick={() => setAddOpen(true)}
-                  className="bg-[#1F2A52] text-[#F4F7F8] hover:bg-[#151D3A]"
-                >
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add your first machine
-                </Button>
-              )}
+        {/* Floor rows — Powerpoint-style flow: each board is its own slide.
+            Single-floor pages and pages with one group scroll naturally. */}
+        {isLoading ? (
+          Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="mt-6 flex flex-col gap-2">
+              <Skeleton className="h-10 w-72" />
+              <Skeleton className="h-16" />
             </div>
-          ) : (
-            floorGroups.map(group => (
-              <FloorRow
-                key={group.id ?? "unassigned"}
-                floorName={group.name}
-                machines={group.machines}
-                floorStats={floorStats(group)}
-                onAssign={handleAssign}
-              />
-            ))
-          )}
-        </section>
-        </ScrollReveal>
+          ))
+        ) : floorGroups.length === 0 ? (
+          <div className="mt-6 flex flex-col items-center gap-3 border border-dashed border-[#D4DFE5] py-16">
+            <p className="font-serif-light text-xl italic text-[#556680]">
+              No machines registered yet.
+            </p>
+            {canWrite && (
+              <Button
+                size="sm"
+                onClick={() => setAddOpen(true)}
+                className="bg-[#1F2A52] text-[#F4F7F8] hover:bg-[#151D3A]"
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Add your first machine
+              </Button>
+            )}
+          </div>
+        ) : flowEnabled ? (
+          <div className="mt-6">
+            <FlowArt aria-label="Occupancy boards flow">
+              {floorGroups.map((group, idx) => (
+                <FlowSection key={group.id ?? "unassigned"} aria-label={`${group.name} board`}>
+                  {/* Masthead for this board slide */}
+                  <header className="flex flex-wrap items-end justify-between gap-6 border-b border-[#1F2A52]/60 pb-3">
+                    <div>
+                      <h2 className="font-display text-3xl text-[#1F2A52] sm:text-4xl">
+                        {group.name} board
+                      </h2>
+                      <p className="font-serif-light mt-1.5 max-w-xl text-sm italic text-[#556680] sm:text-base">
+                        A live register of the hemodialysis machines on this floor —
+                        which are in treatment, which stand vacant, and which cases
+                        demand immediate attention.
+                      </p>
+                      {idx > 0 && (
+                        <Link
+                          href={`/floor/${group.id}`}
+                          className="mt-2 inline-block text-sm text-[#2E9A9B] underline decoration-[#2E9A9B]/60 underline-offset-4 hover:text-[#1F2A52]"
+                        >
+                          Open {group.name} full board →
+                        </Link>
+                      )}
+                    </div>
+                    <div className="flex flex-col items-stretch gap-3 sm:flex-row">
+                      <div className="flex items-baseline gap-3 border-l border-[#D4DFE5] pl-4">
+                        <span className="font-display text-3xl text-[#3E8A6A]">
+                          {group.machines.length - floorStats(group).occupied}
+                        </span>
+                        <span className="smallcaps-detail text-[#7684A0]">Vacant</span>
+                      </div>
+                      <div className="flex items-baseline gap-3 border-l border-[#D4DFE5] pl-4">
+                        <span className="font-display text-3xl text-[#1F2A52]">
+                          {floorStats(group).occupied}
+                        </span>
+                        <span className="smallcaps-detail text-[#7684A0]">In Use</span>
+                      </div>
+                      <div className="flex items-baseline gap-3 border-l border-[#D4DFE5] pl-4">
+                        <span className="font-display text-3xl text-[#9E1F2B]">
+                          {floorStats(group).urgent}
+                        </span>
+                        <span className="smallcaps-detail text-[#7684A0]">Urgent</span>
+                      </div>
+                      <div className="flex items-baseline gap-3 border-l border-[#D4DFE5] pl-4">
+                        <span className="font-display text-3xl text-[#2E9A9B]">
+                          {floorStats(group).dirty}
+                        </span>
+                        <span className="smallcaps-detail text-[#7684A0]">Isolation</span>
+                      </div>
+                    </div>
+                  </header>
+
+                  <ScrollReveal>
+                    <FloorRow
+                      floorName={group.name}
+                      machines={group.machines}
+                      floorStats={floorStats(group)}
+                      onAssign={handleAssign}
+                    />
+                  </ScrollReveal>
+
+                  {group.id !== null && !isGuest && (
+                    <div className="mt-6 flex flex-col gap-6">
+                      <ScrollReveal yOffset={32}>
+                        <WaitingListPanel floorId={group.id} />
+                      </ScrollReveal>
+                      <ScrollReveal yOffset={32}>
+                        <NurseAssignmentsPanel floorId={group.id} />
+                      </ScrollReveal>
+                      <ScrollReveal yOffset={32}>
+                        <NarrativeReport
+                          floorId={group.id}
+                          floorName={group.name}
+                          date={todayKey()}
+                          staff={staff ?? null}
+                          editable={canWrite}
+                        />
+                      </ScrollReveal>
+                    </div>
+                  )}
+
+                  {canWrite && group.id === null && (
+                    <div className="mt-6 flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between border-t border-[#D4DFE5] pt-4">
+                      <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setAddOpen(true)}
+                          className="h-11 sm:h-9 w-full sm:w-auto text-base sm:text-sm border-[#7684A0]/60 text-[#1F2A52] hover:bg-[#E8EFF1]"
+                        >
+                          <Plus className="mr-2 h-4 w-4" />
+                          Add Machine
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </FlowSection>
+              ))}
+            </FlowArt>
+          </div>
+        ) : (
+          <ScrollReveal>
+            <section className="mt-6 flex flex-col gap-8">
+              {floorGroups.map(group => (
+                <FloorRow
+                  key={group.id ?? "unassigned"}
+                  floorName={group.name}
+                  machines={group.machines}
+                  floorStats={floorStats(group)}
+                  onAssign={handleAssign}
+                />
+              ))}
+            </section>
+          </ScrollReveal>
+        )}
 
         {/* Staff footer controls (vacant count + Add Machine / Assign Next Vacant) */}
-        {canWrite && !isLoading && (
+        {canWrite && !isLoading && !flowEnabled && (
           <div className="mt-6 flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between border-t border-[#D4DFE5] pt-4">
             <p className="font-serif-light italic text-[#556680] text-sm sm:text-base">
               {stats.vacant} machine{stats.vacant === 1 ? "s" : ""} vacant ·{" "}
               {data?.filter(r => floorId !== undefined ? r.machine.floorId === floorId : true).length ?? 0} machine
               {data?.filter(r => floorId !== undefined ? r.machine.floorId === floorId : true).length === 1 ? "" : "s"} on the board
             </p>
-            <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setAddOpen(true)}
+              <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setAddOpen(true)}
                 className="h-11 sm:h-9 w-full sm:w-auto text-base sm:text-sm border-[#7684A0]/60 text-[#1F2A52] hover:bg-[#E8EFF1]"
               >
                 <Plus className="mr-2 h-4 w-4" />
@@ -381,16 +486,16 @@ export function OccupancyBoardContent({ floorId }: { floorId?: number }) {
           </div>
         )}
 
-        {/* Per-board waiting list (visible on each floor's board) */}
-        {waitingFloorId !== undefined && !isGuest && (
+        {/* Per-board waiting list (visible on each floor's board;
+            in flow mode these are rendered inside each slide instead) */}
+        {!flowEnabled && waitingFloorId !== undefined && !isGuest && (
           <div className="mt-8">
           <ScrollReveal yOffset={32}>
             <WaitingListPanel floorId={waitingFloorId} />
           </ScrollReveal>
           </div>
         )}
-        {/* Per-floor nurse patient assignments roster */}
-        {waitingFloorId !== undefined && !isGuest && (
+        {!flowEnabled && waitingFloorId !== undefined && !isGuest && (
           <div className="mt-8">
           <ScrollReveal yOffset={32}>
             <NurseAssignmentsPanel floorId={waitingFloorId} />
@@ -401,7 +506,7 @@ export function OccupancyBoardContent({ floorId }: { floorId?: number }) {
         {/* Charge nurse narrative report at the bottom of the board —
             written on the board during the shift; the End of Day Report
             reflects it read-only. Staff only — hidden from guests. */}
-        {waitingFloorId !== undefined && !isGuest && (
+        {!flowEnabled && waitingFloorId !== undefined && !isGuest && (
           <div className="mt-10">
           <ScrollReveal yOffset={32}>
           <NarrativeReport
