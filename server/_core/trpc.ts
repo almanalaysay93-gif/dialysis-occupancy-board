@@ -89,6 +89,32 @@ export const staffReadProcedure = t.procedure.use(
  * a board staff session cookie (nurse/supervisor). Guests (no credentials) are
  * rejected with UNAUTHORIZED. Exposes `staff` on the context for scoping.
  */
+/**
+ * Supervisor-only access: accepts the SKTI Supervisor staff session or a
+ * logged-in OAuth admin user. Nurses, auditors, and guests are rejected with
+ * FORBIDDEN. Used for endpoints that only the supervisor may run, such as the
+ * End of Month report export.
+ */
+export const supervisorProcedure = t.procedure.use(
+  t.middleware(async opts => {
+    const { ctx, next } = opts;
+    const staff: StaffSession = await resolveStaffSession(ctx.req);
+    const oauthUser = ctx.user;
+    // OAuth admin users (the owner's Google login) keep full access.
+    if (oauthUser && oauthUser.role === "admin") {
+      return next({
+        ctx: { ...ctx, user: oauthUser, staff, isStaff: true as const },
+      });
+    }
+    if (staff.role === "supervisor") {
+      return next({
+        ctx: { ...ctx, user: oauthUser ?? null, staff, isStaff: true as const },
+      });
+    }
+    throw new TRPCError({ code: "FORBIDDEN", message: "This action is reserved for the supervisor." });
+  }),
+);
+
 export const staffOrAdminProcedure = t.procedure.use(
   t.middleware(async opts => {
     const { ctx, next } = opts;

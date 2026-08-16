@@ -577,7 +577,7 @@ describe("end of day report scoping", () => {
       expect(call.month).toBe("2026-08");
     });
 
-    it("nurse without a floorId input defaults to their assigned floor", async () => {
+    it("nurse is blocked from the monthly report entirely (supervisor-only)", async () => {
       mockResolve.mockResolvedValue({
         accountId: 7,
         username: "nurse.rdu",
@@ -586,10 +586,38 @@ describe("end of day report scoping", () => {
         assignedFloorId: 2,
       });
       const ctx = makeCtx();
-      await caller(ctx).endOfDay.monthly({});
-      const call = (machineDb.monthReport as ReturnType<typeof vi.fn>).mock
-        .calls[0][0] as { floorId?: number };
-      expect(call.floorId).toBe(2);
+      await expect(caller(ctx).endOfDay.monthly({})).rejects.toMatchObject({
+        code: "FORBIDDEN",
+      });
+      expect(machineDb.monthReport).not.toHaveBeenCalled();
+    });
+    it("auditor is blocked from the monthly report (supervisor-only)", async () => {
+      mockResolve.mockResolvedValue({
+        accountId: 9,
+        username: "auditor",
+        displayName: "Auditor",
+        role: "auditor" as const,
+        assignedFloorId: null,
+      });
+      const ctx = { ...makeCtx(), user: null } as TrpcContext;
+      await expect(
+        caller(ctx).endOfDay.monthly({ month: "2026-08" })
+      ).rejects.toMatchObject({ code: "FORBIDDEN" });
+      expect(machineDb.monthReport).not.toHaveBeenCalled();
+    });
+    it("guest is blocked from the monthly report (supervisor-only)", async () => {
+      mockResolve.mockResolvedValue({
+        accountId: 3,
+        username: "guest",
+        displayName: "Guest",
+        role: "guest" as const,
+        assignedFloorId: null,
+      });
+      const ctx = { ...makeCtx(), user: null } as TrpcContext;
+      await expect(
+        caller(ctx).endOfDay.monthly({ month: "2026-08" })
+      ).rejects.toMatchObject({ code: "FORBIDDEN" });
+      expect(machineDb.monthReport).not.toHaveBeenCalled();
     });
 
     it("nurse cannot scope the monthly report to a floor outside their assignment", async () => {

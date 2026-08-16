@@ -3,7 +3,7 @@ import { z } from "zod";
 import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
-import { protectedProcedure, publicProcedure, router, staffOrAdminProcedure, staffReadProcedure } from "./_core/trpc";
+import { protectedProcedure, publicProcedure, router, staffOrAdminProcedure, staffReadProcedure, supervisorProcedure } from "./_core/trpc";
 import * as machineDb from "./machines";
 import {
   hashWithSalt,
@@ -755,7 +755,7 @@ export const appRouter = router({
      * utilized, distinct patients catered, urgency/isolation breakdowns,
      * treatment hours, waiting-list additions and pause time.
      */
-    monthly: staffReadProcedure
+    monthly: supervisorProcedure
       .input(
         z.object({
           floorId: z.number().int().positive().optional(),

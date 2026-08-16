@@ -169,9 +169,12 @@ export default function EndOfDayReport() {
   };
   const boards: ReportBoard[] = !isMulti && singleQuery.data ? [singleQuery.data] : [];
   const dateLabel = formatDateLabel(new Date(`${date}T12:00:00+08:00`));
+  // The End of Month report is reserved for the supervisor — non-supervisors
+  // never call the endpoint and never see its controls.
+  const isSupervisor = staff?.role === "supervisor";
   const { data: monthly, isLoading: monthlyLoading } = trpc.endOfDay.monthly.useQuery(
-    { month },
-    { refetchInterval: false }
+    isSupervisor ? { month } : undefined,
+    { refetchInterval: false, enabled: isSupervisor }
   );
   // Print-mode toggle: when true, the daily report (and controls) is hidden in
   // the print layout so "Export Month PDF" yields a clean month-only PDF.
@@ -236,6 +239,7 @@ export default function EndOfDayReport() {
             >
               Refresh
             </Button>
+            {isSupervisor && (
             <Button
               size="sm"
               className="h-9 bg-[#9E1F2B] text-white hover:bg-[#7a1822]"
@@ -250,9 +254,10 @@ export default function EndOfDayReport() {
               <FileDown className="mr-1.5 h-4 w-4" />
               Export Month PDF
             </Button>
+            )}
           </div>
         </div>
-        <div className="mt-4 flex items-center gap-3">
+        <div className={`mt-4 flex items-center gap-3 ${!isSupervisor ? "print:screen-only" : ""}`}>
           <label
             htmlFor="month-picker"
             className="text-xs font-medium uppercase tracking-[0.18em] text-[#7684A0]"

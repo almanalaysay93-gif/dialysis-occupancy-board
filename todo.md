@@ -373,3 +373,9 @@
 - [x] Other logo usages (sidebar + header in DashboardLayout) checked — no glass disc ring there (solid backgrounds), unchanged
 - [x] Verified visually (screenshots), 128/128 tests + tsc clean, checkpoint + push pending
 - [x] White circle border removed at the image level: extracted the seal from the JPEG's white background via edge-connected flood fill, produced a transparent PNG (skti-seal-transparent_b9fdeed9.png), uploaded to webdev storage, and swapped the reference in Home.tsx, StaffLogin.tsx, and DashboardLayout.tsx
+
+## Supervisor-only monthly PDF export (Aug 16)
+- [ ] Gate endOfDay.monthly tRPC procedure to supervisor role in the backend
+- [ ] Hide month picker + Export Month PDF button on /report for non-supervisors
+- [ ] Add/extend vitest coverage for the RBAC gate
+- [ ] Verify as nurse/guest the export is hidden and blocked, tests pass, checkpoint, push GitHub, deliver
