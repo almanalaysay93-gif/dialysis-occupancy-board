@@ -792,6 +792,8 @@ export const appRouter = router({
           date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
           /** Report month in ISO format (YYYY-MM); defaults to the current month in Asia/Manila time. */
           month: z.string().regex(/^\d{4}-\d{2}$/).optional(),
+          /** Shift filter for narrative tables; "all" or a REPORT_SHIFTS key (empty string = all). */
+          shiftKey: z.string().optional(),
         }).optional()
       )
       .query(async ({ ctx, input }) => {
@@ -799,11 +801,24 @@ export const appRouter = router({
           machineDb.endOfDayReportBulk({ date: input?.date }),
           machineDb.monthReport({ floorId: undefined, month: input?.month }),
         ]);
+        // Shift filter applies to narrative tables only (sessions/sessions are
+        // whole-day aggregates already). Overlap is computed server-side so
+        // the same cached payload serves all shift views; narratives are
+        // filtered per period's reporting window vs the shift window.
+        const shiftKey = input?.shiftKey ?? "";
+        const narratives = shiftKey && shiftKey !== "all"
+          ? Object.fromEntries(
+              Object.entries(daily.narratives).map(([floorId, entries]) => [
+                floorId,
+                entries.filter(e => machineDb.periodOverlapsShift(e.periodKey, shiftKey)),
+              ]),
+            )
+          : daily.narratives;
         return {
           // Staff session carried inline so the /report page needs no
           // separate staff.me round trip (each request costs ~3s overhead).
           staff: ctx.staff,
-          daily,
+          daily: { ...daily, narratives },
           monthly,
         };
       }),

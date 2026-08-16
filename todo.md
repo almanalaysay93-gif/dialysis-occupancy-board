@@ -488,3 +488,9 @@
 - [x] Root cause confirmed: each DB round trip to the Supabase pooler costs ~1.3s even on a warm connection (raw pool ping test 8 runs, 1.24-1.34s each); the fixed ~3s per-request overhead is unavoidable, so the only effective fix is fewer requests
 - [x] Round trips reduced: /report supervisor path now fires just 2 requests total (staff.me + reportPage) carrying the full page payload; monthReport (the ~8s outlier) rewritten as one parallel batch of 5 queries with in-memory per-floor splitting
 - [x] Verify load time on production /report (<5s): reportPage median 2.4s warm, monthly 1.9s, bulkSummary 2.0s; 145/145 tests, tsc clean, checkpoint + push + deliver
+
+## Shift-selector on report page (user request Aug 16)
+- [ ] Add shift selector on /report (nurse shifts: 5am-1pm, 1pm-9pm, 9pm-5am, 7am-3pm, 3pm-11pm, 11pm-7am; transitions: 9-11am, 1-3pm, 5-8pm) that filters the per-board narrative tables and supervisor narratives (session periods carry their own shift windows, so filter by label match)
+- [ ] Shift filter reflected in the print/PDF layout (print-only label + filtered narrative tables)
+- [ ] 30s server-side cache for the daily summary/reportPage payload (per date+role key) so repeated refreshes are near-instant; cache invalidated by narrative writes (best-effort TTL is acceptable for a 30s window)
+- [ ] Verify: tests + tsc, live production timing (summary <1s on cached repeat), checkpoint + push + deliver

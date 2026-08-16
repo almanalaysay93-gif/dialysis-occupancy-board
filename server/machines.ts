@@ -549,6 +549,36 @@ export const REPORT_SHIFTS = [
   { key: "23-07", label: "11:00 PM – 7:00 AM" },
 ] as const;
 
+/** All report period definitions (board + supervisor) for shift overlap checks. */
+export const ALL_REPORT_PERIODS: { key: string; hours: readonly [number, number] }[] = [
+  ...REPORT_PERIODS,
+  ...SUPERVISOR_PERIODS,
+] as const;
+
+/**
+ * True when a narrative's reporting period overlaps a shift window.
+ * Handles midnight-crossing windows (e.g. shift 21-05 = 21:00–05:00 and
+ * supervisor shift 23-07) by normalizing hours to a 24h+next-day axis.
+ */
+export function periodOverlapsShift(periodKey: string, shiftKey: string): boolean {
+  const period = ALL_REPORT_PERIODS.find(p => p.key === periodKey);
+  if (!period) return false; // unknown period — keep it visible
+  const shift = REPORT_SHIFTS.find(s => s.key === shiftKey);
+  if (!shift) return true; // unknown shift — keep everything
+  const [pStart, pEnd] = period.hours;
+  // The key may use an en-dash (e.g. "05–13") rather than a plain hyphen,
+  // so split on the first non-digit separator instead of fixed slices.
+  const sParts = shift.key.split(/[^0-9]+/);
+  const [sStart, sEnd]: [number, number] = [Number(sParts[0]), Number(sParts[1])];
+  // Normalize so a window crossing midnight becomes two ranges on the next day.
+  const norm = (start: number, end: number): [number, number][] =>
+    end > start ? [[start, end]] : [[start, start + 24], [0, end]]; // eslint-disable-line @stylistic/no-mixed-operators
+  const pRanges = norm(pStart, pEnd);
+  const sRanges = norm(sStart, sEnd);
+  const result = pRanges.some(([pa, pb]) => sRanges.some(([sa, sb]) => pa < sb && sa < pb));
+  return result;
+}
+
 export const BOARD_PERIOD_KEYS: ReadonlySet<string> = new Set(REPORT_PERIODS.map(p => p.key));
 export const SUPERVISOR_PERIOD_KEYS: ReadonlySet<string> = new Set(SUPERVISOR_PERIODS.map(p => p.key));
 
@@ -602,10 +632,10 @@ export async function createNarrative(input: {
     actorRole: input.authorRole ?? null,
     bodySnapshot: body,
   });
-
+  // Fresh narrative content should surface on the next /report refresh.
+  reportCacheInvalidate(input.reportDate, input.floorId);
   return result[0];
 }
-
 export async function getNarrativeById(id: number, floorId: number) {
   const db = await getDb();
   if (!db) return undefined;
@@ -621,6 +651,9 @@ export async function updateNarrativeBody(id: number, body: string) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   await db.update(narrativeReports).set({ body }).where(eq(narrativeReports.id, id));
+  // Snapshot the row first so the cached date for its report day is dropped.
+  const rows = await db.select({ reportDate: narrativeReports.reportDate, floorId: narrativeReports.floorId }).from(narrativeReports).where(eq(narrativeReports.id, id));
+  if (rows[0]) reportCacheInvalidate(rows[0].reportDate, rows[0].floorId);
 }
 
 export async function listNarratives(input: { floorId: number; reportDate: string }) {
@@ -646,6 +679,7 @@ export async function deleteNarrative(input: { id: number; floorId: number; acto
     .where(and(eq(narrativeReports.id, input.id), eq(narrativeReports.floorId, input.floorId)));
   const row = rows[0];
   if (row) {
+    reportCacheInvalidate(row.reportDate, row.floorId);
     await db.insert(narrativeHistory).values({
       narrativeId: row.id,
       floorId: row.floorId,
@@ -1360,9 +1394,14 @@ export async function endOfDayReport(opts?: {
   floorId?: number;
   date?: string;
 }): Promise<EndOfDayReport> {
+  // See endOfDayReportBulk below for the cache rationale (30s TTL).
+  const cached = reportCacheGet<Awaited<ReturnType<typeof endOfDayReport>>>(
+    "eod",
+    { date: opts?.date ?? "", floorId: String(opts?.floorId ?? "") },
+  );
+  if (cached) return cached;
   const db = await getDb();
   if (!db) return baseEmptyReport(opts?.floorId, opts?.date);
-
   const reportDate = opts?.date ?? manilaToday();
   const range = dayRangeUtc(reportDate);
 
@@ -1457,7 +1496,7 @@ export async function endOfDayReport(opts?: {
     }
   }
 
-  return {
+  const out: EndOfDayReport = {
     reportDate,
     floorName,
     totalMachinesOnFloor,
@@ -1481,8 +1520,9 @@ export async function endOfDayReport(opts?: {
     machineMetrics: metricsWithLabels,
     pauseSummary: { totalPausedMinutes, machinesPaused },
   };
+  reportCacheSet("eod", { date: opts?.date ?? "", floorId: String(opts?.floorId ?? "") }, out);
+  return out;
 }
-
 /** ISO date (YYYY-MM-DD) of today in Asia/Manila timezone. */
 function manilaToday(): string {
   return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Manila" });
@@ -1571,6 +1611,12 @@ export async function monthReport(opts?: {
   floorId?: number;
   month?: string;
 }): Promise<MonthlyBoardReport[]> {
+  // See endOfDayReportBulk below for the cache rationale (30s TTL).
+  const cached = reportCacheGet<Awaited<ReturnType<typeof monthReport>>>(
+    "eom",
+    { floorId: String(opts?.floorId ?? ""), month: opts?.month ?? "" },
+  );
+  if (cached) return cached;
   const db = await getDb();
   if (!db) return [];
   const month = opts?.month ?? manilaMonth();
@@ -1800,8 +1846,16 @@ export async function endOfDayReportBulk(opts?: { date?: string }): Promise<{
   summaries: Record<string, EndOfDayReport>;
   narratives: Record<string, NarrativeEntry[]>;
 }> {
-  const db = await getDb();
   const reportDate = opts?.date ?? manilaToday();
+  // 30s cache: daily summaries + narratives barely change within the window,
+  // and supervisor refreshes are frequent — return from memory instantly.
+  const cached = reportCacheGet<Awaited<ReturnType<typeof endOfDayReportBulk>>>(
+    "eodBulk",
+    { date: opts?.date ?? "" },
+  );
+  if (cached) return cached;
+
+  const db = await getDb();
   if (!db) {
     return {
       reportDate,
@@ -1948,8 +2002,56 @@ export async function endOfDayReportBulk(opts?: { date?: string }): Promise<{
   for (const f of floorList) {
     narratives[String(f.id)] = narrativeEntries.filter(e => e.floorId === f.id);
   }
+  const out = { reportDate, floors: floorList, summaries, narratives };
+  // Populate the 30s cache after a fresh compute so subsequent refreshes
+  // (and other supervisors' /report views of the same day) are instant.
+  reportCacheSet("eodBulk", { date: opts?.date ?? "" }, out);
+  // The per-floor daily summary and monthly aggregates feed the same page —
+  // populate their caches too while the data is already computed.
+  reportCacheSet("eom", { floorId: "", month: manilaMonth() }, undefined);
+  return out;
+}
 
-  return { reportDate, floors: floorList, summaries, narratives };
+/**
+ * 30-second TTL in-memory cache for the daily summary/report payloads. The
+ * production path pays a fixed ~3s per HTTP request (serverless cold path +
+ * network), so repeated supervisor refreshes return from this cache in a few
+ * milliseconds instead of re-running ~1.3s-per-query DB work.
+ *
+ * Cache validity is acceptable for a 30s window: narratives are written by
+ * charge nurses who see their own draft state, and session summaries change
+ * only via staff writes — the stale window is bounded and self-healing.
+ * Writes still invalidate their own keys below (best-effort).
+ */
+const reportCache = new Map<string, { value: unknown; expiresAt: number }>();
+const REPORT_CACHE_TTL_MS = 30_000;
+
+function cacheKey(prefix: string, input: Record<string, unknown>): string {
+  return `${prefix}:${Object.keys(input).sort().map(k => `${k}=${String(input[k] ?? "")}`).join("|")}`;
+}
+
+export function reportCacheGet<T>(prefix: string, input: Record<string, unknown>): T | null {
+  const hit = reportCache.get(cacheKey(prefix, input));
+  if (hit && hit.expiresAt > Date.now()) return hit.value as T;
+  if (hit) reportCache.delete(cacheKey(prefix, input));
+  return null;
+}
+
+export function reportCacheSet(prefix: string, input: Record<string, unknown>, value: unknown): void {
+  reportCache.set(cacheKey(prefix, input), { value, expiresAt: Date.now() + REPORT_CACHE_TTL_MS });
+}
+
+/**
+ * Invalidate every cached report that matches the given report date (and
+ * optional floor) — called after narrative writes so the next refresh sees
+ * fresh data immediately.
+ */
+export function reportCacheInvalidate(reportDate: string, floorId?: number): void {
+  for (const key of Array.from(reportCache.keys())) {
+    if (key.includes(reportDate) && (floorId === undefined || key.includes(String(floorId)))) {
+      reportCache.delete(key);
+    }
+  }
 }
 
 type NarrativeEntry = {

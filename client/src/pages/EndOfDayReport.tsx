@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "wouter";
-import { ClipboardList, Dumbbell, FileDown, PenLine, Printer, Trash2, UserRound, Users } from "lucide-react";
+import { ClipboardList, Dumbbell, FileDown, Filter, PenLine, Printer, Trash2, UserRound, Users } from "lucide-react";
 import { toast } from "sonner";
 import DashboardLayout from "@/components/DashboardLayout";
 import { ScrollReveal } from "@/components/ScrollReveal";
@@ -144,6 +144,8 @@ function ReportBoardSection({
 export default function EndOfDayReport() {
   const [date, setDate] = useState(() => localDateStr(0));
   const [month, setMonth] = useState(() => manilaMonthStr(0));
+  // Shift filter for narrative tables (server-side period-overlap filter).
+  const [shiftKey, setShiftKey] = useState<string>("all");
 
   // Staff session scoping: the summary query already restricts nurses to
   // their own board. Supervisors see every board — one call
@@ -165,7 +167,7 @@ export default function EndOfDayReport() {
   );
 
   const pageQuery = trpc.endOfDay.reportPage.useQuery(
-    { date, month },
+    { date, month, shiftKey },
     { refetchInterval: 30_000, enabled: staff?.role === "supervisor" }
   );
   const floors = pageQuery.data?.daily.floors;
@@ -174,9 +176,9 @@ export default function EndOfDayReport() {
   // responses are already cached by the time the sections render.
   useEffect(() => {
     void utils.staff.me.prefetch();
-    void utils.endOfDay.reportPage.prefetch({ date, month });
+    void utils.endOfDay.reportPage.prefetch({ date, month, shiftKey });
     void utils.endOfDay.summary.prefetch({ date });
-  }, [utils, date, month]);
+  }, [utils, date, month, shiftKey]);
 
   const isMulti = staff?.role === "supervisor";
   const isGuest = staff?.role === "guest";
@@ -185,7 +187,7 @@ export default function EndOfDayReport() {
     : singleQuery.isLoading;
   const refresh = () => {
     if (isMulti) {
-      void utils.endOfDay.reportPage.invalidate({ date, month });
+      void utils.endOfDay.reportPage.invalidate({ date, month, shiftKey });
     } else {
       void singleQuery.refetch();
     }
@@ -193,6 +195,10 @@ export default function EndOfDayReport() {
   };
   const boards: ReportBoard[] = !isMulti && singleQuery.data ? [singleQuery.data] : [];
   const dateLabel = formatDateLabel(new Date(`${date}T12:00:00+08:00`));
+  const shiftLabel =
+    shiftKey && shiftKey !== "all"
+      ? `Filtered by Shift · ${REPORT_SHIFTS.find(s => s.key === shiftKey)?.label ?? shiftKey}`
+      : null;
   // The End of Month report is reserved for the supervisor — non-supervisors
   // never call the endpoint and never see its controls.
   const isSupervisor = staff?.role === "supervisor";
@@ -297,6 +303,42 @@ export default function EndOfDayReport() {
             className="h-9 rounded-sm border border-[#D4DFE5] bg-white px-2 text-sm text-[#1F2A52] outline-none focus:border-[#2E9A9B]"
           />
         </div>
+        {isSupervisor && (
+          <div className={`mt-3 flex flex-wrap items-center gap-3 ${printMonthOnly ? "print:screen-only" : ""}`}>
+            <label
+              htmlFor="shift-selector"
+              className="text-xs font-medium uppercase tracking-[0.18em] text-[#7684A0]"
+            >
+              Narrative Shift Filter
+            </label>
+            <select
+              id="shift-selector"
+              value={shiftKey}
+              onChange={e => setShiftKey(e.target.value)}
+              className="h-9 rounded-sm border border-[#D4DFE5] bg-white px-2 text-sm text-[#1F2A52] outline-none focus:border-[#2E9A9B]"
+            >
+              <option value="all">All Shifts</option>
+              {REPORT_SHIFTS.map(s => (
+                <option key={s.key} value={s.key}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+            <span className="text-xs text-[#556680]">
+              Shows narrative entries whose session/transition window overlaps
+              the selected shift (supervisor shifts included).
+            </span>
+          </div>
+        )}
+
+        {/* Active shift filter banner — also visible in print so the PDF
+            states which shift the narrative tables reflect. */}
+        {shiftLabel && (
+          <div className="mt-3 inline-flex items-center gap-2 rounded-sm border border-[#2E9A9B]/40 bg-[#2E9A9B]/10 px-3 py-1.5 text-xs font-medium text-[#17696A]">
+            <Filter className="h-3.5 w-3.5" />
+            {shiftLabel}
+          </div>
+        )}
 
         {/* Daily report content — hidden during a month-only print so the
             End of Month PDF never includes the End of Day Report. */}
