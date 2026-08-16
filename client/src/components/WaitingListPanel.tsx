@@ -353,7 +353,7 @@ export default function WaitingListPanel({ floorId }: { floorId: number }) {
     });
 
   return (
-    <section className="mt-8 border border-[#1F2A52]/80 bg-[#FBFCFD]">
+    <section className="glass-panel border border-[#1F2A52]/80">
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-[#D4DFE5] px-5 py-4">
         <div className="flex items-center gap-3">
           <Users className="h-5 w-5 text-[#2E9A9B]" />

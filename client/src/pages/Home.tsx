@@ -402,6 +402,7 @@ export function OccupancyBoardContent({ floorId }: { floorId?: number }) {
             written on the board during the shift; the End of Day Report
             reflects it read-only. Staff only — hidden from guests. */}
         {waitingFloorId !== undefined && !isGuest && (
+          <div className="mt-10">
           <ScrollReveal yOffset={32}>
           <NarrativeReport
             floorId={waitingFloorId}
@@ -411,6 +412,7 @@ export function OccupancyBoardContent({ floorId }: { floorId?: number }) {
             editable={canWrite}
           />
           </ScrollReveal>
+          </div>
         )}
 
         <AddMachineDialog

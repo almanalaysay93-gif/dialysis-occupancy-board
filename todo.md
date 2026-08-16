@@ -426,3 +426,8 @@
 - [x] Add ScrollReveal to End of Day Report page (single-board card, multi-board cards, narrative sections, supervisor + history sections)
 - [x] Add ScrollReveal to Staff Login page (hero + form card)
 - [x] Verify all pages (screenshots: /, /rooms, /staff-login, /backup all clean; /urgent & /report show auth-gated skeletons in unauthenticated capture — expected); 130/130 tests + tsc pass; checkpoint + deliver
+
+## Board panel spacing + Waiting List restyle (user request Aug 16)
+- [x] Add space between Nurse Assignments and Narrative Report sections on all boards — NarrativeReport wrapped in a div.mt-10 (Waiting/Nurse panels keep mt-8)
+- [x] Restyle Waiting List to match the Nurse Assignments card look on all boards — WaitingListPanel outer section now uses the .glass-panel utility (was plain mt-8 border + bg-[#FBFCFD])
+- [x] Verify visually on / and /floor/:id (guest screenshots clean), 130/130 tests + tsc pass, checkpoint + deliver
