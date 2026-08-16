@@ -386,14 +386,14 @@ export function OccupancyBoardContent({ floorId }: { floorId?: number }) {
         {/* Per-board waiting list (visible on each floor's board;
             in flow mode these are rendered inside each slide instead) */}
         {!flowEnabled && waitingFloorId !== undefined && !isClinicalHidden && (
-          <div className="mt-8">
+          <div className="mt-10">
           <ScrollReveal yOffset={32}>
             <WaitingListPanel floorId={waitingFloorId} />
           </ScrollReveal>
           </div>
         )}
         {!flowEnabled && waitingFloorId !== undefined && !isClinicalHidden && (
-          <div className="mt-8">
+          <div className="mt-10">
           <ScrollReveal yOffset={32}>
             <NurseAssignmentsPanel floorId={waitingFloorId} />
           </ScrollReveal>
@@ -404,7 +404,7 @@ export function OccupancyBoardContent({ floorId }: { floorId?: number }) {
             written on the board during the shift; the End of Day Report
             reflects it read-only. Staff only — hidden from guests. */}
         {!flowEnabled && waitingFloorId !== undefined && !isClinicalHidden && (
-          <div className="mt-10">
+          <div className="mt-14">
           <ScrollReveal yOffset={32}>
           <NarrativeReport
             floorId={waitingFloorId}

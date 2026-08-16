@@ -469,3 +469,7 @@
 - [x] Root-cause: check staff credentials table/seed state and auth mutation logic
 - [x] Restore missing staff accounts (nurse.skti-icu, nurse.skti-service-ward, auditor) per staff-credentials.md
 - [x] Fix: reset nurse.skti-main hash to documented Nurse1234; vitest coverage (141 tests), tsc clean, committed 0131760, pushed to GitHub
+
+## Add space between the board tables/panels (user request Aug 16)
+- [ ] Increase vertical spacing between Narrative Report sections (SKTI Main / RDU Annex / RDU Main) and other panel blocks on the Occupancy Board
+- [ ] Verify visually at desktop and mobile, tests + tsc pass, checkpoint + deliver

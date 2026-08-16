@@ -1058,7 +1058,7 @@ export function NarrativeReport({
   if (!authorName && openAuthor === "") setOpenAuthor("");
 
   return (
-    <Card className="glass-panel print:bg-white print:backdrop-none print:shadow-none print:border print:border-[#D4DFE5] print:break-inside-avoid">
+    <Card className="glass-panel mt-6 first:mt-0 print:bg-white print:backdrop-none print:shadow-none print:border print:border-[#D4DFE5] print:break-inside-avoid">
       <CardHeader className="border-b border-[#D4DFE5]/70 pb-4">
         <div className="flex items-center gap-2">
           <PenLine className="h-4 w-4 text-[#2E9A9B]" />
@@ -1072,7 +1072,7 @@ export function NarrativeReport({
             : "Charge nurse narratives recorded for this day — supervisors view only."}
         </p>
       </CardHeader>
-      <CardContent className="space-y-2 pt-4">
+      <CardContent className="space-y-3 pt-4">
         {isLoading ? (
           <Skeleton className="h-40" />
         ) : isError ? (
@@ -1086,7 +1086,7 @@ export function NarrativeReport({
             return (
               <div
                 key={period.key}
-                className="rounded-sm border border-[#D4DFE5] bg-[#FBFCFD]"
+                className="rounded-sm border border-[#D4DFE5] bg-[#FBFCFD] py-2"
               >
                 {entry ? (
                   <div className="flex items-start justify-between gap-3 px-3.5 py-3">
@@ -1173,7 +1173,7 @@ export function NarrativeReport({
             return (
               <div
                 key={period.key}
-                className="rounded-sm border border-[#D4DFE5] bg-[#FBFCFD]"
+                className="rounded-sm border border-[#D4DFE5] bg-[#FBFCFD] py-2"
               >
                 {entry ? (
                   <div className="flex items-start justify-between gap-3 px-3.5 py-3">
