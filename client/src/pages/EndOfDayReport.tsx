@@ -180,6 +180,12 @@ export default function EndOfDayReport() {
   // Print-mode toggle: when true, the daily report (and controls) is hidden in
   // the print layout so "Export Month PDF" yields a clean month-only PDF.
   const [printMonthOnly, setPrintMonthOnly] = useState(false);
+  // Reset printMonthOnly when the browser print / PDF dialog closes
+  useEffect(() => {
+    const handleAfterPrint = () => setPrintMonthOnly(false);
+    window.addEventListener("afterprint", handleAfterPrint);
+    return () => window.removeEventListener("afterprint", handleAfterPrint);
+  }, []);
 
   return (
     <DashboardLayout>
@@ -213,7 +219,7 @@ export default function EndOfDayReport() {
               board{isMulti ? "s" : ""} for {dateLabel}.
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 print:screen-only">
             <input
               type="date"
               value={date}
@@ -226,35 +232,29 @@ export default function EndOfDayReport() {
             <Button
               size="sm"
               variant="outline"
-              className="h-9 border-[#D4DFE5] text-[#1F2A52]"
-              onClick={() => window.print()}
-            >
-              <Printer className="mr-1.5 h-4 w-4" />
-              Print
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-9 border-[#D4DFE5] text-[#1F2A52]"
-              onClick={refresh}
-            >
-              Refresh
-            </Button>
-            {isSupervisor && (
-            <Button
-              size="sm"
-              className="h-9 bg-[#9E1F2B] text-white hover:bg-[#7a1822]"
+              className="h-9 border-[#D4DFE5] text-[#1F2A52] hover:bg-[#E8EFF1]"
               onClick={() => {
-                // Print only the End of Month report: hide the daily report
-                // content before opening the print dialog, then restore it.
-                setPrintMonthOnly(true);
+                setPrintMonthOnly(false);
                 window.print();
               }}
-              aria-label="Export the End of Month report as PDF"
+              aria-label="Save Daily Report as PDF"
             >
-              <FileDown className="mr-1.5 h-4 w-4" />
-              Export Month PDF
+              <FileDown className="mr-1.5 h-4 w-4 text-[#2E9A9B]" />
+              Save Daily Report as PDF
             </Button>
+            {isSupervisor && (
+              <Button
+                size="sm"
+                className="h-9 bg-[#9E1F2B] text-white hover:bg-[#7a1822]"
+                onClick={() => {
+                  setPrintMonthOnly(true);
+                  window.print();
+                }}
+                aria-label="Save Monthly Report as PDF"
+              >
+                <FileDown className="mr-1.5 h-4 w-4" />
+                Save Monthly Report as PDF
+              </Button>
             )}
           </div>
         </div>
@@ -1544,8 +1544,8 @@ function PrintableMonthReport({
         <p className="mt-1 text-sm text-[#556680]">{monthLabel} · All boards · Asia/Manila time</p>
       </div>
 
-      {data.map(board => (
-        <div key={board.floorId} className="mb-10 break-before-page">
+      {data.map((board, idx) => (
+        <div key={board.floorId} className={`mb-8 ${idx > 0 ? "break-before-page" : ""}`}>
           <h3 className="mb-3 font-display text-xl text-[#1F2A52]">
             {board.floorName ?? `Floor ${board.floorId}`}
           </h3>

@@ -11,7 +11,9 @@ let scrollTriggerRegistered = false;
  */
 async function ensureScrollTrigger() {
   const [gsapModule, triggerModule] = await Promise.all([
+    // @ts-ignore
     import("gsap"),
+    // @ts-ignore
     import("gsap/ScrollTrigger"),
   ]);
   const gsap = gsapModule.gsap;

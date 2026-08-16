@@ -314,24 +314,39 @@
    chrome (sidebar, topbar, controls, the daily report) and render only the
    printable month report so the exported PDF is a clean paginated document. */
 @media print {
+  @page {
+    margin: 12mm 10mm;
+    size: A4 portrait;
+  }
+  html, body {
+    height: auto !important;
+    overflow: visible !important;
+    background: white !important;
+    color: black !important;
+  }
   .screen\:hidden {
     display: none !important;
   }
+  [data-slot="sidebar"],
   [data-slot="sidebar-header"],
-  [data-slot="sidebar-content"] {
+  [data-slot="sidebar-content"],
+  header,
+  nav,
+  button {
     display: none !important;
   }
-  /* Keep the inset content area; the month print block surfaces on top. */
   .print\:block {
     display: block !important;
   }
-  /* Month-only export — hides the daily report subtree so the PDF contains
-     only the printable End of Month report. */
   .print\:screen-only {
     display: none !important;
   }
-  @page {
-    margin: 14mm;
-    size: A4;
+  .break-before-page {
+    break-before: page !important;
+    page-break-before: always !important;
+  }
+  table, tr, td, th, .glass-panel, .glass-table {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
   }
 }
