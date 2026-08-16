@@ -463,3 +463,9 @@
 ## Header Sign out / date overlap fix (mobile, user report Aug 16)
 - [x] Fix board header: Sign out button overlaps the date on small screens — restructure the header row (wrap to two lines, date below controls)
 - [x] Verify on 375px mobile viewport, tests + tsc pass, checkpoint + deliver
+
+## Staff login "Invalid username or password" (user report Aug 16)
+- [x] Reproduce /staff-login failure: staff.username + password rejected with "Invalid username or password"
+- [x] Root-cause: check staff credentials table/seed state and auth mutation logic
+- [x] Restore missing staff accounts (nurse.skti-icu, nurse.skti-service-ward, auditor) per staff-credentials.md
+- [ ] Fix + vitest coverage, tsc clean, checkpoint, push to GitHub, deliver
