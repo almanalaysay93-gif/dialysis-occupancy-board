@@ -1778,7 +1778,7 @@ export async function endOfDayReportBulk(opts?: { date?: string }): Promise<{
   // Run the remaining day-wide loads concurrently: one sessions, one waiting,
   // one machines query each, regardless of floor count.
   const range = dayRangeUtc(reportDate);
-  const [allMachines, ended, waitingRows] = await Promise.all([
+  const [allMachines, ended, waitingRows, activeToday] = await Promise.all([
     db.select().from(machines),
     db
       .select()
@@ -1788,6 +1788,17 @@ export async function endOfDayReportBulk(opts?: { date?: string }): Promise<{
       .select()
       .from(waitingList)
       .where(sql`${waitingList.joinedAt} >= ${range.from} AND ${waitingList.joinedAt} < ${range.to}`),
+    // Active sessions started today — fetched day-wide once instead of
+    // one query per floor (~1.3s each serially on the remote pooler).
+    db
+      .select({
+        machineId: sessions.machineId,
+        startedAt: sessions.startedAt,
+        pausedSeconds: sessions.pausedSeconds,
+        endedAt: sessions.endedAt,
+      })
+      .from(sessions)
+      .where(and(eq(sessions.status, "active"), sql`${sessions.startedAt} >= ${range.from}`, sql`${sessions.startedAt} <= ${range.to}`)),
   ]);
 
   const byFloor = new Map<number, typeof allMachines>();
@@ -1827,11 +1838,11 @@ export async function endOfDayReportBulk(opts?: { date?: string }): Promise<{
       else waitingAdds.normal++;
     }
 
-    const machineMetrics = await machineDayMetricsInline({
-      db,
+    const machineMetrics = machineDayMetricsInline({
       floorId: f.id,
       date: reportDate,
       ended,
+      activeToday,
       machines: floorMachines,
     });
 
@@ -1924,8 +1935,7 @@ async function listNarrativesBulk(
  * sessions + floor machine rows, so the bulk endpoint doesn't pay extra
  * round trips per floor.
  */
-async function machineDayMetricsInline(input: {
-  db: Awaited<ReturnType<typeof getDb>>;
+function machineDayMetricsInline(input: {
   floorId: number;
   date: string;
   ended: {
@@ -1933,24 +1943,21 @@ async function machineDayMetricsInline(input: {
     startedAt: Date;
     endedAt: Date | null;
     pausedSeconds: number;
-    status: string;
+  }[];
+  activeToday: {
+    machineId: number;
+    startedAt: Date;
+    endedAt: Date | null;
+    pausedSeconds: number;
   }[];
   machines: { id: number }[];
-}): Promise<Record<string, { pausedMinutes: number; idleMinutes: number; occupiedMinutes: number }>> {
-  const { db, date, ended, machines } = input;
+}): Record<string, { pausedMinutes: number; idleMinutes: number; occupiedMinutes: number }> {
+  const { ended, activeToday, machines } = input;
   const out: Record<string, { pausedMinutes: number; idleMinutes: number; occupiedMinutes: number }> = {};
-  if (!db) return out;
-
-  const dateStart = new Date(`${date}T00:00:00Z`);
-  const dateEnd = new Date(`${date}T23:59:59Z`);
-
-  // Ended sessions were already loaded for the whole day — reuse them.
-  // We still need the active-since-today sessions for this floor (1 query/floor).
-  const activeToday = await db
-    .select({ machineId: sessions.machineId, startedAt: sessions.startedAt, pausedSeconds: sessions.pausedSeconds, endedAt: sessions.endedAt })
-    .from(sessions)
-    .where(and(eq(sessions.status, "active"), sql`${sessions.startedAt} >= ${dateStart}`, sql`${sessions.startedAt} <= ${dateEnd}`));
-
+  const dateStart = new Date(`${input.date}T00:00:00Z`);
+  const dateEnd = new Date(`${input.date}T23:59:59Z`);
+  // Fully in-memory: ended + active-today sessions were pre-fetched
+  // day-wide by the bulk helper (no per-floor DB round trips).
   const onFloor = new Set(machines.map(m => m.id));
   const byMachine = new Map<number, { sessions: { startedAt: Date; endedAt: Date | null; pausedSeconds: number }[] }>();
   for (const s of [...ended, ...activeToday]) {
