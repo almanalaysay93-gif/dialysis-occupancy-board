@@ -191,11 +191,11 @@ function DashboardLayoutContent({
                     alt="SPMCKTI logo"
                     className="h-9 w-9 rounded-full object-cover shrink-0"
                   />
-                  <span className="flex flex-col min-w-0 leading-tight">
+                  <span className="flex flex-col min-w-0 leading-tight shrink">
                     <span className="font-display text-lg tracking-tight text-foreground">
                       Dialysis<span className="text-accent">.</span>
                     </span>
-                    <span className="text-[9px] uppercase tracking-[0.22em] text-muted-foreground truncate">
+                    <span className="text-[9px] uppercase tracking-[0.22em] text-muted-foreground whitespace-normal break-words">
                       SPMC Kidney &amp; Transplant
                     </span>
                   </span>

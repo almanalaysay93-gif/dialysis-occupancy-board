@@ -386,4 +386,9 @@
 - [x] DashboardLayout.tsx: /urgent removed from the guest sidebar
 - [x] Urgent.tsx: guest view replaced with "reserved for clinical staff" prompt + staff-login link; urgent query disabled for guests
 - [x] Verified live in browser as guest: /floor/30001 shows machines with no Waiting/Nurse/Narrative panels; /urgent shows the staff-only prompt and no Urgent Cases entry in the sidebar; 130/130 tests pass, tsc clean
-- [ ] Checkpoint, push GitHub, deliver
+- [x] Checkpoint 4666928e saved (auto-published); pushed to GitHub (4666928)
+
+## Sidebar brand text truncation (Aug 16)
+- [ ] Fix "SPMC KIDNEY & TRANS..." truncation in the sidebar brand block — full text must display
+- [ ] Check other truncated text spots (header wordmark) for the same issue
+- [ ] Verify sidebar renders full brand text, checkpoint, push GitHub, deliver
