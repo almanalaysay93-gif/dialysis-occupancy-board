@@ -779,6 +779,36 @@ export const appRouter = router({
       .query(async ({ input }) => machineDb.endOfDayReportBulk({ date: input?.date })),
 
     /**
+     * Entire supervisor /report page in ONE call: staff session info, floor
+     * list, per-floor summaries, narratives and the end-of-month aggregate.
+     * The production path pays a fixed ~3s overhead per HTTP request
+     * (serverless cold path + network), so collapsing the page's 4-5
+     * requests into a single request roughly halves the perceived load time.
+     */
+    reportPage: supervisorProcedure
+      .input(
+        z.object({
+          /** Report date in ISO format (YYYY-MM-DD); defaults to today in Asia/Manila time. */
+          date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+          /** Report month in ISO format (YYYY-MM); defaults to the current month in Asia/Manila time. */
+          month: z.string().regex(/^\d{4}-\d{2}$/).optional(),
+        }).optional()
+      )
+      .query(async ({ ctx, input }) => {
+        const [daily, monthly] = await Promise.all([
+          machineDb.endOfDayReportBulk({ date: input?.date }),
+          machineDb.monthReport({ floorId: undefined, month: input?.month }),
+        ]);
+        return {
+          // Staff session carried inline so the /report page needs no
+          // separate staff.me round trip (each request costs ~3s overhead).
+          staff: ctx.staff,
+          daily,
+          monthly,
+        };
+      }),
+
+    /**
      * End of Month report: aggregates the end-of-day data across every day of
      * the given month (Asia/Manila) per floor — sessions ended, machines
      * utilized, distinct patients catered, urgency/isolation breakdowns,

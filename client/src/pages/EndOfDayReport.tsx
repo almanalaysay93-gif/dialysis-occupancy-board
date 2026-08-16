@@ -146,46 +146,46 @@ export default function EndOfDayReport() {
   const [month, setMonth] = useState(() => manilaMonthStr(0));
 
   // Staff session scoping: the summary query already restricts nurses to
-  // their own board. Supervisors see every board — one bulk call
-  // (endOfDay.bulkSummary) returns all floors' summaries, narratives and
-  // machine metrics in a single request instead of one query per floor,
-  // which matters because the remote database costs ~1.3s per round trip.
-  // Nurses (one board) and guests use the single unscoped query as before.
-  const { data: floors } = trpc.machines.listFloors.useQuery(undefined, {
-    refetchInterval: 30_000,
-    staleTime: 20_000,
-  });
-  const singleQuery = trpc.endOfDay.summary.useQuery(
-    { date },
-    { refetchInterval: false }
-  );
+  // their own board. Supervisors see every board — one call
+  // (endOfDay.reportPage) returns the staff session, all floors' summaries,
+  // narratives, machine metrics and the end-of-month aggregate in a SINGLE
+  // HTTP request. The production path pays a fixed ~3s overhead per request
+  // (serverless cold path + network), so collapsing 4-5 requests into one
+  // roughly halves the perceived page load time. Nurses (one board) and
+  // guests use the single unscoped query as before.
   const staffMe = trpc.staff.me.useQuery(undefined, { retry: false });
   const staff = staffMe.data ?? null;
   const utils = trpc.useUtils();
 
-  const bulkQuery = trpc.endOfDay.bulkSummary.useQuery(
+  // Nurses (single board) and the read-only staff view keep the original
+  // unscoped summary query; supervisors never touch it.
+  const singleQuery = trpc.endOfDay.summary.useQuery(
     { date },
-    { refetchInterval: false, enabled: staff?.role === "supervisor" }
+    { refetchInterval: false, enabled: staff?.role !== "supervisor" }
   );
+
+  const pageQuery = trpc.endOfDay.reportPage.useQuery(
+    { date, month },
+    { refetchInterval: 30_000, enabled: staff?.role === "supervisor" }
+  );
+  const floors = pageQuery.data?.daily.floors;
 
   // Kick all heavy report queries off the moment the page mounts so their
   // responses are already cached by the time the sections render.
   useEffect(() => {
     void utils.staff.me.prefetch();
-    void utils.machines.listFloors.prefetch();
+    void utils.endOfDay.reportPage.prefetch({ date, month });
     void utils.endOfDay.summary.prefetch({ date });
-    void utils.endOfDay.bulkSummary.prefetch({ date });
-    void utils.endOfDay.monthly.prefetch({ month });
   }, [utils, date, month]);
 
   const isMulti = staff?.role === "supervisor";
   const isGuest = staff?.role === "guest";
   const isLoading = isMulti
-    ? ((floors ?? []).length === 0 || floors === undefined || bulkQuery.isLoading)
+    ? ((floors ?? []).length === 0 || floors === undefined || pageQuery.isLoading)
     : singleQuery.isLoading;
   const refresh = () => {
     if (isMulti) {
-      void utils.endOfDay.bulkSummary.invalidate({ date });
+      void utils.endOfDay.reportPage.invalidate({ date, month });
     } else {
       void singleQuery.refetch();
     }
@@ -196,10 +196,8 @@ export default function EndOfDayReport() {
   // The End of Month report is reserved for the supervisor — non-supervisors
   // never call the endpoint and never see its controls.
   const isSupervisor = staff?.role === "supervisor";
-  const { data: monthly, isLoading: monthlyLoading } = trpc.endOfDay.monthly.useQuery(
-    isSupervisor ? { month } : undefined,
-    { refetchInterval: false, enabled: isSupervisor }
-  );
+  const monthly = isSupervisor ? (pageQuery.data?.monthly ?? null) : null;
+  const monthlyLoading = isSupervisor && pageQuery.isLoading;
   // Print-mode toggle: when true, the daily report (and controls) is hidden in
   // the print layout so "Export Month PDF" yields a clean month-only PDF.
   const [printMonthOnly, setPrintMonthOnly] = useState(false);
@@ -368,7 +366,7 @@ export default function EndOfDayReport() {
                 key={f.id}
                 floorId={f.id}
                 date={date}
-                board={bulkQuery.data?.summaries[String(f.id)] ?? null}
+                board={pageQuery.data?.daily.summaries[String(f.id)] ?? null}
               />
             ))}
           </div>
@@ -384,7 +382,7 @@ export default function EndOfDayReport() {
               floorName={f.name}
               date={date}
               staff={staff}
-              entries={bulkQuery.data?.narratives[String(f.id)]}
+              entries={pageQuery.data?.daily.narratives[String(f.id)]}
             />
           ))}
         </ScrollReveal>
@@ -396,7 +394,7 @@ export default function EndOfDayReport() {
             date={date}
             staff={staff}
             multi={isMulti}
-            floorNarratives={bulkQuery.data?.narratives}
+            floorNarratives={pageQuery.data?.daily.narratives}
           />
         )}
 
