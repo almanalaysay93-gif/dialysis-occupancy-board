@@ -490,7 +490,7 @@
 - [x] Verify load time on production /report (<5s): reportPage median 2.4s warm, monthly 1.9s, bulkSummary 2.0s; 145/145 tests, tsc clean, checkpoint + push + deliver
 
 ## Shift-selector on report page (user request Aug 16)
-- [ ] Add shift selector on /report (nurse shifts: 5am-1pm, 1pm-9pm, 9pm-5am, 7am-3pm, 3pm-11pm, 11pm-7am; transitions: 9-11am, 1-3pm, 5-8pm) that filters the per-board narrative tables and supervisor narratives (session periods carry their own shift windows, so filter by label match)
-- [ ] Shift filter reflected in the print/PDF layout (print-only label + filtered narrative tables)
-- [ ] 30s server-side cache for the daily summary/reportPage payload (per date+role key) so repeated refreshes are near-instant; cache invalidated by narrative writes (best-effort TTL is acceptable for a 30s window)
-- [ ] Verify: tests + tsc, live production timing (summary <1s on cached repeat), checkpoint + push + deliver
+- [x] Add shift selector on /report (nurse shifts: 5am-1pm, 1pm-9pm, 9pm-5am, 7am-3pm, 3pm-11pm, 11pm-7am; transitions: 9-11am, 1-3pm, 5-8pm) that filters the per-board narrative tables and supervisor narratives — implemented via server-side periodOverlapsShift (midnight-crossing windows handled; en-dash parsing fixed) driven by the shiftKey input on endOfDay.reportPage
+- [x] Shift filter reflected in the print/PDF layout — active-filter banner renders in view and carries through print/PDF alongside the filtered narrative tables
+- [x] 30s server-side cache for the daily summary/reportPage payload (keyed by date+shift) so repeated refreshes skip all DB work; cache invalidated on narrative create/edit/delete
+- [x] Verify: 156/156 tests + tsc clean; live production: reportPage cold 3.4s (vs ~15s before), cached repeat 1.7s; nurse and guest both get 403 on reportPage; checkpoint 26f40ea8 deployed and pushed to GitHub (0b611dc..26f40ea)
