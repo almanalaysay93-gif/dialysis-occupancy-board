@@ -170,7 +170,7 @@ export function OccupancyBoardContent({ floorId }: { floorId?: number }) {
           <div className="absolute inset-0 bg-gradient-to-r from-[#F7F9FB]/40 via-transparent to-transparent" />
           <div className="relative flex items-center gap-4 px-5 py-3.5 sm:px-6">
             <img
-              src="/manus-storage/skti-logo_1a83b735.jpg"
+              src="/manus-storage/skti-seal-transparent_b9fdeed9.png"
               alt="SKTI seal"
               className="h-12 w-12 shrink-0 rounded-full object-cover drop-shadow-[0_2px_8px_rgba(22,39,70,0.35)] sm:h-14 sm:w-14"
             />

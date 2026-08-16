@@ -70,7 +70,7 @@ export default function StaffLogin() {
           <div className="absolute inset-0 bg-gradient-to-b from-[#F7F9FB]/30 via-transparent to-[#F7F9FB]/30" />
           <div className="relative flex flex-col items-center gap-2.5">
             <img
-              src="/manus-storage/skti-logo_1a83b735.jpg"
+              src="/manus-storage/skti-seal-transparent_b9fdeed9.png"
               alt="SKTI seal"
               className="h-28 w-28 rounded-full object-cover drop-shadow-[0_3px_12px_rgba(22,39,70,0.4)]"
             />

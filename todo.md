@@ -372,3 +372,4 @@
 - [x] Removed the frosted disc ring around the seal in the board banner
 - [x] Other logo usages (sidebar + header in DashboardLayout) checked — no glass disc ring there (solid backgrounds), unchanged
 - [x] Verified visually (screenshots), 128/128 tests + tsc clean, checkpoint + push pending
+- [x] White circle border removed at the image level: extracted the seal from the JPEG's white background via edge-connected flood fill, produced a transparent PNG (skti-seal-transparent_b9fdeed9.png), uploaded to webdev storage, and swapped the reference in Home.tsx, StaffLogin.tsx, and DashboardLayout.tsx
