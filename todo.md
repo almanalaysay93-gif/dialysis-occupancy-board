@@ -408,3 +408,6 @@
 - [x] Marquee content adapted to the dialysis board: Real-Time Machine Tracking / Urgent Case Response / Clean-Dirty Isolation / Nurse Floor Assignments / Daily & Monthly Reporting; CTAs point to Occupancy Board, Rooms & Floors, Staff Sign In, End of Day Report, Backup & Repair; "Crafted with ❤ for SPMCKTI" badge
 - [x] Mount footer below the board content in Home.tsx (inside DashboardLayout); GSAP registration is scroll-safe and print-safe
 - [x] Verify visuals: desktop + mobile screenshots, browser scroll check showing heading, pills, heartbeat badge, back-to-top, giant background text, marquee; tsc clean, 130/130 tests pass; checkpoint + push + deliver
+
+## Footer badge credit (user request Aug 16)
+- [x] Replace "Crafted with ❤ for SPMCKTI" badge with "Developed by AL John P. Manalaysay RN" in CinematicFooter bottom bar

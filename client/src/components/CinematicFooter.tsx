@@ -394,10 +394,8 @@ export function CinematicFooter() {
 
             {/* "Made with Love" Badge */}
             <div className="footer-glass-pill px-6 py-3 rounded-full flex items-center gap-2 order-1 md:order-2 cursor-default border-border/50">
-              <span className="text-muted-foreground text-[10px] md:text-xs font-bold uppercase tracking-widest">Crafted with</span>
-              <span className="animate-footer-heartbeat text-sm md:text-base text-destructive">❤</span>
-              <span className="text-muted-foreground text-[10px] md:text-xs font-bold uppercase tracking-widest">for</span>
-              <span className="text-foreground font-black text-xs md:text-sm tracking-normal ml-1">SPMCKTI</span>
+              <span className="text-muted-foreground text-[10px] md:text-xs font-bold uppercase tracking-widest">Developed by</span>
+              <span className="text-foreground font-black text-xs md:text-sm tracking-normal ml-1">AL John P. Manalaysay RN</span>
             </div>
 
             {/* Back to top */}
