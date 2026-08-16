@@ -326,3 +326,12 @@
 - [x] Silent narrative mutation failures — all narrative mutations (board session/transition narratives, supervisor shift summaries, supervisor dialog) now have onSuccess/onError toasts and invalidate on success
 - [x] Unmapped error codes leaking as 500 — new server/errors.ts mapBackendError maps known backend error codes (MACHINE_OCCUPIED, DURATION_OUT_OF_RANGE, etc.) to typed tRPC errors; passes existing TRPCError through untouched; all catches (waiting.add/remove, setPriority, sessions.end/toggleUrgent/setRepairFlag/updateTag, machines.add, narratives.update/remove) route through it
 - [x] Race conditions on concurrent session assignments (covered by the transaction/locking fix above)
+
+## New nurse accounts for SKTI ICU and SKTI Service Ward (user request, Aug 16)
+- [x] Inspect how existing nurse accounts are seeded and how floor access is mapped (staff_accounts, assignedFloorId, credentials files)
+- [x] Create nurse.skti-icu account scoped to the SKTI ICU floor (floor id 1) with password Seed@1234
+- [x] Create nurse.skti-service-ward account scoped to the SKTI Service Ward floor (floor id 2) with password Seed@1234
+- [x] Verify RBAC live: both nurses log in successfully (staff.me role=nurse, fromCookie=true), and write attempts on other boards (RDU Annex 30002) are blocked; floor-scoped same as other nurses
+- [x] Update staff-credentials.md with the two new accounts and supervisor/End-of-Day references to five boards
+- [x] Update seed.ts (F4/F5 boards, both new nurse entries) so re-seeds stay in sync
+- [ ] Checkpoint, push to GitHub, deliver

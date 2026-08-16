@@ -6,8 +6,8 @@ import { floors, machines, staffAccounts } from "../drizzle/schema";
 import { hashWithSalt } from "./staffAuth";
 
 /**
- * Bring an empty database up to the live layout: three boards, their machines
- * and the four staff logins. Safe to re-run — every step skips rows that
+ * Bring an empty database up to the live layout: five boards, their machines
+ * and the staff logins. Safe to re-run — every step skips rows that
  * already exist, so it never overwrites production data or resets a password.
  *
  * Run with: npm run db:seed
@@ -17,13 +17,17 @@ const BOARDS = [
   { code: "F1", name: "SKTI Main", sortOrder: 1, prefix: "HD", count: 100 },
   { code: "F2", name: "RDU Annex", sortOrder: 2, prefix: "RA", count: 36 },
   { code: "F3", name: "RDU Main", sortOrder: 3, prefix: "RM", count: 24 },
+  { code: "F4", name: "SKTI ICU", sortOrder: 4, prefix: "IC", count: 0 },
+  { code: "F5", name: "SKTI Service Ward", sortOrder: 5, prefix: "SW", count: 0 },
 ];
 
 const STAFF = [
   { username: "supervisor", displayName: "SKTI Supervisor", role: "supervisor" as const, board: null },
-  { username: "nurse.skti-main", displayName: "RDU Nurse · SKTI Main", role: "nurse" as const, board: "F1" },
-  { username: "nurse.rdu-annex", displayName: "RDU Nurse · RDU Annex", role: "nurse" as const, board: "F2" },
-  { username: "nurse.rdu-main", displayName: "RDU Nurse · RDU Main", role: "nurse" as const, board: "F3" },
+  { username: "nurse.skti-main", displayName: "Nurse · SKTI Main", role: "nurse" as const, board: "F1" },
+  { username: "nurse.rdu-annex", displayName: "Nurse · RDU Annex", role: "nurse" as const, board: "F2" },
+  { username: "nurse.rdu-main", displayName: "Nurse · RDU Main", role: "nurse" as const, board: "F3" },
+  { username: "nurse.skti-icu", displayName: "Nurse · SKTI ICU", role: "nurse" as const, board: "F4" },
+  { username: "nurse.skti-service-ward", displayName: "Nurse · SKTI Service Ward", role: "nurse" as const, board: "F5" },
 ];
 
 /** Env override (SEED_PASSWORD_SUPERVISOR, SEED_PASSWORD_NURSE_SKTI_MAIN, …) or a random one. */
