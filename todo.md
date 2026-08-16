@@ -468,4 +468,4 @@
 - [x] Reproduce /staff-login failure: staff.username + password rejected with "Invalid username or password"
 - [x] Root-cause: check staff credentials table/seed state and auth mutation logic
 - [x] Restore missing staff accounts (nurse.skti-icu, nurse.skti-service-ward, auditor) per staff-credentials.md
-- [ ] Fix + vitest coverage, tsc clean, checkpoint, push to GitHub, deliver
+- [x] Fix: reset nurse.skti-main hash to documented Nurse1234; vitest coverage (141 tests), tsc clean, committed 0131760, pushed to GitHub
