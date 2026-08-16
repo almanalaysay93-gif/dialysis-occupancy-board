@@ -494,3 +494,6 @@
 - [x] Shift filter reflected in the print/PDF layout — active-filter banner renders in view and carries through print/PDF alongside the filtered narrative tables
 - [x] 30s server-side cache for the daily summary/reportPage payload (keyed by date+shift) so repeated refreshes skip all DB work; cache invalidated on narrative create/edit/delete
 - [x] Verify: 156/156 tests + tsc clean; live production: reportPage cold 3.4s (vs ~15s before), cached repeat 1.7s; nurse and guest both get 403 on reportPage; checkpoint 26f40ea8 deployed and pushed to GitHub (0b611dc..26f40ea)
+
+## Collapsed sidebar label fix (Aug 16)
+- [ ] "FLOOR BOARDS" group label wraps awkwardly ("FLOO BOAR") when sidebar is collapsed — show "FB" (or hide) when collapsed
