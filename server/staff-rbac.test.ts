@@ -52,6 +52,26 @@ vi.mock("./machines", () => ({
     machineMetrics: {},
     pauseSummary: { totalPausedMinutes: 0, machinesPaused: 0 },
   })),
+  monthReport: vi.fn(async (opts?: { floorId?: number; month?: string }) => [
+    {
+      floorId: opts?.floorId ?? 30001,
+      floorName: opts?.floorId === 2 ? "RDU Annex" : "SKTI Main",
+      month: opts?.month ?? "2026-08",
+      days: [],
+      totals: {
+        sessionsEnded: 100,
+        peakMachinesUtilized: 40,
+        totalMachinesOnFloor: 100,
+        patientsCatered: 100,
+        urgency: { normal: 90, urgent: 10, veryUrgent: 0 },
+        isolation: { clean: 80, dirty: 20 },
+        totalTreatmentHours: 600,
+        waitingAdds: { normal: 5, urgent: 2, veryUrgent: 1, total: 8 },
+        totalPausedMinutes: 30,
+        daysWithActivity: 16,
+      },
+    },
+  ]),
   listNarratives: vi.fn(async () => []),
   // Mirrors the role-based period validation rules of the real createNarrative
   // in server/machines.ts so the tRPC procedure's FORBIDDEN flow is exercised
@@ -537,6 +557,68 @@ describe("end of day report scoping", () => {
     await expect(
       caller(ctx).endOfDay.summary({ floorId: 1 })
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  describe("end of month report scoping", () => {
+    it("supervisor may request the monthly report without a floor scope", async () => {
+      mockResolve.mockResolvedValue({
+        accountId: 5,
+        username: "supervisor",
+        displayName: "SKTI Supervisor",
+        role: "supervisor" as const,
+        assignedFloorId: null,
+      });
+      const ctx = { ...makeCtx(), user: null } as TrpcContext;
+      const report = await caller(ctx).endOfDay.monthly({ month: "2026-08" });
+      expect(Array.isArray(report)).toBe(true);
+      const call = (machineDb.monthReport as ReturnType<typeof vi.fn>).mock
+        .calls[0][0] as { floorId?: number; month?: string };
+      expect(call.floorId).toBeUndefined();
+      expect(call.month).toBe("2026-08");
+    });
+
+    it("nurse without a floorId input defaults to their assigned floor", async () => {
+      mockResolve.mockResolvedValue({
+        accountId: 7,
+        username: "nurse.rdu",
+        displayName: "RDU Nurse",
+        role: "nurse" as const,
+        assignedFloorId: 2,
+      });
+      const ctx = makeCtx();
+      await caller(ctx).endOfDay.monthly({});
+      const call = (machineDb.monthReport as ReturnType<typeof vi.fn>).mock
+        .calls[0][0] as { floorId?: number };
+      expect(call.floorId).toBe(2);
+    });
+
+    it("nurse cannot scope the monthly report to a floor outside their assignment", async () => {
+      mockResolve.mockResolvedValue({
+        accountId: 7,
+        username: "nurse.rdu",
+        displayName: "RDU Nurse",
+        role: "nurse" as const,
+        assignedFloorId: 2,
+      });
+      const ctx = { ...makeCtx(), user: null } as TrpcContext;
+      await expect(
+        caller(ctx).endOfDay.monthly({ floorId: 1 })
+      ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    });
+
+    it("rejects an invalid month format", async () => {
+      mockResolve.mockResolvedValue({
+        accountId: 5,
+        username: "supervisor",
+        displayName: "SKTI Supervisor",
+        role: "supervisor" as const,
+        assignedFloorId: null,
+      });
+      const ctx = { ...makeCtx(), user: null } as TrpcContext;
+      await expect(
+        caller(ctx).endOfDay.monthly({ month: "August 2026" })
+      ).rejects.toThrow();
+    });
   });
 
   it("guest may view the report read-only (floor defaults to undefined, no write calls)", async () => {

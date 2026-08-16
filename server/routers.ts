@@ -748,6 +748,33 @@ export const appRouter = router({
         }
         return machineDb.endOfDayReport({ floorId, date: input?.date });
       }),
+
+    /**
+     * End of Month report: aggregates the end-of-day data across every day of
+     * the given month (Asia/Manila) per floor — sessions ended, machines
+     * utilized, distinct patients catered, urgency/isolation breakdowns,
+     * treatment hours, waiting-list additions and pause time.
+     */
+    monthly: staffReadProcedure
+      .input(
+        z.object({
+          floorId: z.number().int().positive().optional(),
+          /** Report month in ISO format (YYYY-MM); defaults to the current month in Asia/Manila time. */
+          month: z.string().regex(/^\d{4}-\d{2}$/).optional(),
+        }).optional()
+      )
+      .query(async ({ ctx, input }) => {
+        const staff = ctx.staff;
+        // Same floor scoping as the daily summary: nurses see only their own board.
+        let floorId: number | undefined = input?.floorId;
+        if (floorId === undefined && staff.role === "nurse") {
+          floorId = staff.assignedFloorId ?? undefined;
+        }
+        if (floorId !== undefined) {
+          requireFloorAccess(staff, floorId, ctx.user);
+        }
+        return machineDb.monthReport({ floorId, month: input?.month });
+      }),
   }),
 
   /**

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "wouter";
-import { ClipboardList, Dumbbell, PenLine, Printer, Trash2, UserRound, Users } from "lucide-react";
+import { ClipboardList, Dumbbell, FileDown, PenLine, Printer, Trash2, UserRound, Users } from "lucide-react";
 import { toast } from "sonner";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
@@ -73,6 +73,14 @@ function formatDateLabel(date: Date): string {
   });
 }
 
+function manilaMonthStr(offsetMonths: number): string {
+  const d = new Date();
+  d.setMonth(d.getMonth() + offsetMonths);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  return `${y}-${m}`;
+}
+
 function localDateStr(offsetDays: number): string {
   const d = new Date();
   d.setDate(d.getDate() + offsetDays);
@@ -130,6 +138,7 @@ function ReportBoardSection({
  */
 export default function EndOfDayReport() {
   const [date, setDate] = useState(() => localDateStr(0));
+  const [month, setMonth] = useState(() => manilaMonthStr(0));
 
   // Staff session scoping: the summary query already restricts nurses to
   // their own board. Supervisors see every board (one section per floor,
@@ -160,6 +169,13 @@ export default function EndOfDayReport() {
   };
   const boards: ReportBoard[] = !isMulti && singleQuery.data ? [singleQuery.data] : [];
   const dateLabel = formatDateLabel(new Date(`${date}T12:00:00+08:00`));
+  const { data: monthly, isLoading: monthlyLoading } = trpc.endOfDay.monthly.useQuery(
+    { month },
+    { refetchInterval: false }
+  );
+  // Print-mode toggle: when true, the daily report (and controls) is hidden in
+  // the print layout so "Export Month PDF" yields a clean month-only PDF.
+  const [printMonthOnly, setPrintMonthOnly] = useState(false);
 
   return (
     <DashboardLayout>
@@ -178,7 +194,7 @@ export default function EndOfDayReport() {
         </div>
       ) : (
         <>
-        <div className="w-full px-4 sm:px-6 py-6">
+        <div className={`w-full px-4 sm:px-6 py-6 ${printMonthOnly ? "print:screen-only" : ""}`}>
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.22em] text-[#7684A0]">
@@ -220,7 +236,39 @@ export default function EndOfDayReport() {
             >
               Refresh
             </Button>
+            <Button
+              size="sm"
+              className="h-9 bg-[#9E1F2B] text-white hover:bg-[#7a1822]"
+              onClick={() => {
+                // Print only the End of Month report: hide the daily report
+                // content before opening the print dialog, then restore it.
+                setPrintMonthOnly(true);
+                window.print();
+              }}
+              aria-label="Export the End of Month report as PDF"
+            >
+              <FileDown className="mr-1.5 h-4 w-4" />
+              Export Month PDF
+            </Button>
           </div>
+        </div>
+        <div className="mt-4 flex items-center gap-3">
+          <label
+            htmlFor="month-picker"
+            className="text-xs font-medium uppercase tracking-[0.18em] text-[#7684A0]"
+          >
+            Month
+          </label>
+          <input
+            id="month-picker"
+            type="month"
+            value={month}
+            max={manilaMonthStr(0)}
+            onChange={e => {
+              setMonth(e.target.value || manilaMonthStr(0));
+            }}
+            className="h-9 rounded-sm border border-[#D4DFE5] bg-white px-2 text-sm text-[#1F2A52] outline-none focus:border-[#2E9A9B]"
+          />
         </div>
 
         {isLoading && (
@@ -309,6 +357,15 @@ export default function EndOfDayReport() {
         {staff?.role === "auditor" && (
           <NarrativeHistorySection floors={floors} date={date} />
         )}
+
+        {/* Month export container: invisible on screen, visible only in the print layout. */}
+        <div className="hidden print:block mt-12">
+          {monthlyLoading ? (
+            <Skeleton className="h-96" />
+          ) : monthly ? (
+            <PrintableMonthReport data={monthly} month={month} />
+          ) : null}
+        </div>
       </div>
         </>
       )}
@@ -1404,6 +1461,184 @@ function BreakdownCell({
       <span className={`h-2.5 w-2.5 rounded-full ${color}`} />
       <span className="flex-1 text-[11px] text-[#556680]">{label}</span>
       <span className="font-display text-lg text-[#1F2A52]">{value}</span>
+    </div>
+  );
+}
+
+/**
+ * End of Month report, formatted specifically for PDF export via the
+ * browser's print dialog. Hidden from normal screen viewing (screen:hidden)
+ * and only visible in the print layout (print:block).
+ */
+function PrintableMonthReport({
+  data,
+  month,
+}: {
+  data: {
+    floorId: number;
+    floorName: string | null;
+    month: string;
+    days: {
+      date: string;
+      sessionsEnded: number;
+      patientsCatered: number;
+      machinesUtilized: number;
+      totalMachinesOnFloor: number;
+      urgency: { normal: number; urgent: number; veryUrgent: number };
+      isolation: { clean: number; dirty: number };
+      totalTreatmentHours: number;
+      waitingAdds: number;
+      totalPausedMinutes: number;
+    }[];
+    totals: {
+      sessionsEnded: number;
+      peakMachinesUtilized: number;
+      totalMachinesOnFloor: number;
+      patientsCatered: number;
+      urgency: { normal: number; urgent: number; veryUrgent: number };
+      isolation: { clean: number; dirty: number };
+      totalTreatmentHours: number;
+      waitingAdds: { normal: number; urgent: number; veryUrgent: number; total: number };
+      totalPausedMinutes: number;
+      daysWithActivity: number;
+    };
+  }[];
+  month: string;
+}) {
+  const monthLabel = new Date(`${month}-15T12:00:00+08:00`).toLocaleDateString([], {
+    month: "long",
+    year: "numeric",
+    timeZone: "Asia/Manila",
+  });
+
+  const fmtMin = (min: number) => {
+    if (min < 60) return `${min} min`;
+    const h = Math.floor(min / 60);
+    const m = min % 60;
+    return m > 0 ? `${h} h ${m} min` : `${h} h`;
+  };
+
+  return (
+    <div className="screen:hidden print:block">
+      <div className="mb-8 border-b-2 border-[#9E1F2B] pb-4">
+        <p className="text-xs uppercase tracking-[0.2em] text-[#7684A0]">Hemodialysis Occupancy Board</p>
+        <h2 className="font-display text-2xl text-[#1F2A52]">End of Month Report</h2>
+        <p className="mt-1 text-sm text-[#556680]">{monthLabel} · All boards · Asia/Manila time</p>
+      </div>
+
+      {data.map(board => (
+        <div key={board.floorId} className="mb-10 break-before-page">
+          <h3 className="mb-3 font-display text-xl text-[#1F2A52]">
+            {board.floorName ?? `Floor ${board.floorId}`}
+          </h3>
+
+          <table className="w-full border-collapse text-sm">
+            <thead>
+              <tr className="border-b-2 border-[#1F2A52] text-left text-[#1F2A52]">
+                <th className="px-2 py-1.5 font-semibold">Metric</th>
+                <th className="px-2 py-1.5 font-semibold">Total</th>
+              </tr>
+            </thead>
+            <tbody className="text-[#374151]">
+              <tr className="border-b border-[#D4DFE5]">
+                <td className="px-2 py-1">Sessions completed</td>
+                <td className="px-2 py-1 font-medium">{board.totals.sessionsEnded}</td>
+              </tr>
+              <tr className="border-b border-[#D4DFE5]">
+                <td className="px-2 py-1">Patients catered (distinct)</td>
+                <td className="px-2 py-1 font-medium">{board.totals.patientsCatered}</td>
+              </tr>
+              <tr className="border-b border-[#D4DFE5]">
+                <td className="px-2 py-1">Machines on floor</td>
+                <td className="px-2 py-1 font-medium">{board.totals.totalMachinesOnFloor}</td>
+              </tr>
+              <tr className="border-b border-[#D4DFE5]">
+                <td className="px-2 py-1">Peak machines utilized in one day</td>
+                <td className="px-2 py-1 font-medium">{board.totals.peakMachinesUtilized}</td>
+              </tr>
+              <tr className="border-b border-[#D4DFE5]">
+                <td className="px-2 py-1">Total treatment hours</td>
+                <td className="px-2 py-1 font-medium">{board.totals.totalTreatmentHours} h</td>
+              </tr>
+              <tr className="border-b border-[#D4DFE5]">
+                <td className="px-2 py-1">Normal / Urgent / Very urgent cases</td>
+                <td className="px-2 py-1 font-medium">
+                  {board.totals.urgency.normal} / {board.totals.urgency.urgent} /{" "}
+                  {board.totals.urgency.veryUrgent}
+                </td>
+              </tr>
+              <tr className="border-b border-[#D4DFE5]">
+                <td className="px-2 py-1">Clean / Dirty isolation tags</td>
+                <td className="px-2 py-1 font-medium">
+                  {board.totals.isolation.clean} / {board.totals.isolation.dirty}
+                </td>
+              </tr>
+              <tr className="border-b border-[#D4DFE5]">
+                <td className="px-2 py-1">Waiting-list additions (normal / urgent / very urgent / total)</td>
+                <td className="px-2 py-1 font-medium">
+                  {board.totals.waitingAdds.normal} / {board.totals.waitingAdds.urgent} /{" "}
+                  {board.totals.waitingAdds.veryUrgent} / {board.totals.waitingAdds.total}
+                </td>
+              </tr>
+              <tr className="border-b border-[#D4DFE5]">
+                <td className="px-2 py-1">Total machine pause time</td>
+                <td className="px-2 py-1 font-medium">{fmtMin(board.totals.totalPausedMinutes)}</td>
+              </tr>
+              <tr>
+                <td className="px-2 py-1">Days with activity</td>
+                <td className="px-2 py-1 font-medium">
+                  {board.totals.daysWithActivity} of {board.days.length}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+
+          <h4 className="mb-2 mt-6 font-semibold text-[#1F2A52]">Daily breakdown</h4>
+          <table className="w-full border-collapse text-sm">
+            <thead>
+              <tr className="border-b-2 border-[#1F2A52] text-left text-[#1F2A52]">
+                <th className="px-2 py-1.5 font-semibold">Date</th>
+                <th className="px-2 py-1.5 text-right font-semibold">Sessions</th>
+                <th className="px-2 py-1.5 text-right font-semibold">Patients</th>
+                <th className="px-2 py-1.5 text-right font-semibold">Machines used</th>
+                <th className="px-2 py-1.5 text-right font-semibold">Hours</th>
+                <th className="px-2 py-1.5 text-right font-semibold">Urgent</th>
+                <th className="px-2 py-1.5 text-right font-semibold">Very urgent</th>
+                <th className="px-2 py-1.5 text-right font-semibold">Waiting added</th>
+                <th className="px-2 py-1.5 text-right font-semibold">Pause</th>
+              </tr>
+            </thead>
+            <tbody className="text-[#374151]">
+              {board.days.map(day => (
+                <tr key={day.date} className="border-b border-[#D4DFE5]">
+                  <td className="px-2 py-1">
+                    {new Date(`${day.date}T12:00:00+08:00`).toLocaleDateString([], {
+                      weekday: "short",
+                      day: "numeric",
+                      timeZone: "Asia/Manila",
+                    })}
+                  </td>
+                  <td className="px-2 py-1 text-right">{day.sessionsEnded}</td>
+                  <td className="px-2 py-1 text-right">{day.patientsCatered}</td>
+                  <td className="px-2 py-1 text-right">
+                    {day.machinesUtilized}/{day.totalMachinesOnFloor}
+                  </td>
+                  <td className="px-2 py-1 text-right">{day.totalTreatmentHours}</td>
+                  <td className="px-2 py-1 text-right">{day.urgency.urgent}</td>
+                  <td className="px-2 py-1 text-right">{day.urgency.veryUrgent}</td>
+                  <td className="px-2 py-1 text-right">{day.waitingAdds}</td>
+                  <td className="px-2 py-1 text-right">{fmtMin(day.totalPausedMinutes)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ))}
+
+      <p className="mt-6 text-xs text-[#7684A0]">
+        Generated {new Date().toLocaleString([], { timeZone: "Asia/Manila" })} ·
+        Hemodialysis Occupancy Board
+      </p>
     </div>
   );
 }

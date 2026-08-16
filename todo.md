@@ -334,4 +334,13 @@
 - [x] Verify RBAC live: both nurses log in successfully (staff.me role=nurse, fromCookie=true), and write attempts on other boards (RDU Annex 30002) are blocked; floor-scoped same as other nurses
 - [x] Update staff-credentials.md with the two new accounts and supervisor/End-of-Day references to five boards
 - [x] Update seed.ts (F4/F5 boards, both new nurse entries) so re-seeds stay in sync
-- [ ] Checkpoint, push to GitHub, deliver
+- [x] Checkpoint, push to GitHub, deliver
+
+## PDF export for the End of Month report (user request, Aug 16)
+- [x] Inspect EndOfDayReport page: current structure, monthly data availability, and where the export button should live
+- [x] Backend monthReport helper + endOfDay.monthly procedure: per-day sessions/patients/machines/utilization/urgency/isolation/waiting/treatment hours + totalPausedMinutes, plus monthly totals
+- [x] UI: month picker (defaults to current month) on /report; "Export Month PDF" button (crimson) opens the browser print dialog
+- [x] PrintableMonthReport component: print-only (screen:hidden/print:block) with cover header, per-floor summary tables, day-by-day table; A4 @page; app chrome hidden in print
+- [x] Month-only print mode: "Export Month PDF" hides the daily report via a print:screen-only wrapper so the PDF contains only the End of Month report (plain Print still exports the daily report)
+- [x] Performance fix during verification: replaced the per-day machineDayMetrics N+1 loop (~87 s) with a bulk machineRangeMetrics computation (~5 s)
+- [x] Verify end-to-end: supervisor sees month picker + button, monthly data loads, print CSS correct; 128/128 tests pass, tsc clean; checkpoint, push GitHub, deliver

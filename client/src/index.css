@@ -233,3 +233,30 @@
 .urgent-waiting {
   animation: waitpulse 1.6s ease-in-out infinite;
 }
+
+/* End of Month PDF export — print layout.
+   When "Export Month PDF" triggers the browser print dialog, hide the app
+   chrome (sidebar, topbar, controls, the daily report) and render only the
+   printable month report so the exported PDF is a clean paginated document. */
+@media print {
+  .screen\:hidden {
+    display: none !important;
+  }
+  [data-slot="sidebar-header"],
+  [data-slot="sidebar-content"] {
+    display: none !important;
+  }
+  /* Keep the inset content area; the month print block surfaces on top. */
+  .print\:block {
+    display: block !important;
+  }
+  /* Month-only export — hides the daily report subtree so the PDF contains
+     only the printable End of Month report. */
+  .print\:screen-only {
+    display: none !important;
+  }
+  @page {
+    margin: 14mm;
+    size: A4;
+  }
+}
