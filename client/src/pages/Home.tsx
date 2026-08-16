@@ -161,13 +161,13 @@ export function OccupancyBoardContent({ floorId }: { floorId?: number }) {
   return (
     <div className="w-full px-4 sm:px-6 py-6">
         {/* Frosted-glass institute banner — SKTI building imagery */}
-        <section className="glass-deep relative mb-4 overflow-hidden border border-[#1F2A52]/15">
+        <section className="glass-deep relative mb-4 overflow-hidden border border-[#1F2A52]/25">
           <img
             src="/manus-storage/skti-building_5c90942a.jpg"
             alt="SPMC Kidney & Transplant Institute building"
-            className="absolute inset-0 h-full w-full object-cover object-top opacity-[0.14]"
+            className="absolute inset-0 h-full w-full object-cover object-top opacity-[0.35] saturate-[1.1]"
           />
-          <div className="absolute inset-0 bg-gradient-to-r from-[#F7F9FB] via-[#F7F9FB]/70 to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-r from-[#F7F9FB]/40 via-transparent to-transparent" />
           <div className="relative flex items-center gap-4 px-5 py-3.5 sm:px-6">
             <span className="glass-icon h-14 w-14 shrink-0 p-2 sm:h-16 sm:w-16">
               <img

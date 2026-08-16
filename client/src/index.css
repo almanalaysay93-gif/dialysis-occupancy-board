@@ -127,36 +127,41 @@
    Translucent navy-tinted glass with backdrop blur; machine tile status
    colors remain solid and fully readable on top of the glass. */
 .glass-panel {
-  background: oklch(0.99 0.003 220 / 0.55);
-  backdrop-filter: blur(14px) saturate(1.15);
-  -webkit-backdrop-filter: blur(14px) saturate(1.15);
-  border: 1px solid oklch(0.99 0.003 220 / 0.65);
+  background: oklch(0.98 0.012 225 / 0.65);
+  backdrop-filter: blur(16px) saturate(1.35);
+  -webkit-backdrop-filter: blur(16px) saturate(1.35);
+  border: 1px solid oklch(0.99 0.003 220 / 0.8);
+  border-top-color: oklch(0.99 0.003 220 / 0.95);
   box-shadow:
-    0 4px 24px -6px oklch(0.275 0.062 262 / 0.12),
-    inset 0 1px 0 oklch(0.99 0.003 220 / 0.8);
+    0 4px 24px -6px oklch(0.275 0.062 262 / 0.16),
+    0 0 0 1px oklch(0.275 0.062 262 / 0.05),
+    inset 0 1px 0 oklch(0.99 0.003 220 / 0.9);
   border-radius: 0.625rem;
 }
 .glass-deep {
-  background: oklch(0.97 0.01 220 / 0.72);
-  backdrop-filter: blur(18px) saturate(1.25);
-  -webkit-backdrop-filter: blur(18px) saturate(1.25);
-  border: 1px solid oklch(0.99 0.003 220 / 0.6);
+  background: oklch(0.965 0.014 225 / 0.82);
+  backdrop-filter: blur(20px) saturate(1.45);
+  -webkit-backdrop-filter: blur(20px) saturate(1.45);
+  border: 1px solid oklch(0.99 0.003 220 / 0.75);
+  border-top-color: oklch(0.99 0.003 220 / 0.95);
   box-shadow:
-    0 8px 32px -8px oklch(0.275 0.062 262 / 0.18),
-    inset 0 1px 0 oklch(0.99 0.003 220 / 0.85);
+    0 8px 32px -8px oklch(0.275 0.062 262 / 0.22),
+    0 0 0 1px oklch(0.275 0.062 262 / 0.07),
+    inset 0 1px 0 oklch(0.99 0.003 220 / 0.95);
   border-radius: 0.625rem;
 }
 /* Glass table: frosted surface with translucent header strip. */
 .glass-table {
   border-collapse: separate;
   border-spacing: 0;
-  background: oklch(0.99 0.003 220 / 0.5);
-  backdrop-filter: blur(12px) saturate(1.1);
-  -webkit-backdrop-filter: blur(12px) saturate(1.1);
-  border: 1px solid oklch(0.99 0.003 220 / 0.6);
+  background: oklch(0.985 0.01 225 / 0.62);
+  backdrop-filter: blur(14px) saturate(1.3);
+  -webkit-backdrop-filter: blur(14px) saturate(1.3);
+  border: 1px solid oklch(0.99 0.003 220 / 0.78);
+  border-top-color: oklch(0.99 0.003 220 / 0.92);
   box-shadow:
-    0 4px 20px -6px oklch(0.275 0.062 262 / 0.1),
-    inset 0 1px 0 oklch(0.99 0.003 220 / 0.75);
+    0 4px 20px -6px oklch(0.275 0.062 262 / 0.14),
+    inset 0 1px 0 oklch(0.99 0.003 220 / 0.88);
   border-radius: 0.5rem;
   overflow: hidden;
 }

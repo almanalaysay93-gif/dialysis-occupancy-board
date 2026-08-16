@@ -61,12 +61,13 @@ export default function StaffLogin() {
   return (
     <div className="min-h-screen bg-[#f5f4ef] flex items-center justify-center p-4">
       <div className="w-full max-w-md space-y-6">
-        <div className="glass-deep relative overflow-hidden border border-[#1F2A52]/15 px-8 py-6 text-center">
+        <div className="glass-deep relative overflow-hidden border border-[#1F2A52]/25 px-8 py-7 text-center">
           <img
             src="/manus-storage/skti-building_5c90942a.jpg"
             alt="SPMC Kidney & Transplant Institute building"
-            className="absolute inset-0 h-full w-full object-cover object-top opacity-[0.16]"
+            className="absolute inset-0 h-full w-full object-cover opacity-[0.4] saturate-[1.05]"
           />
+          <div className="absolute inset-0 bg-gradient-to-b from-[#F7F9FB]/30 via-transparent to-[#F7F9FB]/30" />
           <div className="relative flex flex-col items-center gap-2.5">
             <div className="glass-icon inline-flex h-24 w-24 p-3">
               <img

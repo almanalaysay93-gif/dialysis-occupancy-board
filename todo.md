@@ -359,3 +359,9 @@
 - [x] Remove the HD machines photo from the login hero
 - [x] Remove the HD machines photo from the board banner
 - [x] Verify visuals (screenshots), checkpoint saved (auto-published)
+
+## Hero blank space + glassmorphism visibility fix (Aug 16 — /buildme)
+- [ ] Login hero: eliminate white blank space — make the building backdrop and glass card feel full/edge-to-edge with visible frosted blur and borders
+- [ ] Strengthen glassmorphism utility classes (blur, translucent fill, inner highlight, border) so the effect is clearly visible on banners, cards, and tables
+- [ ] Ensure banner strip on boards shows a clearly visible frosted glass panel
+- [ ] Verify visuals, checkpoint, push GitHub, deliver
