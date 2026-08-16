@@ -1578,48 +1578,59 @@ export async function monthReport(opts?: {
     throw new Error("Month must be YYYY-MM.");
   }
 
-  const floorRows = await db.select().from(floors).where(
-    opts?.floorId ? eq(floors.id, opts.floorId) : undefined,
-  );
+  // Build the UTC day windows for every day of the month, anchored to +08:00.
+  const [year, monthNum] = month.split("-").map(Number);
+  const daysInMonth = new Date(Date.UTC(year, monthNum, 0)).getUTCDate();
+  const dayRanges = Array.from({ length: daysInMonth }, (_, i) => {
+    const iso = `${year}-${String(monthNum).padStart(2, "0")}-${String(i + 1).padStart(2, "0")}`;
+    return { iso, ...dayRangeUtc(iso) };
+  });
+  const rangeStart = dayRanges[0].from;
+  const rangeEnd = dayRanges[dayRanges.length - 1].to;
+
+  // Load everything once, in parallel: the remote pooler serializes queries
+  // (~1.3s each), so one round trip per table beats a per-floor loop.
+  const [floorRows, allMachines, monthSessions, allWaiting, activeRows] = await Promise.all([
+    db.select().from(floors).where(opts?.floorId ? eq(floors.id, opts.floorId) : undefined),
+    db.select().from(machines),
+    db.execute(sql`
+      SELECT * FROM ${sessions}
+      WHERE "status" = 'ended' AND "endedAt" >= ${rangeStart} AND "endedAt" < ${rangeEnd}
+    `),
+    db.execute(sql`
+      SELECT * FROM ${waitingList}
+      WHERE "joinedAt" >= ${rangeStart} AND "joinedAt" < ${rangeEnd}
+    `),
+    db.execute(sql`
+      SELECT "machineId","startedAt","endedAt","pausedSeconds","status" FROM ${sessions}
+      WHERE "status" = 'active' AND "startedAt" >= ${rangeStart} AND "startedAt" < ${rangeEnd}
+    `),
+  ]);
+  type MonthSessionRow = {
+    id: number;
+    machineId: number;
+    patientId: string;
+    startedAt: Date;
+    endedAt: Date | null;
+    pausedSeconds: number;
+    durationMinutes: number;
+    urgent: boolean;
+    isolationTag: string | null;
+  };
+  const monthEnded: MonthSessionRow[] = ((monthSessions?.rows ?? []) as unknown[]).map(r => r as MonthSessionRow);
+  const waitingRows: { floorId: number; joinedAt: Date; priority: string | null }[] = (allWaiting?.rows ?? []) as never;
+  const activeSessionRows: { machineId: number; startedAt: Date; endedAt: Date | null; pausedSeconds: number }[] = (activeRows?.rows ?? []) as never;
 
   const out: MonthlyBoardReport[] = [];
   for (const floor of floorRows) {
-    const floorMachines = await db
-      .select()
-      .from(machines)
-      .where(eq(machines.floorId, floor.id));
+    const floorMachines = allMachines.filter(m => m.floorId === floor.id);
     const machineIds = new Set(floorMachines.map(m => m.id));
     const machineLabels = new Map<number, string>(floorMachines.map(m => [m.id, m.label]));
 
-    // Build the UTC day windows for every day of the month, anchored to +08:00.
-    const [year, monthNum] = month.split("-").map(Number);
-    const daysInMonth = new Date(Date.UTC(year, monthNum, 0)).getUTCDate();
-    const dayRanges = Array.from({ length: daysInMonth }, (_, i) => {
-      const iso = `${year}-${String(monthNum).padStart(2, "0")}-${String(i + 1).padStart(2, "0")}`;
-      return { iso, ...dayRangeUtc(iso) };
-    });
-
-    const sessionRows = await db
-      .select()
-      .from(sessions)
-      .where(
-        and(
-          eq(sessions.status, "ended"),
-          sql`${sessions.endedAt} >= ${dayRanges[0].from} AND ${sessions.endedAt} < ${dayRanges[dayRanges.length - 1].to}`,
-        ),
-      );
-    const monthSessions = sessionRows.filter(s => machineIds.has(s.machineId));
+    const sOfFloor = monthEnded.filter((s: MonthSessionRow) => machineIds.has(s.machineId));
 
     // Waiting-list additions during the month on this floor.
-    const waiting = await db
-      .select()
-      .from(waitingList)
-      .where(
-        and(
-          eq(waitingList.floorId, floor.id),
-          sql`${waitingList.joinedAt} >= ${dayRanges[0].from} AND ${waitingList.joinedAt} < ${dayRanges[dayRanges.length - 1].to}`,
-        ),
-      );
+    const waiting = waitingRows.filter(w => w.floorId === floor.id);
 
     const perDay = new Map<string, {
       sessionsEnded: number; patientsCatered: number; machinesUtilized: number;
@@ -1637,7 +1648,7 @@ export async function monthReport(opts?: {
     }
 
     const allPatients = new Set<string>();
-    for (const s of monthSessions) {
+    for (const s of sOfFloor) {
       const d = new Date(s.endedAt!);
       const iso = d.toLocaleDateString("en-CA", { timeZone: "Asia/Manila" });
       const bucket = perDay.get(iso);
@@ -1665,15 +1676,34 @@ export async function monthReport(opts?: {
     // from the already-fetched session rows (pausedSeconds is a session-level
     // cumulative value, so per-session attribution by endedAt day matches the
     // per-day loop above).
-    const rangeMetrics = await machineRangeMetrics({
-      floorId: floor.id,
-      rangeStart: dayRanges[0].from,
-      rangeEnd: dayRanges[dayRanges.length - 1].to,
-    });
-    const totalPausedByMachine = new Map<number, number>();
-    for (const [id, m] of Object.entries(rangeMetrics)) totalPausedByMachine.set(Number(id), m.pausedMinutes);
-    for (const s of monthSessions) {
-      const pausedMin = totalPausedByMachine.get(s.machineId) ?? 0;
+    // Pause minutes per floor: compute in memory from the already-fetched
+    // sessions (pausedSeconds is cumulative per session, so splitting by the
+    // endedAt day matches the per-day loop above). The range-spanning
+    // operating window comes straight from the fetched rows.
+    const onFloor = new Set(floorMachines.map(m => m.id));
+    const floorSessionSpans: { machineId: number; startedAt: Date; endedAt: Date | null; pausedSeconds: number }[] = [
+      ...sOfFloor.map((s: MonthSessionRow) => ({ machineId: s.machineId, startedAt: s.startedAt, endedAt: s.endedAt ?? null, pausedSeconds: s.pausedSeconds })),
+      ...activeSessionRows.filter(a => onFloor.has(a.machineId)),
+    ];
+    let floorStart: number | null = null;
+    let floorEnd: number | null = null;
+    const now = Date.now();
+    for (const s of floorSessionSpans) {
+      const start = Math.max(s.startedAt.getTime(), rangeStart.getTime());
+      const end = Math.min((s.endedAt ? s.endedAt.getTime() : now), rangeEnd.getTime());
+      if (end <= start) continue;
+      if (floorStart === null) { floorStart = start; floorEnd = end; }
+      else { floorStart = Math.min(floorStart, start); floorEnd = Math.max(floorEnd!, end); }
+    }
+    const pausedByMachine = new Map<number, number>();
+    if (floorStart !== null) {
+      for (const s of sOfFloor) {
+        const pausedMin = Math.round((s.pausedSeconds ?? 0) * 1000 / 60000);
+        if (pausedMin > 0) pausedByMachine.set(s.machineId, (pausedByMachine.get(s.machineId) ?? 0) + pausedMin);
+      }
+    }
+    for (const s of sOfFloor) {
+      const pausedMin = pausedByMachine.get(s.machineId) ?? 0;
       if (pausedMin > 0) {
         const d = new Date(s.endedAt!);
         const iso = d.toLocaleDateString("en-CA", { timeZone: "Asia/Manila" });
@@ -1682,7 +1712,7 @@ export async function monthReport(opts?: {
           // Attribute the machine's paused minutes to the day the session
           // ended on (same day window used for sessionsEnded/patientsCatered).
           bucket.pausedMinutes += pausedMin;
-          totalPausedByMachine.set(s.machineId, 0);
+          pausedByMachine.set(s.machineId, 0);
         }
       }
     }
