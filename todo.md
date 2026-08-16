@@ -361,7 +361,14 @@
 - [x] Verify visuals (screenshots), checkpoint saved (auto-published)
 
 ## Hero blank space + glassmorphism visibility fix (Aug 16 — /buildme)
-- [ ] Login hero: eliminate white blank space — make the building backdrop and glass card feel full/edge-to-edge with visible frosted blur and borders
-- [ ] Strengthen glassmorphism utility classes (blur, translucent fill, inner highlight, border) so the effect is clearly visible on banners, cards, and tables
-- [ ] Ensure banner strip on boards shows a clearly visible frosted glass panel
-- [ ] Verify visuals, checkpoint, push GitHub, deliver
+- [x] Login hero: eliminated white blank space — building photo now fills the card edge-to-edge (object-cover, opacity 0.4 with light top/bottom tints)
+- [x] Strengthened glassmorphism utilities — .glass-panel/.glass-deep/.glass-table: deeper frost opacity, stronger blur/saturation, brighter borders + top highlight + subtle outer ring
+- [x] Banner strip shows visible frosted glass over a richer building backdrop (opacity 0.35, gradient overlay reduced)
+- [x] Verified on production after hard reload: seal renders in banner, glass visible; checkpoint 02be6cf8 (auto-published); verified seal JPEG content is intact (800x800, real colors)
+- [x] Push latest changes to GitHub (02be6cf)
+
+## Logo ring removal (Aug 16 — /buildme)
+- [x] Removed the frosted disc ring around the seal on the login hero (larger seal directly on the backdrop with soft drop shadow)
+- [x] Removed the frosted disc ring around the seal in the board banner
+- [x] Other logo usages (sidebar + header in DashboardLayout) checked — no glass disc ring there (solid backgrounds), unchanged
+- [x] Verified visually (screenshots), 128/128 tests + tsc clean, checkpoint + push pending

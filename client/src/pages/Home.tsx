@@ -169,13 +169,11 @@ export function OccupancyBoardContent({ floorId }: { floorId?: number }) {
           />
           <div className="absolute inset-0 bg-gradient-to-r from-[#F7F9FB]/40 via-transparent to-transparent" />
           <div className="relative flex items-center gap-4 px-5 py-3.5 sm:px-6">
-            <span className="glass-icon h-14 w-14 shrink-0 p-2 sm:h-16 sm:w-16">
-              <img
-                src="/manus-storage/skti-logo_1a83b735.jpg"
-                alt="SKTI seal"
-                className="h-full w-full rounded-full object-cover"
-              />
-            </span>
+            <img
+              src="/manus-storage/skti-logo_1a83b735.jpg"
+              alt="SKTI seal"
+              className="h-12 w-12 shrink-0 rounded-full object-cover drop-shadow-[0_2px_8px_rgba(22,39,70,0.35)] sm:h-14 sm:w-14"
+            />
             <div className="min-w-0">
               <p className="font-display text-sm font-semibold tracking-wide text-[#1F2A52] sm:text-base">
                 SPMC Kidney &amp; Transplant Institute

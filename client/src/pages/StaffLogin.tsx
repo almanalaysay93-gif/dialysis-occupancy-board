@@ -69,13 +69,11 @@ export default function StaffLogin() {
           />
           <div className="absolute inset-0 bg-gradient-to-b from-[#F7F9FB]/30 via-transparent to-[#F7F9FB]/30" />
           <div className="relative flex flex-col items-center gap-2.5">
-            <div className="glass-icon inline-flex h-24 w-24 p-3">
-              <img
-                src="/manus-storage/skti-logo_1a83b735.jpg"
-                alt="SKTI seal"
-                className="h-full w-full rounded-full object-cover"
-              />
-            </div>
+            <img
+              src="/manus-storage/skti-logo_1a83b735.jpg"
+              alt="SKTI seal"
+              className="h-28 w-28 rounded-full object-cover drop-shadow-[0_3px_12px_rgba(22,39,70,0.4)]"
+            />
             <h1 className="font-serif text-3xl text-[#1F2A52]">SPMCKTI Occupancy Board</h1>
             <p className="text-sm text-[#4a4a45]">SPMC Kidney &amp; Transplant Institute</p>
           </div>
