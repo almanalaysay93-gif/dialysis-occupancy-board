@@ -431,3 +431,8 @@
 - [x] Add space between Nurse Assignments and Narrative Report sections on all boards — NarrativeReport wrapped in a div.mt-10 (Waiting/Nurse panels keep mt-8)
 - [x] Restyle Waiting List to match the Nurse Assignments card look on all boards — WaitingListPanel outer section now uses the .glass-panel utility (was plain mt-8 border + bg-[#FBFCFD])
 - [x] Verify visually on / and /floor/:id (guest screenshots clean), 130/130 tests + tsc pass, checkpoint + deliver
+
+## Guest gating verification — all boards (user request Aug 16)
+- [x] Verify Waiting List / Nurse Assignments / Narrative Report panels are hidden from guests on every board — gating intact in HEAD: all three panels gated with `!isGuest` in the shared OccupancyBoardContent (used by / and /floor/:id for all 5 floors)
+- [x] Recent edits did not touch the gating — only spacing wrappers were added inside the gated blocks; additionally gated the "N WAITING" header stat (WaitingCount) for guests
+- [x] Verified live in browser as guest (GUEST · GUEST) on /floor/30003: only machines + header stats shown, no Waiting List / Nurse Assignments / Narrative Report panels; earlier screenshot showing panels was a capture-tool artifact (ScrollReveal opacity snap); 130/130 tests + tsc pass; checkpoint + deliver

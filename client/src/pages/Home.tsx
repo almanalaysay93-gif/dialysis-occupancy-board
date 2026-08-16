@@ -255,7 +255,7 @@ export function OccupancyBoardContent({ floorId }: { floorId?: number }) {
                   Isolation
                 </span>
               </div>
-              {waitingFloorId !== undefined && <WaitingCount floorId={waitingFloorId} />}
+              {waitingFloorId !== undefined && !isGuest && <WaitingCount floorId={waitingFloorId} />}
             </div>
           </div>
         </header>
