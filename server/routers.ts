@@ -763,6 +763,22 @@ export const appRouter = router({
       }),
 
     /**
+     * All-boards End of Day report in a SINGLE call: summaries, per-machine
+     * pause/idle metrics and day narratives for every floor. Used by the
+     * supervisor's /report page to avoid one DB round trip (~1.3s) per
+     * per-floor procedure — supervisors see all boards, everyone else is
+     * rejected so a nurse/guest never pays for boards they can't read.
+     */
+    bulkSummary: supervisorProcedure
+      .input(
+        z.object({
+          /** Report date in ISO format (YYYY-MM-DD); defaults to today in Asia/Manila time. */
+          date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+        }).optional()
+      )
+      .query(async ({ input }) => machineDb.endOfDayReportBulk({ date: input?.date })),
+
+    /**
      * End of Month report: aggregates the end-of-day data across every day of
      * the given month (Asia/Manila) per floor — sessions ended, machines
      * utilized, distinct patients catered, urgency/isolation breakdowns,

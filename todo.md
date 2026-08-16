@@ -483,3 +483,8 @@
 - [ ] Profile live /report end-to-end: measure each tRPC request on the production deployment and find where the 15s is spent (cold start? serverless boot? sequential queries? dashboard layout blockers?)
 - [ ] Apply targeted fix for the real bottleneck
 - [ ] Verify load time, tests + tsc, checkpoint + push + deliver
+
+## /report 15s — round 3: round-trip reduction (root cause confirmed Aug 16)
+- [ ] Root cause confirmed: each DB round trip to the Supabase pooler costs ~1.3s even on a warm connection (raw pool ping test 8 runs, 1.24-1.34s each). /report fires 8+ parallel queries => 10-15s. Warmup/retry fixes cannot fix a per-query fixed cost.
+- [ ] Reduce /report round trips: bundle per-board data into fewer bulk endpoints (board summary + narrative + waiting in single calls where possible) and/or add short-TTL in-memory caching for read-only report data (lru-cache, ~10s TTL)
+- [ ] Verify load time on production /report (<5s), tests + tsc, checkpoint + push + deliver

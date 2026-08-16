@@ -101,15 +101,19 @@ function localDateStr(offsetDays: number): string {
 function ReportBoardSection({
   floorId,
   date,
+  board,
 }: {
   floorId: number;
   date: string;
+  /** Pre-fetched per-floor summary (supervisor bulk call). Skips its own query. */
+  board?: ReportBoard | null;
 }) {
   const { data, isLoading, error, refetch } = trpc.endOfDay.summary.useQuery(
     { date, floorId },
-    { refetchInterval: false }
+    { refetchInterval: false, enabled: board === undefined }
   );
-  if (isLoading) return <Skeleton className="h-72" />;
+  const resolved = board ?? data;
+  if (!resolved && isLoading) return <Skeleton className="h-72" />;
   if (error) {
     return (
       <Card className="glass-panel border-[#9E1F2B]/40 bg-[#FBF5F5]/80">
@@ -128,8 +132,8 @@ function ReportBoardSection({
       </Card>
     );
   }
-  if (!data) return <Skeleton className="h-72" />;
-  return <ReportBoardCard board={data} />;
+  if (!resolved) return <Skeleton className="h-72" />;
+  return <ReportBoardCard board={resolved} />;
 }
 
 /**
@@ -142,9 +146,11 @@ export default function EndOfDayReport() {
   const [month, setMonth] = useState(() => manilaMonthStr(0));
 
   // Staff session scoping: the summary query already restricts nurses to
-  // their own board. Supervisors see every board (one section per floor,
-  // each with its own stable query hook); nurses (one board) and guests use
-  // the single unscoped query.
+  // their own board. Supervisors see every board — one bulk call
+  // (endOfDay.bulkSummary) returns all floors' summaries, narratives and
+  // machine metrics in a single request instead of one query per floor,
+  // which matters because the remote database costs ~1.3s per round trip.
+  // Nurses (one board) and guests use the single unscoped query as before.
   const { data: floors } = trpc.machines.listFloors.useQuery(undefined, {
     refetchInterval: 30_000,
     staleTime: 20_000,
@@ -157,25 +163,32 @@ export default function EndOfDayReport() {
   const staff = staffMe.data ?? null;
   const utils = trpc.useUtils();
 
+  const bulkQuery = trpc.endOfDay.bulkSummary.useQuery(
+    { date },
+    { refetchInterval: false, enabled: staff?.role === "supervisor" }
+  );
+
   // Kick all heavy report queries off the moment the page mounts so their
   // responses are already cached by the time the sections render.
   useEffect(() => {
     void utils.staff.me.prefetch();
     void utils.machines.listFloors.prefetch();
     void utils.endOfDay.summary.prefetch({ date });
+    void utils.endOfDay.bulkSummary.prefetch({ date });
     void utils.endOfDay.monthly.prefetch({ month });
   }, [utils, date, month]);
 
   const isMulti = staff?.role === "supervisor";
   const isGuest = staff?.role === "guest";
   const isLoading = isMulti
-    ? (floors ?? []).length === 0 || floors === undefined
+    ? ((floors ?? []).length === 0 || floors === undefined || bulkQuery.isLoading)
     : singleQuery.isLoading;
   const refresh = () => {
     if (isMulti) {
-      (floors ?? []).forEach(f => void utils.endOfDay.summary.invalidate({ date, floorId: f.id }));
+      void utils.endOfDay.bulkSummary.invalidate({ date });
+    } else {
+      void singleQuery.refetch();
     }
-    void singleQuery.refetch();
     void utils.machines.listFloors.invalidate();
   };
   const boards: ReportBoard[] = !isMulti && singleQuery.data ? [singleQuery.data] : [];
@@ -351,7 +364,12 @@ export default function EndOfDayReport() {
           <ScrollReveal>
           <div className="mt-8 grid gap-5 lg:grid-cols-2 print:grid-cols-1">
             {(floors ?? []).map(f => (
-              <ReportBoardSection key={f.id} floorId={f.id} date={date} />
+              <ReportBoardSection
+                key={f.id}
+                floorId={f.id}
+                date={date}
+                board={bulkQuery.data?.summaries[String(f.id)] ?? null}
+              />
             ))}
           </div>
           </ScrollReveal>
@@ -366,6 +384,7 @@ export default function EndOfDayReport() {
               floorName={f.name}
               date={date}
               staff={staff}
+              entries={bulkQuery.data?.narratives[String(f.id)]}
             />
           ))}
         </ScrollReveal>
@@ -377,6 +396,7 @@ export default function EndOfDayReport() {
             date={date}
             staff={staff}
             multi={isMulti}
+            floorNarratives={bulkQuery.data?.narratives}
           />
         )}
 
@@ -406,12 +426,15 @@ function SupervisorNarrativeSection({
   date,
   staff,
   multi,
+  floorNarratives,
 }: {
   floors: { id: number; name: string }[] | undefined;
   date: string;
   staff: { role: string; displayName?: string } | null;
   /** true for supervisors (sees all boards), false for a nurse (owns one board) */
   multi: boolean;
+  /** Bulk-fetched day-wide narratives (supervisor /report call). Skips the per-floor queries. */
+  floorNarratives?: Record<string, { id: number; floorId: number; periodKey: string; shiftKey: string | null; author: string; body: string; updatedAt: Date }[]>;
 }) {
   const utils = trpc.useUtils();
   // Resolve which boards this viewer can see. A nurse is scoped to their own
@@ -422,8 +445,13 @@ function SupervisorNarrativeSection({
     : floorList.slice(0, 1);
 
   // One narrative list per visible board (each is a stable per-floor query).
+  // When the parent already fetched day-wide narratives (bulkSummary), these
+  // are disabled — the entries arrive via the floorNarratives prop instead.
   const listQueries = visibleFloors.map(f =>
-    trpc.narratives.list.useQuery({ floorId: f.id, reportDate: date }, { retry: false })
+    trpc.narratives.list.useQuery(
+      { floorId: f.id, reportDate: date },
+      { retry: false, enabled: floorNarratives === undefined }
+    )
   );
   const isLoading = listQueries.some(q => q.isLoading);
   const isError = listQueries.some(q => q.isError);
@@ -468,7 +496,10 @@ function SupervisorNarrativeSection({
       string,
       { id: number; floorId: number; periodKey: string; author: string; body: string; updatedAt: Date }
     >();
-    for (const narratives of listQueries.map(q => q.data ?? [])) {
+    const sources = floorNarratives
+      ? Object.values(floorNarratives)
+      : listQueries.map(q => q.data ?? []);
+    for (const narratives of sources) {
       for (const entry of narratives) {
         if (entry.periodKey && SUPERVISOR_PERIODS.some(p => p.key === entry.periodKey)) {
           map.set(`${entry.floorId}:${entry.periodKey}`, entry as never);
@@ -476,7 +507,7 @@ function SupervisorNarrativeSection({
       }
     }
     return map;
-  }, [listQueries.map(q => q.data)]);
+  }, [floorNarratives, listQueries.map(q => q.data)]);
 
   return (
     <Card className="glass-deep mt-5 print:bg-white print:backdrop-none print:shadow-none print:border print:border-[#D4DFE5] print:break-inside-avoid">
@@ -964,13 +995,16 @@ function NarrativeSection({
   floorName,
   date,
   staff,
+  entries,
 }: {
   floorId: number;
   floorName: string;
   date: string;
   staff: { role: string; displayName?: string | null; name?: string } | null;
+  /** Pre-fetched narratives for this floor (supervisor bulk call). Skips its own query. */
+  entries?: { id: number; periodKey: string; shiftKey: string | null; author: string; body: string; updatedAt: Date }[];
 }) {
-  return <NarrativeReport floorId={floorId} floorName={floorName} date={date} staff={staff} editable={false} />;
+  return <NarrativeReport floorId={floorId} floorName={floorName} date={date} staff={staff} editable={false} entries={entries} />;
 }
 
 /**
@@ -984,19 +1018,23 @@ export function NarrativeReport({
   date,
   staff,
   editable,
+  entries,
 }: {
   floorId: number;
   floorName: string;
   date: string;
   staff: { role: string; displayName?: string | null; name?: string } | null;
   editable: boolean;
+  /** Pre-fetched narratives for this floor (supervisor bulk call). Skips its own query. */
+  entries?: { id: number; periodKey: string; shiftKey: string | null; author: string; body: string; updatedAt: Date }[];
 }) {
   if (!floorId) return null;
   const utils = trpc.useUtils();
   const { data: narratives, isLoading, isError, error } = trpc.narratives.list.useQuery(
     { floorId, reportDate: date },
-    { refetchInterval: editable ? 15_000 : false }
+    { refetchInterval: editable ? 15_000 : false, enabled: entries === undefined }
   );
+  const resolvedNarratives = entries ?? narratives;
   const createMutation = trpc.narratives.create.useMutation({
     onSuccess: () => {
       toast.success("Narrative saved");
@@ -1060,9 +1098,9 @@ export function NarrativeReport({
 
   const entriesByPeriod = useMemo(() => {
     const map = new Map<string, { id: number; periodKey: string; shiftKey: string | null; author: string; body: string; updatedAt: Date }>();
-    (narratives ?? []).forEach(n => map.set(n.periodKey, n as never));
+    (resolvedNarratives ?? []).forEach(n => map.set(n.periodKey, n as never));
     return map;
-  }, [narratives]);
+  }, [resolvedNarratives]);
 
   const authorName = staff?.displayName ?? "";
   if (!authorName && openAuthor === "") setOpenAuthor("");
@@ -1089,7 +1127,7 @@ export function NarrativeReport({
           <p className="px-3.5 py-3 text-xs text-[#9E1F2B]">
             Narratives could not be loaded ({String(error?.message ?? "network error")}) — try signing in as clinical staff or refresh the page.
           </p>
-        ) : !canWriteBoard && narratives !== undefined ? (
+        ) : !canWriteBoard && resolvedNarratives !== undefined ? (
           // Read-only rendering for supervisors / anyone without write rights.
           REPORT_PERIODS.map(period => {
             const entry = entriesByPeriod.get(period.key);

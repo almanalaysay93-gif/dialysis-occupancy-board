@@ -1744,3 +1744,242 @@ export async function monthReport(opts?: {
   }
   return out;
 }
+
+/**
+ * Bulk End of Day report for ALL boards in one server call.
+ *
+ * The per-floor `endOfDay.summary` RPC issues ~7 DB round trips each; for a
+ * supervisor with 5 boards that is 30+ round trips at ~1.3s each (the fixed
+ * network cost of the remote Supabase pooler), i.e. 10-15s wall time. This
+ * variant fetches everything globally once (~6 round trips TOTAL), which is
+ * the single biggest load-time win for the /report page.
+ */
+export async function endOfDayReportBulk(opts?: { date?: string }): Promise<{
+  reportDate: string;
+  floors: { id: number; name: string }[];
+  summaries: Record<string, EndOfDayReport>;
+  narratives: Record<string, NarrativeEntry[]>;
+}> {
+  const db = await getDb();
+  const reportDate = opts?.date ?? manilaToday();
+  if (!db) {
+    return {
+      reportDate,
+      floors: [],
+      summaries: {},
+      narratives: {},
+    };
+  }
+
+  const floorList = await db.select().from(floors).orderBy(floors.sortOrder, floors.id);
+
+  const narrativeEntries = await listNarrativesBulk(db, { reportDate });
+
+  // Run the remaining day-wide loads concurrently: one sessions, one waiting,
+  // one machines query each, regardless of floor count.
+  const range = dayRangeUtc(reportDate);
+  const [allMachines, ended, waitingRows] = await Promise.all([
+    db.select().from(machines),
+    db
+      .select()
+      .from(sessions)
+      .where(and(eq(sessions.status, "ended"), sql`${sessions.endedAt} >= ${range.from} AND ${sessions.endedAt} < ${range.to}`)),
+    db
+      .select()
+      .from(waitingList)
+      .where(sql`${waitingList.joinedAt} >= ${range.from} AND ${waitingList.joinedAt} < ${range.to}`),
+  ]);
+
+  const byFloor = new Map<number, typeof allMachines>();
+  for (const m of allMachines) {
+    const arr = byFloor.get(m.floorId ?? 0);
+    if (arr) arr.push(m);
+    else byFloor.set(m.floorId ?? 0, [m]);
+  }
+
+  const summaries: Record<string, EndOfDayReport> = {};
+  for (const f of floorList) {
+    const floorMachines = byFloor.get(f.id) ?? [];
+    const floorMachineIds = new Set(floorMachines.map(m => m.id));
+    const machineLabels = new Map<number, string>(floorMachines.map(m => [m.id, m.label]));
+
+    const filtered = ended.filter(r => floorMachineIds.has(r.machineId));
+    const urgency = { normal: 0, urgent: 0, veryUrgent: 0 };
+    const isolation = { clean: 0, dirty: 0 };
+    const patients = new Set<string>();
+    const usedMachines = new Set<number>();
+    let totalMinutes = 0;
+    for (const s of filtered) {
+      if (s.urgent) urgency.urgent++;
+      else urgency.normal++;
+      if (s.isolationTag === "dirty") isolation.dirty++;
+      else isolation.clean++;
+      patients.add(s.patientId);
+      usedMachines.add(s.machineId);
+      totalMinutes += s.durationMinutes;
+    }
+
+    const floorWaiting = waitingRows.filter(w => w.floorId === f.id);
+    const waitingAdds = { normal: 0, urgent: 0, veryUrgent: 0, total: floorWaiting.length };
+    for (const w of floorWaiting) {
+      if (w.priority === "veryUrgent") waitingAdds.veryUrgent++;
+      else if (w.priority === "urgent") waitingAdds.urgent++;
+      else waitingAdds.normal++;
+    }
+
+    const machineMetrics = await machineDayMetricsInline({
+      db,
+      floorId: f.id,
+      date: reportDate,
+      ended,
+      machines: floorMachines,
+    });
+
+    const metricsWithLabels: Record<string, { machineLabel: string; pausedMinutes: number; idleMinutes: number; occupiedMinutes: number }> = {};
+    for (const key of Object.keys(machineMetrics)) {
+      const id = Number(key);
+      metricsWithLabels[machineLabels.get(id) ?? key] = { machineLabel: machineLabels.get(id) ?? key, ...machineMetrics[key] };
+    }
+
+    let totalPausedMinutes = 0;
+    let machinesPaused = 0;
+    for (const m of Object.values(metricsWithLabels)) {
+      if (m.pausedMinutes > 0) {
+        machinesPaused++;
+        totalPausedMinutes += m.pausedMinutes;
+      }
+    }
+
+    summaries[String(f.id)] = {
+      reportDate,
+      floorName: f.name,
+      totalMachinesOnFloor: floorMachines.length,
+      sessionsEnded: filtered.length,
+      machinesUtilized: { used: usedMachines.size, total: floorMachines.length },
+      patientsCatered: patients.size,
+      urgency,
+      isolation,
+      totalTreatmentHours: Math.round((totalMinutes / 60) * 10) / 10,
+      waitingAdds,
+      sessions: filtered.map(s => ({
+        patientId: s.patientId,
+        machineLabel: machineLabels.get(s.machineId) ?? String(s.machineId),
+        durationMinutes: s.durationMinutes,
+        startedAt: s.startedAt,
+        endedAt: s.endedAt!,
+        urgent: s.urgent,
+        isolationTag: s.isolationTag,
+        nurse: s.assignedNurse,
+      })),
+      machineMetrics: metricsWithLabels,
+      pauseSummary: { totalPausedMinutes, machinesPaused },
+    };
+  }
+
+  const narratives: Record<string, NarrativeEntry[]> = {};
+  for (const f of floorList) {
+    narratives[String(f.id)] = narrativeEntries.filter(e => e.floorId === f.id);
+  }
+
+  return { reportDate, floors: floorList, summaries, narratives };
+}
+
+type NarrativeEntry = {
+  id: number;
+  floorId: number;
+  reportDate: string;
+  periodKey: string;
+  shiftKey: string | null;
+  author: string;
+  body: string;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+/** Narrative list without a per-floor round trip — used by the bulk endpoint. */
+async function listNarrativesBulk(
+  db: Awaited<ReturnType<typeof getDb>>,
+  opts: { reportDate: string },
+): Promise<NarrativeEntry[]> {
+  if (!db) return [];
+  return db
+    .select({
+      id: narrativeReports.id,
+      floorId: narrativeReports.floorId,
+      reportDate: narrativeReports.reportDate,
+      periodKey: narrativeReports.periodKey,
+      shiftKey: narrativeReports.shiftKey,
+      author: narrativeReports.author,
+      body: narrativeReports.body,
+      createdAt: narrativeReports.createdAt,
+      updatedAt: narrativeReports.updatedAt,
+    })
+    .from(narrativeReports)
+    .where(eq(narrativeReports.reportDate, opts.reportDate))
+    .orderBy(narrativeReports.floorId, narrativeReports.periodKey);
+}
+
+/**
+ * Same math as `machineDayMetrics` but reuses the already-fetched ended
+ * sessions + floor machine rows, so the bulk endpoint doesn't pay extra
+ * round trips per floor.
+ */
+async function machineDayMetricsInline(input: {
+  db: Awaited<ReturnType<typeof getDb>>;
+  floorId: number;
+  date: string;
+  ended: {
+    machineId: number;
+    startedAt: Date;
+    endedAt: Date | null;
+    pausedSeconds: number;
+    status: string;
+  }[];
+  machines: { id: number }[];
+}): Promise<Record<string, { pausedMinutes: number; idleMinutes: number; occupiedMinutes: number }>> {
+  const { db, date, ended, machines } = input;
+  const out: Record<string, { pausedMinutes: number; idleMinutes: number; occupiedMinutes: number }> = {};
+  if (!db) return out;
+
+  const dateStart = new Date(`${date}T00:00:00Z`);
+  const dateEnd = new Date(`${date}T23:59:59Z`);
+
+  // Ended sessions were already loaded for the whole day — reuse them.
+  // We still need the active-since-today sessions for this floor (1 query/floor).
+  const activeToday = await db
+    .select({ machineId: sessions.machineId, startedAt: sessions.startedAt, pausedSeconds: sessions.pausedSeconds, endedAt: sessions.endedAt })
+    .from(sessions)
+    .where(and(eq(sessions.status, "active"), sql`${sessions.startedAt} >= ${dateStart}`, sql`${sessions.startedAt} <= ${dateEnd}`));
+
+  const onFloor = new Set(machines.map(m => m.id));
+  const byMachine = new Map<number, { sessions: { startedAt: Date; endedAt: Date | null; pausedSeconds: number }[] }>();
+  for (const s of [...ended, ...activeToday]) {
+    if (!onFloor.has(s.machineId)) continue;
+    let acc = byMachine.get(s.machineId);
+    if (!acc) {
+      acc = { sessions: [] };
+      byMachine.set(s.machineId, acc);
+    }
+    acc.sessions.push({ startedAt: s.startedAt, endedAt: s.endedAt, pausedSeconds: s.pausedSeconds });
+  }
+
+  const now = Date.now();
+  for (const entry of Array.from(byMachine.entries())) {
+    const [machineId, acc] = entry;
+    let occupiedMs = 0;
+    let pausedMs = 0;
+    for (const s of acc.sessions) {
+      const start = Math.max(s.startedAt.getTime(), dateStart.getTime());
+      const end = Math.min((s.endedAt ?? new Date(now)).getTime(), dateEnd.getTime());
+      if (end > start) occupiedMs += end - start;
+      pausedMs += Math.max(0, s.pausedSeconds) * 1000;
+    }
+    const idleMs = Math.max(0, dateEnd.getTime() - dateStart.getTime() - occupiedMs);
+    out[String(machineId)] = {
+      pausedMinutes: Math.round(pausedMs / 60000),
+      idleMinutes: Math.round(idleMs / 60000),
+      occupiedMinutes: Math.round(occupiedMs / 60000),
+    };
+  }
+  return out;
+}
