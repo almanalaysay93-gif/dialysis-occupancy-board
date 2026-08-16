@@ -12,7 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useCanWrite } from "@/hooks/useCanWrite";
 import { trpc } from "@/lib/trpc";
 import { Activity, Plus } from "lucide-react";
-import { CinematicFooter } from "@/components/CinematicFooter";
+import { ScrollReveal } from "@/components/ScrollReveal";
 import { useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 import type { MachineWithSession } from "../../../server/machines";
@@ -303,6 +303,7 @@ export function OccupancyBoardContent({ floorId }: { floorId?: number }) {
         )}
 
         {/* Floor rows */}
+        <ScrollReveal>
         <section className="mt-6 flex flex-col gap-5">
           {isLoading ? (
             Array.from({ length: 3 }).map((_, i) => (
@@ -339,6 +340,7 @@ export function OccupancyBoardContent({ floorId }: { floorId?: number }) {
             ))
           )}
         </section>
+        </ScrollReveal>
 
         {/* Staff footer controls (vacant count + Add Machine / Assign Next Vacant) */}
         {canWrite && !isLoading && (
@@ -381,17 +383,22 @@ export function OccupancyBoardContent({ floorId }: { floorId?: number }) {
 
         {/* Per-board waiting list (visible on each floor's board) */}
         {waitingFloorId !== undefined && !isGuest && (
-          <WaitingListPanel floorId={waitingFloorId} />
+          <ScrollReveal yOffset={32}>
+            <WaitingListPanel floorId={waitingFloorId} />
+          </ScrollReveal>
         )}
         {/* Per-floor nurse patient assignments roster */}
         {waitingFloorId !== undefined && !isGuest && (
-          <NurseAssignmentsPanel floorId={waitingFloorId} />
+          <ScrollReveal yOffset={32}>
+            <NurseAssignmentsPanel floorId={waitingFloorId} />
+          </ScrollReveal>
         )}
 
         {/* Charge nurse narrative report at the bottom of the board —
             written on the board during the shift; the End of Day Report
             reflects it read-only. Staff only — hidden from guests. */}
         {waitingFloorId !== undefined && !isGuest && (
+          <ScrollReveal yOffset={32}>
           <NarrativeReport
             floorId={waitingFloorId}
             floorName={floorNameForScope ?? ""}
@@ -399,6 +406,7 @@ export function OccupancyBoardContent({ floorId }: { floorId?: number }) {
             staff={staff ?? null}
             editable={canWrite}
           />
+          </ScrollReveal>
         )}
 
         <AddMachineDialog
@@ -434,7 +442,6 @@ export default function Home() {
   return (
     <DashboardLayout>
       <OccupancyBoardContent />
-      <CinematicFooter />
     </DashboardLayout>
   );
 }

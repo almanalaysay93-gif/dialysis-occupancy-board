@@ -411,3 +411,9 @@
 
 ## Footer badge credit (user request Aug 16)
 - [x] Replace "Crafted with ❤ for SPMCKTI" badge with "Developed by AL John P. Manalaysay RN" in CinematicFooter bottom bar
+
+## Section scroll-reveal on board pages (user request Aug 16)
+- [x] Remove CinematicFooter mount from Home.tsx (board pages should not carry the footer); CinematicFooter.tsx deleted (unused)
+- [x] Create a reusable ScrollReveal wrapper component (client/src/components/ScrollReveal.tsx — GSAP ScrollTrigger fade/slide-in on scroll, loaded client-only, print-safe, prefers-reduced-motion aware, settles instantly if already in view)
+- [x] Wrap the board sections in OccupancyBoardContent with ScrollReveal: floor machine rows, Waiting List, Nurse Assignments, Narrative Report
+- [x] Verify animations render and do not break layout (full-page screenshots of / and /floor/30001 clean); tests 130/130 + tsc pass; checkpoint + deliver
