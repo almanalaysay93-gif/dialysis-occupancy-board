@@ -167,6 +167,18 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+    cssCodeSplit: true,
+    minify: "esbuild",
+    target: "es2020",
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ["react", "react-dom", "wouter", "@tanstack/react-query"],
+          icons: ["lucide-react"],
+          trpc: ["@trpc/client", "@trpc/react-query", "superjson"],
+        },
+      },
+    },
   },
   server: {
     host: true,
