@@ -461,5 +461,5 @@
 - [x] Verify layout (desktop full-page screenshot of / stacks naturally), tsc clean, 133/133 tests pass; checkpoint 966be6b6 (auto-published) + deliver
 
 ## Header Sign out / date overlap fix (mobile, user report Aug 16)
-- [ ] Fix board header: Sign out button overlaps the date on small screens — restructure the header row (wrap to two lines, date below controls)
-- [ ] Verify on 375px mobile viewport, tests + tsc pass, checkpoint + deliver
+- [x] Fix board header: Sign out button overlaps the date on small screens — restructure the header row (wrap to two lines, date below controls)
+- [x] Verify on 375px mobile viewport, tests + tsc pass, checkpoint + deliver
