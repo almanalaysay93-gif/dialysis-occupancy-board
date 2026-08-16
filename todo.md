@@ -382,8 +382,8 @@
 - [x] Push latest changes to GitHub (a677b5d)
 
 ## Guest visibility gates (Aug 16)
-- [ ] Hide Waiting List panel from guests on board pages
-- [ ] Hide Nurse Assignments panel from guests on board pages
-- [ ] Hide Narrative Report from guests on board pages (also on /report read-only reflection)
-- [ ] Hide Urgent Cases section/nav from guests (guests must not see Urgent Cases register)
-- [ ] Verify guest view: no Waiting List / Nurse Assignments / Narrative / Urgent panels; tests pass, checkpoint, push GitHub, deliver
+- [x] Home.tsx: Waiting List, Nurse Assignments, and Narrative Report panels gated behind !isGuest in OccupancyBoardContent (covers / and /floor/:id)
+- [x] DashboardLayout.tsx: /urgent removed from the guest sidebar
+- [x] Urgent.tsx: guest view replaced with "reserved for clinical staff" prompt + staff-login link; urgent query disabled for guests
+- [x] Verified live in browser as guest: /floor/30001 shows machines with no Waiting/Nurse/Narrative panels; /urgent shows the staff-only prompt and no Urgent Cases entry in the sidebar; 130/130 tests pass, tsc clean
+- [ ] Checkpoint, push GitHub, deliver
