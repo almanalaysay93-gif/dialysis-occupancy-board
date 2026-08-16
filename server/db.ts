@@ -21,49 +21,85 @@ function resolveUrl(): string | null {
 }
 
 // Lazily create the drizzle instance so local tooling can run without a DB.
-export async function getDb() {
-  if (!_db) {
-    const url = resolveUrl();
-    if (url) {
-      try {
-        const pool = new Pool({
-          connectionString: url,
-          max: 8,
-          min: 1,
-          idleTimeoutMillis: 30_000,
-          connectionTimeoutMillis: 15_000,
-          keepAlive: true,
-          keepAliveInitialDelayMillis: 10_000,
-          // Always negotiate TLS. Supabase pooler connections (including those
-          // routed through the platform proxy) present a certificate chain that
-          // node-postgres does not trust by default, so self-signed intermediates
-          // must be accepted to avoid SELF_SIGNED_CERT_IN_CHAIN.
-          ssl: url.startsWith("postgresql") || url.startsWith("postgres")
-            ? { rejectUnauthorized: false }
-            : undefined,
-        });
-        await pool.query("SELECT 1");
-        _db = drizzle(pool);
-      } catch (error) {
-        console.warn("[Database] Failed to connect:", error);
-        _db = null;
-      }
+//
+// Production cold starts: the remote Supabase pooler occasionally drops the
+// first connection attempt ("Connection terminated due to connection timeout").
+// A single blocking attempt would make every first request on a cold instance
+// stall for up to 15s while the pool times out and retries. Instead:
+//  - pool creation does not force an initial connection (min: 0) — cheap to create,
+//    connections are opened on demand;
+//  - the SELECT 1 probe + every getDb() call retry up to 3 times with backoff,
+//    so a transient drop costs ~1-2s total instead of the full timeout; and
+//  - warmDb() fires at boot and keeps retrying in the background until the DB
+//    responds, so warmed requests skip the handshake entirely.
+let _pool: Pool | null = null;
+
+function buildPool(url: string): Pool {
+  return new Pool({
+    connectionString: url,
+    max: 8,
+    min: 0,
+    idleTimeoutMillis: 30_000,
+    connectionTimeoutMillis: 8_000,
+    keepAlive: true,
+    keepAliveInitialDelayMillis: 10_000,
+    // Always negotiate TLS. Supabase pooler connections (including those
+    // routed through the platform proxy) present a certificate chain that
+    // node-postgres does not trust by default, so self-signed intermediates
+    // must be accepted to avoid SELF_SIGNED_CERT_IN_CHAIN.
+    ssl: url.startsWith("postgresql") || url.startsWith("postgres")
+      ? { rejectUnauthorized: false }
+      : undefined,
+  });
+}
+
+function sleep(ms: number) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+export async function getDb(): Promise<ReturnType<typeof drizzle> | null> {
+  const url = resolveUrl();
+  if (!url) return null;
+  // If a warmed pool exists and is healthy, reuse it straight away.
+  if (_db) return _db;
+  let lastError: unknown = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      if (!_pool) _pool = buildPool(url);
+      await _pool.query("SELECT 1");
+      _db = drizzle(_pool);
+      return _db;
+    } catch (error) {
+      lastError = error;
+      // Transient pooler drops deserve a retry; persistent config errors should not.
+      const message = error instanceof Error ? error.message : String(error);
+      if (!message.includes("terminated") && !message.includes("timeout") && !message.includes("unexpectedly")) break;
+      await sleep(500 * (attempt + 1));
+      // A dropped pool cannot be reused — rebuild it for the next attempt.
+      try { await _pool?.end(); } catch { /* ignore */ }
+      _pool = null;
     }
   }
-  return _db;
+  console.warn("[Database] Failed to connect after retries:", lastError);
+  return null;
 }
 
 /**
- * Warm up the connection pool eagerly: establish the minimum pool of
- * connections at boot so the first report-page requests don't each stall
- * behind a fresh TLS handshake to the remote database (~1s per connection).
+ * Warm up the connection pool eagerly at boot so requests don't stall behind
+ * a fresh TLS handshake to the remote database (~1s per connection).
+ *
+ * On cold production instances the pooler may drop the very first connection
+ * attempt, so this keeps retrying in the background (with backoff) until the
+ * database responds — never blocking server startup.
  */
-export async function warmDb() {
-  try {
-    await getDb();
-  } catch {
-    // getDb already logs and returns null when unavailable.
-  }
+export function warmDb() {
+  void (async () => {
+    for (let attempt = 0; attempt < 6; attempt++) {
+      const db = await getDb();
+      if (db) return;
+      await sleep(2000 * (attempt + 1));
+    }
+  })();
 }
 
 export async function upsertUser(user: InsertUser): Promise<void> {

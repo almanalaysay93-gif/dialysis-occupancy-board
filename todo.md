@@ -478,3 +478,8 @@
 - [x] Optimize: DB pool warmup at boot (min:1, keepAlive), listMachines Promise.all parallel queries (bff93c8), /report mount prefetch (staff.me, listFloors, summary, monthly) (1750a43d)
 - [x] Verify visually (/ and /report render fully), tests 141/141 + tsc clean, checkpoints auto-published, delivered (SKTI Main / RDU Annex / RDU Main) and other panel blocks on the Occupancy Board (mt-10/m-14 wrappers, card mt-6, space-y-3, period rows py-2)
 - [x] Verify classes served in compiled modules, tests (141) + tsc pass, checkpoint 13b1e83 auto-published, pushed to GitHub (13b1e83)
+
+## /report still takes ~15 seconds to load (user report Aug 16, after warmup fixes)
+- [ ] Profile live /report end-to-end: measure each tRPC request on the production deployment and find where the 15s is spent (cold start? serverless boot? sequential queries? dashboard layout blockers?)
+- [ ] Apply targeted fix for the real bottleneck
+- [ ] Verify load time, tests + tsc, checkpoint + push + deliver
