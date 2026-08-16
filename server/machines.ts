@@ -1778,28 +1778,43 @@ export async function endOfDayReportBulk(opts?: { date?: string }): Promise<{
   // Run the remaining day-wide loads concurrently: one sessions, one waiting,
   // one machines query each, regardless of floor count.
   const range = dayRangeUtc(reportDate);
-  const [allMachines, ended, waitingRows, activeToday] = await Promise.all([
+  const [allMachines, waitingRows, daySessions] = await Promise.all([
     db.select().from(machines),
-    db
-      .select()
-      .from(sessions)
-      .where(and(eq(sessions.status, "ended"), sql`${sessions.endedAt} >= ${range.from} AND ${sessions.endedAt} < ${range.to}`)),
     db
       .select()
       .from(waitingList)
       .where(sql`${waitingList.joinedAt} >= ${range.from} AND ${waitingList.joinedAt} < ${range.to}`),
-    // Active sessions started today — fetched day-wide once instead of
-    // one query per floor (~1.3s each serially on the remote pooler).
-    db
-      .select({
-        machineId: sessions.machineId,
-        startedAt: sessions.startedAt,
-        pausedSeconds: sessions.pausedSeconds,
-        endedAt: sessions.endedAt,
-      })
-      .from(sessions)
-      .where(and(eq(sessions.status, "active"), sql`${sessions.startedAt} >= ${range.from}`, sql`${sessions.startedAt} <= ${range.to}`)),
+    // Both ended and active-today sessions in ONE round trip: the remote
+    // Supabase pooler runs in transaction mode with a single connection,
+    // so "parallel" queries actually serialize (~1.3s each). One UNION
+    // all halves the session round trips.
+    db.execute(sql`
+      SELECT "machineId", "patientId", "startedAt", "endedAt", "pausedSeconds", "durationMinutes",
+             "assignedNurse", "status", "urgent", "isolationTag"
+      FROM ${sessions}
+      WHERE ("status" = 'ended' AND "endedAt" >= ${range.from} AND "endedAt" < ${range.to})
+         OR ("status" = 'active' AND "startedAt" >= ${range.from} AND "startedAt" <= ${range.to})
+    `),
   ]);
+  type DaySessionRow = {
+    machineId: number;
+    patientId: string;
+    startedAt: Date;
+    endedAt: Date | null;
+    pausedSeconds: number;
+    durationMinutes: number;
+    assignedNurse: string | null;
+    status: string;
+    urgent: boolean;
+    isolationTag: string | null;
+  };
+  const ended: DaySessionRow[] = ((daySessions?.rows ?? []) as DaySessionRow[]).filter((r: DaySessionRow) => r.status === "ended");
+  const activeToday = ((daySessions?.rows ?? []) as DaySessionRow[]).filter((r: DaySessionRow) => r.status === "active").map((r: DaySessionRow) => ({
+    machineId: r.machineId,
+    startedAt: r.startedAt,
+    pausedSeconds: r.pausedSeconds,
+    endedAt: r.endedAt,
+  }));
 
   const byFloor = new Map<number, typeof allMachines>();
   for (const m of allMachines) {
@@ -1825,7 +1840,7 @@ export async function endOfDayReportBulk(opts?: { date?: string }): Promise<{
       else urgency.normal++;
       if (s.isolationTag === "dirty") isolation.dirty++;
       else isolation.clean++;
-      patients.add(s.patientId);
+      patients.add(s.patientId ?? String(s.machineId));
       usedMachines.add(s.machineId);
       totalMinutes += s.durationMinutes;
     }
@@ -1873,13 +1888,13 @@ export async function endOfDayReportBulk(opts?: { date?: string }): Promise<{
       totalTreatmentHours: Math.round((totalMinutes / 60) * 10) / 10,
       waitingAdds,
       sessions: filtered.map(s => ({
-        patientId: s.patientId,
+        patientId: s.patientId ?? String(s.machineId),
         machineLabel: machineLabels.get(s.machineId) ?? String(s.machineId),
         durationMinutes: s.durationMinutes,
         startedAt: s.startedAt,
         endedAt: s.endedAt!,
         urgent: s.urgent,
-        isolationTag: s.isolationTag,
+        isolationTag: s.isolationTag ?? "clean",
         nurse: s.assignedNurse,
       })),
       machineMetrics: metricsWithLabels,
