@@ -499,4 +499,4 @@
 - [x] "FLOOR BOARDS" group label fix: shows "FB" when the sidebar is collapsed (icon mode) and "Floor Boards" when expanded; whitespace-nowrap + overflow-hidden prevent wrapping during the collapse animation; checkpoint c1a311b8 deployed and live
 
 ## Panel spacing scan (Aug 16)
-- [ ] Scan all board tables/panels (stats rows, treatment time strip, Waiting List, Nurse Assignments, Narrative Report) and add consistent vertical space where sections sit too close (e.g. "Total treatment time" panel flush against the Narrative Report card)
+- [x] Scan all board tables/panels (stats rows, treatment time strip, Waiting List, Nurse Assignments, Narrative Report) and add consistent vertical space where sections sit too close — uniform mt-10 wrappers in Home.tsx (flow and single-floor pages), NurseAssignmentsPanel intrinsic mt-8 removed (caller-controlled), End of Day report grids widened from gap-5 to gap-8; verified via full-page screenshots; checkpoint 5a3c36dd deployed
