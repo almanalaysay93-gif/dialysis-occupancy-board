@@ -417,3 +417,12 @@
 - [x] Create a reusable ScrollReveal wrapper component (client/src/components/ScrollReveal.tsx — GSAP ScrollTrigger fade/slide-in on scroll, loaded client-only, print-safe, prefers-reduced-motion aware, settles instantly if already in view)
 - [x] Wrap the board sections in OccupancyBoardContent with ScrollReveal: floor machine rows, Waiting List, Nurse Assignments, Narrative Report
 - [x] Verify animations render and do not break layout (full-page screenshots of / and /floor/30001 clean); tests 130/130 + tsc pass; checkpoint + deliver
+
+## Site-wide scroll reveal + table spacing (user request Aug 16)
+- [x] Increase spacing between floor machine table sections on the board (larger gap between SKTI Main / RDU Annex / RDU Main / ICU / Service Ward blocks; waiting/nurse/narrative panels spaced via mt-8 divs)
+- [x] Add ScrollReveal to Rooms & Floors page (room cards list + footer)
+- [x] Add ScrollReveal to Urgent Cases page (urgent sessions + very-urgent waiting sections)
+- [x] Add ScrollReveal to Backup & Repair page (/backup — drop cards grid + tip)
+- [x] Add ScrollReveal to End of Day Report page (single-board card, multi-board cards, narrative sections, supervisor + history sections)
+- [x] Add ScrollReveal to Staff Login page (hero + form card)
+- [x] Verify all pages (screenshots: /, /rooms, /staff-login, /backup all clean; /urgent & /report show auth-gated skeletons in unauthenticated capture — expected); 130/130 tests + tsc pass; checkpoint + deliver

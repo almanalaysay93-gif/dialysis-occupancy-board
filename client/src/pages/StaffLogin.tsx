@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ScrollReveal } from "@/components/ScrollReveal";
 import { startLogin } from "@/const";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
@@ -60,6 +61,7 @@ export default function StaffLogin() {
 
   return (
     <div className="min-h-screen bg-[#f5f4ef] flex items-center justify-center p-4">
+      <ScrollReveal yOffset={36}>
       <div className="w-full max-w-md space-y-6">
         <div className="glass-deep relative overflow-hidden border border-[#1F2A52]/25 px-8 py-7 text-center">
           <img
@@ -178,6 +180,7 @@ export default function StaffLogin() {
           </div>
         )}
       </div>
+      </ScrollReveal>
     </div>
   );
 }

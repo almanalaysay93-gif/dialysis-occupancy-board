@@ -2,6 +2,7 @@ import DashboardLayout from "@/components/DashboardLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ScrollReveal } from "@/components/ScrollReveal";
 import {
   Dialog,
   DialogContent,
@@ -94,6 +95,7 @@ export default function BackupRepair() {
             ))}
           </div>
         ) : (
+          <ScrollReveal>
           <div className="grid gap-6 md:grid-cols-2">
             <DropCard
               type="backup"
@@ -163,13 +165,16 @@ export default function BackupRepair() {
               ))}
             </DropCard>
           </div>
+          </ScrollReveal>
         )}
 
+        <ScrollReveal>
         <p className="text-xs text-muted-foreground">
           Tip: drag a vacant machine tile onto either card to park it — Backup Machines or Machines in
           Repair. Machines in treatment cannot be moved — end the session first. You can also use the
           tile menu (⋮) on any board.
         </p>
+        </ScrollReveal>
       </div>
 
       <Dialog open={returning !== null} onOpenChange={open => !open && setReturning(null)}>

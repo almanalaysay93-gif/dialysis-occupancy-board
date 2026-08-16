@@ -304,7 +304,7 @@ export function OccupancyBoardContent({ floorId }: { floorId?: number }) {
 
         {/* Floor rows */}
         <ScrollReveal>
-        <section className="mt-6 flex flex-col gap-5">
+        <section className="mt-6 flex flex-col gap-8">
           {isLoading ? (
             Array.from({ length: 3 }).map((_, i) => (
               <div key={i} className="flex flex-col gap-2">
@@ -383,15 +383,19 @@ export function OccupancyBoardContent({ floorId }: { floorId?: number }) {
 
         {/* Per-board waiting list (visible on each floor's board) */}
         {waitingFloorId !== undefined && !isGuest && (
+          <div className="mt-8">
           <ScrollReveal yOffset={32}>
             <WaitingListPanel floorId={waitingFloorId} />
           </ScrollReveal>
+          </div>
         )}
         {/* Per-floor nurse patient assignments roster */}
         {waitingFloorId !== undefined && !isGuest && (
+          <div className="mt-8">
           <ScrollReveal yOffset={32}>
             <NurseAssignmentsPanel floorId={waitingFloorId} />
           </ScrollReveal>
+          </div>
         )}
 
         {/* Charge nurse narrative report at the bottom of the board —

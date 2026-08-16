@@ -3,6 +3,7 @@ import { Link } from "wouter";
 import { ClipboardList, Dumbbell, FileDown, PenLine, Printer, Trash2, UserRound, Users } from "lucide-react";
 import { toast } from "sonner";
 import DashboardLayout from "@/components/DashboardLayout";
+import { ScrollReveal } from "@/components/ScrollReveal";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -319,6 +320,7 @@ export default function EndOfDayReport() {
         )}
 
         {!isMulti && singleQuery.data && (
+          <ScrollReveal>
           <div className="mt-8 grid gap-5 lg:grid-cols-2 print:grid-cols-1">
             <div className="flex flex-col gap-5">
               <ReportBoardCard board={singleQuery.data} />
@@ -332,16 +334,20 @@ export default function EndOfDayReport() {
               )}
             </div>
           </div>
+          </ScrollReveal>
         )}
 
         {isMulti && (
+          <ScrollReveal>
           <div className="mt-8 grid gap-5 lg:grid-cols-2 print:grid-cols-1">
             {(floors ?? []).map(f => (
               <ReportBoardSection key={f.id} floorId={f.id} date={date} />
             ))}
           </div>
+          </ScrollReveal>
         )}
 
+        <ScrollReveal>
         {isMulti &&
           (floors ?? []).map(f => (
             <NarrativeSection
@@ -352,7 +358,9 @@ export default function EndOfDayReport() {
               staff={staff}
             />
           ))}
+        </ScrollReveal>
 
+        <ScrollReveal>
         {(floors ?? []).length > 0 && (
           <SupervisorNarrativeSection
             floors={floors}
@@ -365,6 +373,7 @@ export default function EndOfDayReport() {
         {staff?.role === "auditor" && (
           <NarrativeHistorySection floors={floors} date={date} />
         )}
+        </ScrollReveal>
 
         </div>
         {/* Month export container: invisible on screen, visible only in the print layout. */}

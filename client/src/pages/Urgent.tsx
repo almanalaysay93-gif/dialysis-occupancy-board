@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { useCanWrite } from "@/hooks/useCanWrite";
 import { startLogin } from "@/const";
 import { trpc } from "@/lib/trpc";
+import { ScrollReveal } from "@/components/ScrollReveal";
 import { BellRing, Droplets, Power, Siren, Users } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link } from "wouter";
@@ -161,7 +162,9 @@ export default function Urgent() {
           </div>
         )}
 
-        <div className="mt-8 flex flex-col gap-6">
+        <div className="mt-8">
+        <ScrollReveal>
+        <div className="flex flex-col gap-6">
           {isLoading ? (
             <>
               {Array.from({ length: 3 }).map((_, i) => (
@@ -305,6 +308,8 @@ export default function Urgent() {
               )}
             </>
           )}
+        </div>
+        </ScrollReveal>
         </div>
       </div>
 

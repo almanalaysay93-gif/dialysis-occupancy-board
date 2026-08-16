@@ -4,6 +4,8 @@ import RemoveRoomDialog from "@/components/RemoveRoomDialog";
 import RenameRoomDialog from "@/components/RenameRoomDialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { ScrollReveal } from "@/components/ScrollReveal";
 import { useCanWrite } from "@/hooks/useCanWrite";
 import { startLogin } from "@/const";
 import { trpc } from "@/lib/trpc";
@@ -111,7 +113,9 @@ export default function Rooms() {
           </div>
         )}
 
-        <div className="mt-8 flex flex-col gap-4">
+        <div className="mt-8">
+        <ScrollReveal>
+        <div className="flex flex-col gap-4">
           {isLoading ? (
             Array.from({ length: 3 }).map((_, i) => (
               <div key={i} className="h-[96px] animate-pulse bg-[#E8EFF1]" />
@@ -223,13 +227,17 @@ export default function Rooms() {
             })
           )}
         </div>
+        </ScrollReveal>
+        </div>
 
+        <ScrollReveal>
         <footer className="mt-10 border-t border-[#D4DFE5] pt-4">
           <p className="font-serif-light text-sm italic text-[#7684A0]">
             A room must be empty of machines before it can be removed — remove
             its machines from the Occupancy Board first, then return here.
           </p>
         </footer>
+        </ScrollReveal>
       </div>
 
       <AddRoomDialog open={addOpen} onClose={() => setAddOpen(false)} />
