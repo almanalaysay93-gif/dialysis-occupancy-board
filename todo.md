@@ -379,4 +379,11 @@
 - [x] UI: month picker and Export Month PDF button hidden from non-supervisors on /report; the monthly query is disabled (enabled: false) for them so the endpoint is never called
 - [x] Vitest: replaced stale nurse-scoping monthly tests with nurse/auditor/guest FORBIDDEN tests verifying monthReport DB call never happens; 130/130 passing, tsc clean
 - [x] Verified as guest on /report (screenshot): no month controls, staff-only prompt shown; checkpoint ee3e103c saved (auto-published)
-- [ ] Push latest changes to GitHub
+- [x] Push latest changes to GitHub (a677b5d)
+
+## Guest visibility gates (Aug 16)
+- [ ] Hide Waiting List panel from guests on board pages
+- [ ] Hide Nurse Assignments panel from guests on board pages
+- [ ] Hide Narrative Report from guests on board pages (also on /report read-only reflection)
+- [ ] Hide Urgent Cases section/nav from guests (guests must not see Urgent Cases register)
+- [ ] Verify guest view: no Waiting List / Nurse Assignments / Narrative / Urgent panels; tests pass, checkpoint, push GitHub, deliver

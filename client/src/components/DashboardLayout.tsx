@@ -165,10 +165,11 @@ function DashboardLayoutContent({
     staffRole === "nurse"
       ?       allFloorBoardItems.filter(f => f.floorId === (staff?.assignedFloorId ?? null))
       : allFloorBoardItems;
-  // Read-only viewers (guest, logged-out staff page) don't manage rooms.
+  // Read-only viewers (guest, logged-out staff page) don't manage rooms,
+  // read reports, or see urgent cases / backup & repair.
   const visibleMenuItems =
     staffRole === "guest"
-      ? menuItems.filter(item => item.path !== "/rooms" && item.path !== "/report" && item.path !== "/backup")
+      ? menuItems.filter(item => item.path !== "/rooms" && item.path !== "/report" && item.path !== "/backup" && item.path !== "/urgent")
       : menuItems;
   // Match the exact floor board by path first (e.g. /floor/30001);
   // a bare /floor/ location (a redirect artifact) highlights nothing.

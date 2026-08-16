@@ -52,7 +52,7 @@ function WaitingCount({ floorId }: { floorId: number }) {
  * machines are shown and page scope is limited to it.
  */
 export function OccupancyBoardContent({ floorId }: { floorId?: number }) {
-  const { canWrite } = useCanWrite();
+  const { canWrite, isGuest } = useCanWrite();
   const { data, isLoading } = trpc.machines.list.useQuery(undefined, {
     // Cross-device real-time sync: re-sync board state every 5 seconds
     refetchInterval: 5_000,
@@ -379,18 +379,18 @@ export function OccupancyBoardContent({ floorId }: { floorId?: number }) {
         )}
 
         {/* Per-board waiting list (visible on each floor's board) */}
-        {waitingFloorId !== undefined && (
+        {waitingFloorId !== undefined && !isGuest && (
           <WaitingListPanel floorId={waitingFloorId} />
         )}
         {/* Per-floor nurse patient assignments roster */}
-        {waitingFloorId !== undefined && (
+        {waitingFloorId !== undefined && !isGuest && (
           <NurseAssignmentsPanel floorId={waitingFloorId} />
         )}
 
         {/* Charge nurse narrative report at the bottom of the board —
             written on the board during the shift; the End of Day Report
-            reflects it read-only */}
-        {waitingFloorId !== undefined && (
+            reflects it read-only. Staff only — hidden from guests. */}
+        {waitingFloorId !== undefined && !isGuest && (
           <NarrativeReport
             floorId={waitingFloorId}
             floorName={floorNameForScope ?? ""}

@@ -7,6 +7,7 @@ import { startLogin } from "@/const";
 import { trpc } from "@/lib/trpc";
 import { BellRing, Droplets, Power, Siren, Users } from "lucide-react";
 import { useMemo, useState } from "react";
+import { Link } from "wouter";
 import { toast } from "sonner";
 
 type UrgentSession = {
@@ -56,10 +57,11 @@ function boardLink(floorId: number | null): string {
 
 export default function Urgent() {
   const utils = trpc.useUtils();
-  const { canWrite } = useCanWrite();
+  const { canWrite, isGuest } = useCanWrite();
 
   const { data, isLoading, error } = trpc.waiting.urgentRegister.useQuery(undefined, {
-    refetchInterval: 5_000,
+    refetchInterval: isGuest ? false : 5_000,
+    enabled: !isGuest,
   });
 
   const urgentSessions = useMemo<UrgentSession[]>(
@@ -124,7 +126,17 @@ export default function Urgent() {
           </p>
         </header>
 
-        {!canWrite && (
+        {isGuest ? (
+          <div className="glass-panel mt-6 flex flex-col items-center gap-3 px-6 py-14 text-center">
+            <BellRing className="h-8 w-8 text-[#7684A0]" />
+            <p className="font-serif-light text-lg text-[#556680]">
+              The Urgent Cases register is reserved for clinical staff.
+            </p>
+            <Link href="/staff-login" className="text-sm font-medium text-[#2E9A9B] underline underline-offset-4">
+              Sign in as staff to view urgent cases
+            </Link>
+          </div>
+        ) : !canWrite && (
           <div className="glass-panel mt-6 flex items-center justify-between px-5 py-4">
             <p className="text-sm text-[#556680]">
               Sign in as clinical staff to manage urgent flags.
