@@ -289,11 +289,16 @@ export function OccupancyBoardContent({ floorId }: { floorId?: number }) {
         {!canWrite && (
           <div className="glass-panel mt-5 flex items-center justify-between px-4 py-3 sm:px-5">
             <div className="flex items-center gap-3">
-              <Activity className="h-5 w-5 text-[#7684A0]" />
-              <p className="text-sm text-[#556680]">
-                Sign in as clinical staff to assign sessions, control machines,
-                or add machines.
-              </p>
+              <Activity className="h-5 w-5 text-[#7684A0] shrink-0" />
+              <div className="flex flex-col gap-0.5">
+                <p className="text-sm text-[#556680]">
+                  Sign in as clinical staff to assign sessions, control machines,
+                  or add machines.
+                </p>
+                <p className="text-xs text-[#7684A0]">
+                  This web app was developed by: AL JOHN MANALAYSAY RN
+                </p>
+              </div>
             </div>
             <Button
               size="sm"
