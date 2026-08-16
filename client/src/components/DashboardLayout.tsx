@@ -327,7 +327,13 @@ function DashboardLayoutContent({
           <div className="flex items-center gap-2">
             {staff && (
               <span className="smallcaps-detail rounded border border-[#D4DFE5] bg-[#F4F7F8] px-2 py-1 text-[#556680]">
-                {staff.displayName} · {staff.role}
+                {staff.role === "guest"
+                  ? "Guest"
+                  : staff.role === "supervisor"
+                    ? "Supervisor"
+                    : staff.role === "auditor"
+                      ? "Auditor"
+                      : (staff.displayName ?? "Nurse").replace(/^Nurse · /i, "") + " Nurse"}
               </span>
             )}
           </div>

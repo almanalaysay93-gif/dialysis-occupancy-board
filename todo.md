@@ -505,3 +505,7 @@
 - [x] Diagnose why the saved/printable daily report includes the whole month's data — the End of Month export block used "hidden print:block", so the month report printed appended to every daily PDF
 - [x] Fix: the month block now uses printMonthOnly gating — prints only when the supervisor runs a month-only export; daily PDF contains only the selected day
 - [x] Verify: tsc clean, 156/156 tests; checkpoint 02b184e5 deployed and live
+
+## Identity chip shows role only (user request Aug 16)
+- [x] Top-right header chip (DashboardLayout) showed "displayName · role" duplicated as "GUEST · GUEST" — now shows only the role label: Guest / Supervisor / Auditor / "SKTI Main Nurse" etc. (area extracted from the nurse displayName, "Nurse" suffix appended)
+- [x] Verified on /, /floor/30001 as guest (chip shows "GUEST"); tsc clean, 156/156 tests; checkpoint deployed and pushed
