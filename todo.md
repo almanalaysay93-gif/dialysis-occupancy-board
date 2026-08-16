@@ -375,7 +375,8 @@
 - [x] White circle border removed at the image level: extracted the seal from the JPEG's white background via edge-connected flood fill, produced a transparent PNG (skti-seal-transparent_b9fdeed9.png), uploaded to webdev storage, and swapped the reference in Home.tsx, StaffLogin.tsx, and DashboardLayout.tsx
 
 ## Supervisor-only monthly PDF export (Aug 16)
-- [ ] Gate endOfDay.monthly tRPC procedure to supervisor role in the backend
-- [ ] Hide month picker + Export Month PDF button on /report for non-supervisors
-- [ ] Add/extend vitest coverage for the RBAC gate
-- [ ] Verify as nurse/guest the export is hidden and blocked, tests pass, checkpoint, push GitHub, deliver
+- [x] Backend: new supervisorProcedure in server/_core/trpc.ts; endOfDay.monthly switched from staffReadProcedure to supervisorProcedure (nurses/auditors/guests rejected with FORBIDDEN; OAuth admins allowed)
+- [x] UI: month picker and Export Month PDF button hidden from non-supervisors on /report; the monthly query is disabled (enabled: false) for them so the endpoint is never called
+- [x] Vitest: replaced stale nurse-scoping monthly tests with nurse/auditor/guest FORBIDDEN tests verifying monthReport DB call never happens; 130/130 passing, tsc clean
+- [x] Verified as guest on /report (screenshot): no month controls, staff-only prompt shown; checkpoint ee3e103c saved (auto-published)
+- [ ] Push latest changes to GitHub
