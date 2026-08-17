@@ -514,3 +514,7 @@
 - [x] Reproduced on production as an anonymous visitor: panels were gated for a cookie guest, but the no-cookie guest fallback (role "guest", fromCookie false) made isClinicalHidden false and leaked the three clinical panels to any viewer with a Guest identity
 - [x] Fix: useCanWrite now treats ANY explicit guest role as a viewer (isGuestMode = role === "guest", independent of fromCookie); isClinicalHidden = !resolved || isGuestMode; auditors count as board staff; StaffLogin copy corrected to say guests see occupancy stats only (waiting lists/nurse assignments/narrative are staff-only)
 - [x] New client gating test server/use-can-write.test.ts (5 cases incl. the leak vector); 161/161 tests, tsc clean; verified on / and /floor/30002 as guest — only machines + stats render, chip "GUEST", sidebar "Guest · view only"
+
+## Unified daily summary table on End of Day report (user request Aug 16)
+- [x] New DailySummaryTable component replaces the per-board cards: one table with a per-board row (Board, Machines utilized, Patients catered, Sessions ended, Normal/Urgent/Very urgent, Waiting added, Clean/Dirty, Treatment time) and a bold Totals row with center-wide utilization + paused minutes
+- [x] Used for both paths — supervisor sees all boards in one table; nurse sees their single board row + Totals; print/PDF layout uses a plain semantic table so it prints cleanly; 161/161 tests + tsc clean

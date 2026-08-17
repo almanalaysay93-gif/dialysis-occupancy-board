@@ -57,6 +57,16 @@ type ReportBoard = {
   isolation: { clean: number; dirty: number };
   totalTreatmentHours: number;
   waitingAdds: { normal: number; urgent: number; veryUrgent: number; total: number };
+  sessions: {
+    patientId: string;
+    machineLabel: string;
+    durationMinutes: number;
+    startedAt: Date;
+    endedAt: Date;
+    urgent: boolean;
+    isolationTag: string;
+    nurse: string | null;
+  }[];
   machineMetrics: Record<
     string,
     { machineLabel?: string; pausedMinutes: number; idleMinutes: number; occupiedMinutes: number }
@@ -386,7 +396,7 @@ export default function EndOfDayReport() {
           <ScrollReveal>
           <div className="mt-8 grid gap-8 lg:grid-cols-2 print:grid-cols-1">
             <div className="flex flex-col gap-8">
-              <ReportBoardCard board={singleQuery.data} />
+              <DailySummaryTable boards={[singleQuery.data]} />
               {singleQuery.data.floorName && (
                 <NarrativeSection
                   floorId={(floors ?? []).find(f => f.name === singleQuery.data.floorName)?.id ?? 0}
@@ -402,15 +412,18 @@ export default function EndOfDayReport() {
 
         {isMulti && (
           <ScrollReveal>
-          <div className="mt-8 grid gap-8 lg:grid-cols-2 print:grid-cols-1">
-            {(floors ?? []).map(f => (
-              <ReportBoardSection
-                key={f.id}
-                floorId={f.id}
-                date={date}
-                board={pageQuery.data?.daily.summaries[String(f.id)] ?? null}
-              />
-            ))}
+          <div className="mt-8">
+            <DailySummaryTable
+              boards={(floors ?? [])
+                .map(f => pageQuery.data?.daily.summaries[String(f.id)] ?? null)
+                .filter(
+                  (b): b is ReportBoard =>
+                    b !== null &&
+                    "floorName" in b &&
+                    "machinesUtilized" in b &&
+                    "urgency" in b
+                )}
+            />
           </div>
           </ScrollReveal>
         )}
@@ -882,6 +895,153 @@ function SupervisorNarrativeDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/**
+ * Unified daily summary: ONE table across all boards with a Totals row.
+ * Used by supervisors (all boards) and nurses/guests (their single board).
+ * Prints cleanly with the rest of the daily report PDF.
+ */
+function DailySummaryTable({ boards }: { boards: ReportBoard[] }) {
+  const totals = {
+    machinesUsed: 0,
+    machinesTotal: 0,
+    sessionsEnded: 0,
+    patientsCatered: 0,
+    normal: 0,
+    urgent: 0,
+    veryUrgent: 0,
+    waitingTotal: 0,
+    clean: 0,
+    dirty: 0,
+    treatmentHours: 0,
+    pausedMinutes: 0,
+  };
+  const allFloors = boards.length > 1;
+  for (const b of boards) {
+    totals.machinesUsed += b.machinesUtilized.used;
+    totals.machinesTotal += b.machinesUtilized.total;
+    totals.sessionsEnded += b.sessionsEnded;
+    totals.patientsCatered += b.patientsCatered;
+    totals.normal += b.urgency.normal;
+    totals.urgent += b.urgency.urgent;
+    totals.veryUrgent += b.urgency.veryUrgent;
+    totals.waitingTotal += b.waitingAdds.total;
+    totals.clean += b.isolation.clean;
+    totals.dirty += b.isolation.dirty;
+    totals.treatmentHours += b.totalTreatmentHours;
+    totals.pausedMinutes += b.pauseSummary.totalPausedMinutes;
+  }
+  const utilizationPct =
+    totals.machinesTotal > 0 ? Math.round((totals.machinesUsed / totals.machinesTotal) * 100) : 0;
+
+  return (
+    <div className="glass-panel print:bg-white print:backdrop-none print:shadow-none print:border print:border-[#D4DFE5] print:break-inside-avoid">
+      <div className="border-b border-[#D4DFE5]/70 px-5 py-4">
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="font-display text-xl text-[#1F2A52]">
+            {allFloors ? "All boards" : boards[0]?.floorName ?? "Daily summary"}
+          </h3>
+          <span className="smallcaps-detail border border-[#D4DFE5] bg-[#F4F7F8] px-2 py-0.5 text-[#7684A0]">
+            {boards[0]?.reportDate}
+          </span>
+        </div>
+        <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-[#E8EFF1]">
+          <div
+            className="h-full rounded-full bg-[#2E9A9B] transition-all"
+            style={{ width: `${utilizationPct}%` }}
+          />
+        </div>
+        <p className="mt-1.5 text-[11px] text-[#7684A0]">
+          {totals.machinesUsed} of {totals.machinesTotal} machines used today ({utilizationPct}% utilization)
+          {totals.pausedMinutes > 0 && ` · ${totals.pausedMinutes} paused minutes across the center`}
+        </p>
+      </div>
+      <div className="overflow-x-auto px-5 py-4">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-left text-[10px] uppercase tracking-[0.14em] text-[#7684A0] border-b border-[#D4DFE5]">
+              {allFloors && <th className="py-2 pr-3 font-medium whitespace-nowrap">Board</th>}
+              <th className="px-3 py-2 font-medium text-right">Machines utilized</th>
+              <th className="px-3 py-2 font-medium text-right">Patients catered</th>
+              <th className="px-3 py-2 font-medium text-right">Sessions ended</th>
+              <th className="px-3 py-2 font-medium text-right">Normal</th>
+              <th className="px-3 py-2 font-medium text-right">Urgent</th>
+              <th className="px-3 py-2 font-medium text-right">Very urgent</th>
+              <th className="px-3 py-2 font-medium text-right">Waiting added</th>
+              <th className="px-3 py-2 font-medium text-right">Clean</th>
+              <th className="px-3 py-2 font-medium text-right">Dirty</th>
+              <th className="pl-3 py-2 font-medium text-right">Treatment time</th>
+            </tr>
+          </thead>
+          <tbody>
+            {boards.map(b => (
+              <tr key={b.floorName ?? "board"} className="border-b border-[#D4DFE5]/50">
+                {allFloors && (
+                  <td className="py-2.5 pr-3 font-medium text-[#1F2A52] whitespace-nowrap">
+                    {b.floorName ?? "—"}
+                  </td>
+                )}
+                <td className="px-3 py-2.5 text-right text-[#1F2A52]">
+                  {b.machinesUtilized.used}
+                  <span className="text-[#7684A0]">/{b.machinesUtilized.total}</span>
+                </td>
+                <td className="px-3 py-2.5 text-right text-[#1F2A52]">{b.patientsCatered}</td>
+                <td className="px-3 py-2.5 text-right text-[#1F2A52]">{b.sessionsEnded}</td>
+                <td className="px-3 py-2.5 text-right text-[#3E8A6A]">{b.urgency.normal}</td>
+                <td className="px-3 py-2.5 text-right text-[#C8A63B]">{b.urgency.urgent}</td>
+                <td className="px-3 py-2.5 text-right text-[#9E1F2B]">{b.urgency.veryUrgent}</td>
+                <td className="px-3 py-2.5 text-right text-[#1F2A52]">{b.waitingAdds.total}</td>
+                <td className="px-3 py-2.5 text-right text-[#3E8A6A]">{b.isolation.clean}</td>
+                <td className="px-3 py-2.5 text-right text-[#2E9A9B]">{b.isolation.dirty}</td>
+                <td className="pl-3 py-2.5 text-right text-[#1F2A52]">
+                  {b.totalTreatmentHours} h
+                </td>
+              </tr>
+            ))}
+            <tr className="border-t-2 border-[#1F2A52]/70">
+              {allFloors && (
+                <td className="py-2.5 pr-3 font-display text-base font-semibold text-[#1F2A52] whitespace-nowrap">
+                  Total
+                </td>
+              )}
+              <td className="px-3 py-2.5 text-right font-display text-base font-semibold text-[#1F2A52]">
+                {totals.machinesUsed}
+                <span className="text-sm text-[#7684A0]">/{totals.machinesTotal}</span>
+              </td>
+              <td className="px-3 py-2.5 text-right font-display text-base font-semibold text-[#1F2A52]">
+                {totals.patientsCatered}
+              </td>
+              <td className="px-3 py-2.5 text-right font-display text-base font-semibold text-[#1F2A52]">
+                {totals.sessionsEnded}
+              </td>
+              <td className="px-3 py-2.5 text-right font-display text-base font-semibold text-[#3E8A6A]">
+                {totals.normal}
+              </td>
+              <td className="px-3 py-2.5 text-right font-display text-base font-semibold text-[#C8A63B]">
+                {totals.urgent}
+              </td>
+              <td className="px-3 py-2.5 text-right font-display text-base font-semibold text-[#9E1F2B]">
+                {totals.veryUrgent}
+              </td>
+              <td className="px-3 py-2.5 text-right font-display text-base font-semibold text-[#1F2A52]">
+                {totals.waitingTotal}
+              </td>
+              <td className="px-3 py-2.5 text-right font-display text-base font-semibold text-[#3E8A6A]">
+                {totals.clean}
+              </td>
+              <td className="px-3 py-2.5 text-right font-display text-base font-semibold text-[#2E9A9B]">
+                {totals.dirty}
+              </td>
+              <td className="pl-3 py-2.5 text-right font-display text-base font-semibold text-[#1F2A52]">
+                {Math.round(totals.treatmentHours * 10) / 10} h
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 }
 
