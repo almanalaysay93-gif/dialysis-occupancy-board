@@ -523,3 +523,8 @@
 - [x] Root cause: raw pg driver rows return timestamps as strings — machineDayMetrics/machineRangeMetrics called .getTime() on them, and string dates leaked into the reportPage sessions payload
 - [x] Fix: coerce startedAt/endedAt to Dates immediately after the raw day-sessions query in reportPage, plus defensive coercion in machineDayMetrics and machineRangeMetrics (same class as the earlier monthReport fix)
 - [x] Verified: 161/161 tests, tsc clean; checkpoint 53717da5 deployed
+
+## Print overflow on unified summary table (user report Aug 17)
+- [ ] The DailySummaryTable overflows in print/PDF: Waiting added, Clean, Dirty, Treatment time columns get cut at the page edge
+- [ ] Make the table print within page width (compact headers, print-width constraint, landscape-safe sizing)
+- [ ] Verify with print layout check; tests + tsc; checkpoint + push + deliver

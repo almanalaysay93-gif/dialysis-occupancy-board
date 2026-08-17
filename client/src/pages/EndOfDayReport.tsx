@@ -959,43 +959,56 @@ function DailySummaryTable({ boards }: { boards: ReportBoard[] }) {
         </p>
       </div>
       <div className="overflow-x-auto px-5 py-4">
-        <table className="w-full text-sm">
+        <table className="w-full min-w-0 table-fixed print:w-full print:text-[11px] text-sm">
+          <colgroup>
+            {allFloors && <col className="w-[15%]" />}
+            <col className="w-[9%]" />
+            <col className="w-[9%]" />
+            <col className="w-[9%]" />
+            <col className="w-[7%]" />
+            <col className="w-[7%]" />
+            <col className="w-[8%]" />
+            <col className="w-[8%]" />
+            <col className="w-[7%]" />
+            <col className="w-[7%]" />
+            <col className="w-[8%]" />
+          </colgroup>
           <thead>
             <tr className="text-left text-[10px] uppercase tracking-[0.14em] text-[#7684A0] border-b border-[#D4DFE5]">
-              {allFloors && <th className="py-2 pr-3 font-medium whitespace-nowrap">Board</th>}
-              <th className="px-3 py-2 font-medium text-right">Machines utilized</th>
-              <th className="px-3 py-2 font-medium text-right">Patients catered</th>
-              <th className="px-3 py-2 font-medium text-right">Sessions ended</th>
-              <th className="px-3 py-2 font-medium text-right">Normal</th>
-              <th className="px-3 py-2 font-medium text-right">Urgent</th>
-              <th className="px-3 py-2 font-medium text-right">Very urgent</th>
-              <th className="px-3 py-2 font-medium text-right">Waiting added</th>
-              <th className="px-3 py-2 font-medium text-right">Clean</th>
-              <th className="px-3 py-2 font-medium text-right">Dirty</th>
-              <th className="pl-3 py-2 font-medium text-right">Treatment time</th>
+              {allFloors && <th className="py-2 pr-3 font-medium whitespace-nowrap print:text-[10px]">Board</th>}
+              <th className="px-1 py-2 font-medium text-right">Machines used</th>
+              <th className="px-1 py-2 font-medium text-right">Patients</th>
+              <th className="px-1 py-2 font-medium text-right">Sessions</th>
+              <th className="px-1 py-2 font-medium text-right">Normal</th>
+              <th className="px-1 py-2 font-medium text-right">Urgent</th>
+              <th className="px-1 py-2 font-medium text-right">V. urgent</th>
+              <th className="px-1 py-2 font-medium text-right">Waiting</th>
+              <th className="px-1 py-2 font-medium text-right">Clean</th>
+              <th className="px-1 py-2 font-medium text-right">Dirty</th>
+              <th className="pl-1 py-2 font-medium text-right">Tx time</th>
             </tr>
           </thead>
           <tbody>
             {boards.map(b => (
               <tr key={b.floorName ?? "board"} className="border-b border-[#D4DFE5]/50">
                 {allFloors && (
-                  <td className="py-2.5 pr-3 font-medium text-[#1F2A52] whitespace-nowrap">
+                  <td className="py-2.5 pr-3 font-medium text-[#1F2A52] whitespace-nowrap print:text-[11px]">
                     {b.floorName ?? "—"}
                   </td>
                 )}
-                <td className="px-3 py-2.5 text-right text-[#1F2A52]">
+                <td className="px-1 py-2.5 text-right text-[#1F2A52]">
                   {b.machinesUtilized.used}
                   <span className="text-[#7684A0]">/{b.machinesUtilized.total}</span>
                 </td>
-                <td className="px-3 py-2.5 text-right text-[#1F2A52]">{b.patientsCatered}</td>
-                <td className="px-3 py-2.5 text-right text-[#1F2A52]">{b.sessionsEnded}</td>
-                <td className="px-3 py-2.5 text-right text-[#3E8A6A]">{b.urgency.normal}</td>
-                <td className="px-3 py-2.5 text-right text-[#C8A63B]">{b.urgency.urgent}</td>
-                <td className="px-3 py-2.5 text-right text-[#9E1F2B]">{b.urgency.veryUrgent}</td>
-                <td className="px-3 py-2.5 text-right text-[#1F2A52]">{b.waitingAdds.total}</td>
-                <td className="px-3 py-2.5 text-right text-[#3E8A6A]">{b.isolation.clean}</td>
-                <td className="px-3 py-2.5 text-right text-[#2E9A9B]">{b.isolation.dirty}</td>
-                <td className="pl-3 py-2.5 text-right text-[#1F2A52]">
+                <td className="px-1 py-2.5 text-right text-[#1F2A52]">{b.patientsCatered}</td>
+                <td className="px-1 py-2.5 text-right text-[#1F2A52]">{b.sessionsEnded}</td>
+                <td className="px-1 py-2.5 text-right text-[#3E8A6A]">{b.urgency.normal}</td>
+                <td className="px-1 py-2.5 text-right text-[#C8A63B]">{b.urgency.urgent}</td>
+                <td className="px-1 py-2.5 text-right text-[#9E1F2B]">{b.urgency.veryUrgent}</td>
+                <td className="px-1 py-2.5 text-right text-[#1F2A52]">{b.waitingAdds.total}</td>
+                <td className="px-1 py-2.5 text-right text-[#3E8A6A]">{b.isolation.clean}</td>
+                <td className="px-1 py-2.5 text-right text-[#2E9A9B]">{b.isolation.dirty}</td>
+                <td className="pl-1 py-2.5 text-right text-[#1F2A52]">
                   {b.totalTreatmentHours} h
                 </td>
               </tr>
@@ -1006,35 +1019,35 @@ function DailySummaryTable({ boards }: { boards: ReportBoard[] }) {
                   Total
                 </td>
               )}
-              <td className="px-3 py-2.5 text-right font-display text-base font-semibold text-[#1F2A52]">
+              <td className="px-1 py-2.5 text-right font-display text-base font-semibold text-[#1F2A52] print:text-sm">
                 {totals.machinesUsed}
-                <span className="text-sm text-[#7684A0]">/{totals.machinesTotal}</span>
+                <span className="text-sm text-[#7684A0] print:text-xs">/{totals.machinesTotal}</span>
               </td>
-              <td className="px-3 py-2.5 text-right font-display text-base font-semibold text-[#1F2A52]">
+              <td className="px-1 py-2.5 text-right font-display text-base font-semibold text-[#1F2A52] print:text-sm">
                 {totals.patientsCatered}
               </td>
-              <td className="px-3 py-2.5 text-right font-display text-base font-semibold text-[#1F2A52]">
+              <td className="px-1 py-2.5 text-right font-display text-base font-semibold text-[#1F2A52] print:text-sm">
                 {totals.sessionsEnded}
               </td>
-              <td className="px-3 py-2.5 text-right font-display text-base font-semibold text-[#3E8A6A]">
+              <td className="px-1 py-2.5 text-right font-display text-base font-semibold text-[#3E8A6A] print:text-sm">
                 {totals.normal}
               </td>
-              <td className="px-3 py-2.5 text-right font-display text-base font-semibold text-[#C8A63B]">
+              <td className="px-1 py-2.5 text-right font-display text-base font-semibold text-[#C8A63B] print:text-sm">
                 {totals.urgent}
               </td>
-              <td className="px-3 py-2.5 text-right font-display text-base font-semibold text-[#9E1F2B]">
+              <td className="px-1 py-2.5 text-right font-display text-base font-semibold text-[#9E1F2B] print:text-sm">
                 {totals.veryUrgent}
               </td>
-              <td className="px-3 py-2.5 text-right font-display text-base font-semibold text-[#1F2A52]">
+              <td className="px-1 py-2.5 text-right font-display text-base font-semibold text-[#1F2A52] print:text-sm">
                 {totals.waitingTotal}
               </td>
-              <td className="px-3 py-2.5 text-right font-display text-base font-semibold text-[#3E8A6A]">
+              <td className="px-1 py-2.5 text-right font-display text-base font-semibold text-[#3E8A6A] print:text-sm">
                 {totals.clean}
               </td>
-              <td className="px-3 py-2.5 text-right font-display text-base font-semibold text-[#2E9A9B]">
+              <td className="px-1 py-2.5 text-right font-display text-base font-semibold text-[#2E9A9B] print:text-sm">
                 {totals.dirty}
               </td>
-              <td className="pl-3 py-2.5 text-right font-display text-base font-semibold text-[#1F2A52]">
+              <td className="pl-1 py-2.5 text-right font-display text-base font-semibold text-[#1F2A52] print:text-sm">
                 {Math.round(totals.treatmentHours * 10) / 10} h
               </td>
             </tr>
