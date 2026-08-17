@@ -518,3 +518,8 @@
 ## Unified daily summary table on End of Day report (user request Aug 16)
 - [x] New DailySummaryTable component replaces the per-board cards: one table with a per-board row (Board, Machines utilized, Patients catered, Sessions ended, Normal/Urgent/Very urgent, Waiting added, Clean/Dirty, Treatment time) and a bold Totals row with center-wide utilization + paused minutes
 - [x] Used for both paths — supervisor sees all boards in one table; nurse sees their single board row + Totals; print/PDF layout uses a plain semantic table so it prints cleanly; 161/161 tests + tsc clean
+
+## Fix "s.startedAt.getTime is not a function" on /report (user report Aug 17)
+- [ ] Find the .getTime() call failing on string timestamps from the bulk report sessions
+- [ ] Coerce startedAt/endedAt to Date objects in the bulk path (same as the monthReport fix)
+- [ ] Verify with tests + tsc; checkpoint + push + deliver

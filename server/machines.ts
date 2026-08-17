@@ -790,8 +790,10 @@ export async function machineDayMetrics(input: { floorId: number; date: string }
     let occupiedMs = 0;
     let pausedMs = 0;
     for (const s of acc.sessions) {
-      const start = Math.max(s.startedAt.getTime(), dateStart.getTime());
-      const end = Math.min((s.endedAt ?? new Date(now)).getTime(), dateEnd.getTime());
+      const sStarted = new Date(s.startedAt);
+      const sEnded = s.endedAt ? new Date(s.endedAt) : new Date(now);
+      const start = Math.max(sStarted.getTime(), dateStart.getTime());
+      const end = Math.min(sEnded.getTime(), dateEnd.getTime());
       if (end > start) occupiedMs += end - start;
       // pausedSeconds accumulates any pauses that completed within the session.
       pausedMs += Math.max(0, s.pausedSeconds) * 1000;
@@ -862,8 +864,10 @@ async function machineRangeMetrics(input: {
   const now = Date.now();
   for (const s of [...rows, ...active]) {
     if (!onFloor.has(s.machineId)) continue;
-    const start = Math.max(s.startedAt.getTime(), input.rangeStart.getTime());
-    const end = Math.min((s.endedAt ?? new Date(now)).getTime(), input.rangeEnd.getTime());
+    const sStarted = new Date(s.startedAt);
+    const sEnded = s.endedAt ? new Date(s.endedAt) : new Date(now);
+    const start = Math.max(sStarted.getTime(), input.rangeStart.getTime());
+    const end = Math.min(sEnded.getTime(), input.rangeEnd.getTime());
     if (end <= start) continue;
     if (floorStart === null) {
       floorStart = start;
@@ -886,8 +890,10 @@ async function machineRangeMetrics(input: {
     let occupiedMs = 0;
     let pausedMs = 0;
     for (const s of acc.sessions) {
-      const start = Math.max(s.startedAt.getTime(), input.rangeStart.getTime());
-      const end = Math.min((s.endedAt ?? new Date(now)).getTime(), input.rangeEnd.getTime());
+      const sStarted = new Date(s.startedAt);
+      const sEnded = s.endedAt ? new Date(s.endedAt) : new Date(now);
+      const start = Math.max(sStarted.getTime(), input.rangeStart.getTime());
+      const end = Math.min(sEnded.getTime(), input.rangeEnd.getTime());
       if (end > start) occupiedMs += end - start;
       pausedMs += Math.max(0, s.pausedSeconds) * 1000;
     }
@@ -1904,8 +1910,19 @@ export async function endOfDayReportBulk(opts?: { date?: string }): Promise<{
     urgent: boolean;
     isolationTag: string | null;
   };
-  const ended: DaySessionRow[] = ((daySessions?.rows ?? []) as DaySessionRow[]).filter((r: DaySessionRow) => r.status === "ended");
-  const activeToday = ((daySessions?.rows ?? []) as DaySessionRow[]).filter((r: DaySessionRow) => r.status === "active").map((r: DaySessionRow) => ({
+  // Raw pg driver rows arrive with timestamps as strings — coerce to Date
+  // immediately so every downstream consumer (metrics, summaries, sessions
+  // payload) sees real Date objects.
+  const dayRows: DaySessionRow[] = ((daySessions?.rows ?? []) as DaySessionRow[]).map(r => ({
+    ...r,
+    startedAt: new Date(r.startedAt),
+    endedAt: r.endedAt ? new Date(r.endedAt) : null,
+    pausedSeconds: Number(r.pausedSeconds),
+    durationMinutes: Number(r.durationMinutes),
+    urgent: Boolean(r.urgent),
+  }));
+  const ended: DaySessionRow[] = dayRows.filter((r: DaySessionRow) => r.status === "ended");
+  const activeToday = dayRows.filter((r: DaySessionRow) => r.status === "active").map((r: DaySessionRow) => ({
     machineId: r.machineId,
     startedAt: r.startedAt,
     pausedSeconds: r.pausedSeconds,
