@@ -520,6 +520,6 @@
 - [x] Used for both paths — supervisor sees all boards in one table; nurse sees their single board row + Totals; print/PDF layout uses a plain semantic table so it prints cleanly; 161/161 tests + tsc clean
 
 ## Fix "s.startedAt.getTime is not a function" on /report (user report Aug 17)
-- [ ] Find the .getTime() call failing on string timestamps from the bulk report sessions
-- [ ] Coerce startedAt/endedAt to Date objects in the bulk path (same as the monthReport fix)
-- [ ] Verify with tests + tsc; checkpoint + push + deliver
+- [x] Root cause: raw pg driver rows return timestamps as strings — machineDayMetrics/machineRangeMetrics called .getTime() on them, and string dates leaked into the reportPage sessions payload
+- [x] Fix: coerce startedAt/endedAt to Dates immediately after the raw day-sessions query in reportPage, plus defensive coercion in machineDayMetrics and machineRangeMetrics (same class as the earlier monthReport fix)
+- [x] Verified: 161/161 tests, tsc clean; checkpoint 53717da5 deployed
