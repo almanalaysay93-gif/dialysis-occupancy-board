@@ -525,6 +525,6 @@
 - [x] Verified: 161/161 tests, tsc clean; checkpoint 53717da5 deployed
 
 ## Print overflow on unified summary table (user report Aug 17)
-- [ ] The DailySummaryTable overflows in print/PDF: Waiting added, Clean, Dirty, Treatment time columns get cut at the page edge
-- [ ] Make the table print within page width (compact headers, print-width constraint, landscape-safe sizing)
-- [ ] Verify with print layout check; tests + tsc; checkpoint + push + deliver
+- [x] The DailySummaryTable overflowed in print/PDF — Waiting added, Clean, Dirty, Treatment time columns cut at the page edge (fluid auto-layout table inside a scroll container)
+- [x] Fix: table-fixed with explicit % column widths (Board 15%, numeric cols 7–9%), compact header labels (Machines used / Patients / Sessions / V. urgent / Waiting / Tx time), reduced px spacing, print-only smaller text; full table fits within A4 portrait width
+- [x] Verified: 161/161 tests, tsc clean; checkpoint 934b116e deployed
