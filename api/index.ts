@@ -1,5 +1,5 @@
 import "dotenv/config";
-import express from "express";
+import express, { type Request, type Response } from "express";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "../server/_core/oauth";
 import { registerStorageProxy } from "../server/_core/storageProxy";
@@ -22,4 +22,6 @@ app.use(
   })
 );
 
-export default app;
+export default function handler(req: Request, res: Response) {
+  return app(req, res);
+}
