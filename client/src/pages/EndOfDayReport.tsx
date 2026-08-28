@@ -274,10 +274,10 @@ export default function EndOfDayReport() {
                 setPrintMonthOnly(false);
                 window.print();
               }}
-              aria-label="Save Daily Report as PDF"
+              aria-label="Print Daily Report as PDF"
             >
-              <FileDown className="mr-1.5 h-4 w-4 text-[#2E9A9B]" />
-              Save Daily Report as PDF
+              <Printer className="mr-1.5 h-4 w-4 text-[#2E9A9B]" />
+              Print Daily Report as PDF
             </Button>
             {isSupervisor && (
               <Button
@@ -287,10 +287,10 @@ export default function EndOfDayReport() {
                   setPrintMonthOnly(true);
                   window.print();
                 }}
-                aria-label="Save Monthly Report as PDF"
+                aria-label="Print Monthly Report as PDF"
               >
-                <FileDown className="mr-1.5 h-4 w-4" />
-                Save Monthly Report as PDF
+                <Printer className="mr-1.5 h-4 w-4" />
+                Print Monthly Report as PDF
               </Button>
             )}
           </div>

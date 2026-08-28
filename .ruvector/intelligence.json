@@ -1,0 +1,27 @@
+{
+  "patterns": {},
+  "memories": [],
+  "trajectories": [],
+  "errors": {},
+  "file_sequences": [],
+  "agents": {},
+  "edges": [],
+  "stats": {
+    "total_patterns": 0,
+    "total_memories": 0,
+    "total_trajectories": 0,
+    "total_errors": 0,
+    "session_count": 0,
+    "last_session": 0
+  },
+  "activeTrajectories": {
+    "traj_1787882463578_k6bok4k7f": {
+      "id": "traj_1787882463578_k6bok4k7f",
+      "context": "vercel-line-125: Inspect Vercel deployment log around line 125",
+      "agent": "browser-session",
+      "file": null,
+      "steps": [],
+      "startTime": 1787882463578
+    }
+  }
+}
