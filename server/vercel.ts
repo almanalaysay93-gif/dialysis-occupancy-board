@@ -1,10 +1,10 @@
 import "dotenv/config";
 import express, { type Request, type Response } from "express";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
-import { registerOAuthRoutes } from "../server/_core/oauth";
-import { registerStorageProxy } from "../server/_core/storageProxy";
-import { appRouter } from "../server/routers";
-import { createContext } from "../server/_core/context";
+import { registerOAuthRoutes } from "./_core/oauth";
+import { registerStorageProxy } from "./_core/storageProxy";
+import { appRouter } from "./routers";
+import { createContext } from "./_core/context";
 
 let appPromise: Promise<any> | null = null;
 
