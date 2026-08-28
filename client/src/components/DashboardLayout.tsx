@@ -82,9 +82,8 @@ export default function DashboardLayout({
         <div className="flex flex-col items-center gap-8 p-8 max-w-md w-full">
           <div className="flex flex-col items-center gap-6">
             <img
-              src="/manus-storage/skti-seal-transparent_b9fdeed9.png"
+              src="/images/skti-seal-transparent.png"
               alt="SPMC Kidney and Transplant Institute"
-              onError={e => { (e.currentTarget as HTMLElement).style.display = 'none'; }}
               className="h-28 w-28 rounded-full object-cover shadow-md"
             />
               <p className="smallcaps-detail text-muted-foreground">
@@ -199,9 +198,8 @@ function DashboardLayoutContent({
               {!isCollapsed ? (
                 <div className="flex items-center gap-2.5 min-w-0">
                   <img
-                    src="/manus-storage/skti-seal-transparent_b9fdeed9.png"
+                    src="/images/skti-seal-transparent.png"
                     alt="SPMCKTI logo"
-                    onError={e => { (e.currentTarget as HTMLElement).style.display = 'none'; }}
                     className="h-9 w-9 rounded-full object-cover shrink-0"
                   />
                   <span className="flex flex-col min-w-0 leading-tight shrink">
@@ -215,9 +213,8 @@ function DashboardLayoutContent({
                 </div>
               ) : (
                 <img
-                  src="/manus-storage/skti-seal-transparent_b9fdeed9.png"
+                  src="/images/skti-seal-transparent.png"
                   alt="SPMCKTI logo"
-                  onError={e => { (e.currentTarget as HTMLElement).style.display = 'none'; }}
                   className="h-8 w-8 rounded-full object-cover"
                 />
               )}

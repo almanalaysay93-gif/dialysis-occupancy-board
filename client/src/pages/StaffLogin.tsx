@@ -74,17 +74,15 @@ export default function StaffLogin() {
       <div className="w-full max-w-md space-y-6">
         <div className="glass-deep relative overflow-hidden border border-[#1F2A52]/25 px-8 py-7 text-center bg-gradient-to-b from-[#1F2A52]/10 to-[#1F2A52]/5">
           <img
-            src="/manus-storage/skti-building_5c90942a.jpg"
+            src="/images/skti-building.jpg"
             alt=""
-            onError={e => { (e.currentTarget as HTMLElement).style.display = 'none'; }}
             className="absolute inset-0 h-full w-full object-cover opacity-[0.4] saturate-[1.05]"
           />
           <div className="absolute inset-0 bg-gradient-to-b from-[#F7F9FB]/30 via-transparent to-[#F7F9FB]/30" />
           <div className="relative flex flex-col items-center gap-2.5">
             <img
-              src="/manus-storage/skti-seal-transparent_b9fdeed9.png"
+              src="/images/skti-seal-transparent.png"
               alt="SKTI seal"
-              onError={e => { (e.currentTarget as HTMLElement).style.display = 'none'; }}
               className="h-24 w-24 rounded-full object-cover drop-shadow-[0_3px_12px_rgba(22,39,70,0.4)]"
             />
             <h1 className="font-serif text-3xl text-[#1F2A52]">SPMCKTI Occupancy Board</h1>
