@@ -4,21 +4,17 @@
   "outputDirectory": "dist/public",
   "functions": {
     "api/index.ts": {
-      "runtime": "@vercel/node",
       "maxDuration": 15
     }
   },
-  "routes": [
+  "rewrites": [
     {
-      "src": "/api/(.*)",
-      "dest": "/api/index.ts"
+      "source": "/api/(.*)",
+      "destination": "/api/index.ts"
     },
     {
-      "handle": "filesystem"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/index.html"
+      "source": "/((?!api/|images/|manus-storage/|assets/).*)",
+      "destination": "/index.html"
     }
   ]
 }
