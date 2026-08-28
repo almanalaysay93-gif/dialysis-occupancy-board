@@ -1,10 +1,8 @@
-import { jsxLocPlugin } from "@builder.io/vite-plugin-jsx-loc";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import fs from "node:fs";
 import path from "node:path";
 import { defineConfig, type Plugin, type ViteDevServer } from "vite";
-import { vitePluginManusRuntime } from "vite-plugin-manus-runtime";
 
 // =============================================================================
 // Manus Debug Collector - Vite Plugin
@@ -150,7 +148,7 @@ function vitePluginManusDebugCollector(): Plugin {
   };
 }
 
-const plugins = [react(), tailwindcss(), jsxLocPlugin(), vitePluginManusRuntime(), vitePluginManusDebugCollector()];
+const plugins = [react(), tailwindcss(), vitePluginManusDebugCollector()];
 
 export default defineConfig({
   plugins,
@@ -172,10 +170,10 @@ export default defineConfig({
     target: "es2020",
     rollupOptions: {
       output: {
-        manualChunks: {
-          vendor: ["react", "react-dom", "wouter", "@tanstack/react-query"],
-          icons: ["lucide-react"],
-          trpc: ["@trpc/client", "@trpc/react-query", "superjson"],
+        manualChunks(id) {
+          if (id.includes("node_modules/lucide-react")) return "icons";
+          if (id.includes("node_modules/@trpc") || id.includes("node_modules/superjson")) return "trpc";
+          if (id.includes("node_modules/react") || id.includes("node_modules/wouter") || id.includes("node_modules/@tanstack")) return "vendor";
         },
       },
     },
