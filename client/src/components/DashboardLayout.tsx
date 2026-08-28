@@ -84,6 +84,7 @@ export default function DashboardLayout({
             <img
               src="/manus-storage/skti-seal-transparent_b9fdeed9.png"
               alt="SPMC Kidney and Transplant Institute"
+              onError={e => { (e.currentTarget as HTMLElement).style.display = 'none'; }}
               className="h-28 w-28 rounded-full object-cover shadow-md"
             />
               <p className="smallcaps-detail text-muted-foreground">
@@ -200,6 +201,7 @@ function DashboardLayoutContent({
                   <img
                     src="/manus-storage/skti-seal-transparent_b9fdeed9.png"
                     alt="SPMCKTI logo"
+                    onError={e => { (e.currentTarget as HTMLElement).style.display = 'none'; }}
                     className="h-9 w-9 rounded-full object-cover shrink-0"
                   />
                   <span className="flex flex-col min-w-0 leading-tight shrink">
@@ -215,6 +217,7 @@ function DashboardLayoutContent({
                 <img
                   src="/manus-storage/skti-seal-transparent_b9fdeed9.png"
                   alt="SPMCKTI logo"
+                  onError={e => { (e.currentTarget as HTMLElement).style.display = 'none'; }}
                   className="h-8 w-8 rounded-full object-cover"
                 />
               )}
