@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect } from "react";
+import { lazy, Suspense } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
@@ -16,6 +16,9 @@ const Rooms = lazy(() => import("./pages/Rooms"));
 const Urgent = lazy(() => import("./pages/Urgent"));
 const StaffLogin = lazy(() => import("./pages/StaffLogin"));
 const EndOfDayReport = lazy(() => import("./pages/EndOfDayReport"));
+const PublicKioskDisplay = lazy(() => import("./pages/PublicKioskDisplay"));
+const ShiftEndorsementPage = lazy(() => import("./pages/ShiftEndorsementPage"));
+const WaterQualityQCPage = lazy(() => import("./pages/WaterQualityQCPage"));
 
 function PageLoader() {
   return (
@@ -31,6 +34,10 @@ function Router() {
     <Suspense fallback={<PageLoader />}>
       <Switch>
         <Route path={"/"} component={Home} />
+        <Route path={"/display"} component={PublicKioskDisplay} />
+        <Route path={"/kiosk"} component={PublicKioskDisplay} />
+        <Route path={"/endorsement"} component={ShiftEndorsementPage} />
+        <Route path={"/water-qc"} component={WaterQualityQCPage} />
         <Route path={"/rooms"} component={Rooms} />
         <Route path={"/backup"} component={BackupRepair} />
         <Route path={"/urgent"} component={Urgent} />
@@ -55,16 +62,6 @@ function Router() {
 // - If you want to make theme switchable, pass `switchable` ThemeProvider and use `useTheme` hook
 
 function App() {
-  useEffect(() => {
-    // Eagerly preload all page chunks in background after initial render
-    void import("./pages/FloorBoard");
-    void import("./pages/BackupRepair");
-    void import("./pages/Rooms");
-    void import("./pages/Urgent");
-    void import("./pages/StaffLogin");
-    void import("./pages/EndOfDayReport");
-  }, []);
-
   return (
     <ErrorBoundary>
       <ThemeProvider

@@ -247,11 +247,11 @@ export default function WaitingListPanel({ floorId }: { floorId: number }) {
   const utils = trpc.useUtils();
   const { data: entries, isLoading } = trpc.waiting.list.useQuery(
     { floorId },
-    { refetchInterval: 5_000 }
+    { refetchInterval: 8_000 }
   );
   const { data: vacantCount } = trpc.waiting.vacantCount.useQuery(
     { floorId },
-    { refetchInterval: 5_000 }
+    { refetchInterval: 8_000 }
   );
   const { canWrite } = useCanWrite();
 

@@ -66,8 +66,14 @@ export const appRouter = router({
 
     machines: router({
     /** All machines with their active session (if any). Auto-polling on the
-     *  client provides cross-device real-time sync. */
-    list: publicProcedure.query(() => machineDb.listMachines()),
+     *  client provides cross-device real-time sync.
+     *
+     *  Open to anonymous viewers (kiosk, guest board) but PHI is masked
+     *  server-side: only a staff session receives the real patientId and
+     *  staff names. Everyone else gets the public ticket code. */
+    list: staffReadProcedure.query(({ ctx }) =>
+      machineDb.listMachines({ canSeePhi: ctx.isStaff })
+    ),
 
     /** Rename a machine (staff only). */
     updateLabel: staffOrAdminProcedure
@@ -525,26 +531,28 @@ export const appRouter = router({
   waiting: router({
     /** Waiting patients per floor. Public so every staff device sees the same queue,
      *  but guest viewers never receive clinical queue data. */
-    list: publicProcedure
+    list: staffReadProcedure
       .input(z.object({ floorId: z.number().int().positive() }))
-      .query(async ({ ctx, input }) => {
-        const staff = await resolveStaffSession(ctx.req);
-        if (staff.role === "guest" && staff.fromCookie) return [];
-        return machineDb.listWaiting({ floorId: input.floorId });
-      }),
+      .query(({ ctx, input }) =>
+        // The kiosk shows this queue in a public waiting room, so the rows
+        // stay readable but carry only the ticket code unless the caller
+        // holds a staff session.
+        machineDb.listWaiting({ floorId: input.floorId }, { canSeePhi: ctx.isStaff })
+      ),
     /**
      * Cross-board urgent register: urgent-flagged active sessions from every
      * floor plus very-urgent patients still waiting anywhere. Public so all
      * staff devices see the same consolidated register.
      */
-    urgentRegister: publicProcedure.query(async ({ ctx }) => {
-      const staff = await resolveStaffSession(ctx.req);
-      if (staff.role === "guest" && staff.fromCookie) {
+    urgentRegister: staffReadProcedure.query(async ({ ctx }) => {
+      // The urgent register is a clinical view: it names patients waiting and
+      // in treatment. Guests and anonymous viewers get nothing.
+      if (!ctx.isStaff) {
         return { urgentSessions: [], veryUrgentWaiting: [] };
       }
       const [sessions, waiting, floors] = await Promise.all([
-        machineDb.listMachines(),
-        machineDb.listWaitingAll(),
+        machineDb.listMachines({ canSeePhi: true }),
+        machineDb.listWaitingAll({ canSeePhi: true }),
         machineDb.listFloors(),
       ]);
 
@@ -564,7 +572,7 @@ export const appRouter = router({
             location: r.machine.location,
             floorId: r.machine.floorId,
             floorName: r.machine.floorId ? (floorNames.get(r.machine.floorId) ?? null) : null,
-            patientId: s.patientId,
+            patientId: s.patientId ?? s.ticket,
             durationMinutes: s.durationMinutes,
             endsAt: s.endsAt,
             isolationTag: s.isolationTag,
@@ -574,10 +582,10 @@ export const appRouter = router({
 
       const veryUrgentWaiting = waiting
         .filter((e: { priority: string }) => e.priority === "veryUrgent")
-        .map((e: { id: number; patientId: string; floorId: number; priority: string; joinedAt: Date }) => ({
+        .map(e => ({
           kind: "waiting" as const,
           waitingId: e.id,
-          patientId: e.patientId,
+          patientId: e.patientId ?? e.ticket,
           floorId: e.floorId,
           floorName: floorNames.get(e.floorId) ?? null,
           priority: e.priority,
@@ -723,13 +731,12 @@ export const appRouter = router({
       }),
 
     /** Active sessions on a floor grouped for the "Nurse Patient Assignments" list. */
-    nurseAssignments: publicProcedure
+    nurseAssignments: staffReadProcedure
       .input(z.object({ floorId: z.number().int().positive() }))
       .query(async ({ ctx, input }) => {
-        // Guest viewers are board viewers only — nurse-patient assignments
-        // never leave the server for a guest session.
-        const staff = await resolveStaffSession(ctx.req);
-        if (staff.role === "guest" && staff.fromCookie) return [];
+        // Nurse-patient assignments name both the nurse and the patient.
+        // They never leave the server for a guest or anonymous viewer.
+        if (!ctx.isStaff) return [];
         return machineDb.listNurseAssignments({ floorId: input.floorId });
       }),
   }),
@@ -1077,6 +1084,457 @@ export const appRouter = router({
       return { success: true } as const;
     }),
   }),
+
+  /**
+   * Shift Handover Endorsements between dialysis charge nurses.
+   */
+  shiftEndorsements: router({
+    list: staffReadProcedure
+      .input(
+        z
+          .object({
+            floorId: z.number().int().positive().optional(),
+            date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+          })
+          .optional()
+      )
+      .query(async ({ ctx, input }) => {
+        if (input?.floorId) {
+          requireFloorAccess(ctx.staff, input.floorId, ctx.user);
+        }
+        return machineDb.listShiftEndorsements(input);
+      }),
+
+    byId: staffReadProcedure
+      .input(z.object({ id: z.number().int().positive() }))
+      .query(async ({ ctx, input }) => {
+        const item = await machineDb.getShiftEndorsementById(input.id);
+        if (!item) throw new TRPCError({ code: "NOT_FOUND", message: "Shift endorsement not found." });
+        if (item.floorId) requireFloorAccess(ctx.staff, item.floorId, ctx.user);
+        return item;
+      }),
+
+    create: staffOrAdminProcedure
+      .input(
+        z.object({
+          shift: z.string().trim().min(1, "Shift identifier is required").max(32),
+          floorId: z.number().int().positive(),
+          date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date format"),
+          incomingNurse: z.string().trim().min(1, "Incoming nurse is required").max(64),
+          outgoingNurse: z.string().trim().min(1, "Outgoing nurse is required").max(64),
+          patientNotes: z.string().trim().max(4000).nullable().default(null),
+          accessIssues: z.string().trim().max(4000).nullable().default(null),
+          equipmentNotes: z.string().trim().max(4000).nullable().default(null),
+          floorName: z.string().trim().max(64).nullable().default(null),
+          situation: z.string().trim().max(4000).nullable().default(null),
+          background: z.string().trim().max(4000).nullable().default(null),
+          assessment: z.string().trim().max(4000).nullable().default(null),
+          recommendations: z.string().trim().max(4000).nullable().default(null),
+          censusJson: z.string().max(4000).nullable().default(null),
+          checklistJson: z.string().max(4000).nullable().default(null),
+          specialWatchJson: z.string().max(8000).nullable().default(null),
+          status: z.enum(["DRAFT", "ENDORSED_AND_LOCKED"]).default("DRAFT"),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        requireFloorAccess(ctx.staff, input.floorId, ctx.user);
+        try {
+          const result = await machineDb.createShiftEndorsement(input);
+          return { success: true, id: result.id } as const;
+        } catch (error) {
+          mapBackendError(error);
+        }
+      }),
+
+    update: staffOrAdminProcedure
+      .input(
+        z.object({
+          id: z.number().int().positive(),
+          shift: z.string().trim().min(1).max(32).optional(),
+          incomingNurse: z.string().trim().min(1).max(64).optional(),
+          outgoingNurse: z.string().trim().min(1).max(64).optional(),
+          patientNotes: z.string().trim().max(4000).nullable().optional(),
+          accessIssues: z.string().trim().max(4000).nullable().optional(),
+          equipmentNotes: z.string().trim().max(4000).nullable().optional(),
+          floorName: z.string().trim().max(64).nullable().optional(),
+          situation: z.string().trim().max(4000).nullable().optional(),
+          background: z.string().trim().max(4000).nullable().optional(),
+          assessment: z.string().trim().max(4000).nullable().optional(),
+          recommendations: z.string().trim().max(4000).nullable().optional(),
+          censusJson: z.string().max(4000).nullable().optional(),
+          checklistJson: z.string().max(4000).nullable().optional(),
+          specialWatchJson: z.string().max(8000).nullable().optional(),
+          status: z.enum(["DRAFT", "ENDORSED_AND_LOCKED"]).optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const item = await machineDb.getShiftEndorsementById(input.id);
+        if (!item) throw new TRPCError({ code: "NOT_FOUND", message: "Shift endorsement not found." });
+        if (item.floorId) requireFloorAccess(ctx.staff, item.floorId, ctx.user);
+        try {
+          const { id, ...updates } = input;
+          await machineDb.updateShiftEndorsement(id, updates);
+          return { success: true } as const;
+        } catch (error) {
+          mapBackendError(error);
+        }
+      }),
+
+    remove: staffOrAdminProcedure
+      .input(z.object({ id: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        const item = await machineDb.getShiftEndorsementById(input.id);
+        if (!item) throw new TRPCError({ code: "NOT_FOUND", message: "Shift endorsement not found." });
+        if (item.floorId) requireFloorAccess(ctx.staff, item.floorId, ctx.user);
+        try {
+          await machineDb.deleteShiftEndorsement(input.id);
+          return { success: true } as const;
+        } catch (error) {
+          mapBackendError(error);
+        }
+      }),
+  }),
+
+  /**
+   * Intra-dialytic session complications and adverse clinical events.
+   */
+  sessionComplications: router({
+    list: staffReadProcedure
+      .input(z.object({ sessionId: z.number().int().positive().optional() }).optional())
+      .query(async ({ input }) => machineDb.listSessionComplications(input)),
+
+    create: staffOrAdminProcedure
+      .input(
+        z.object({
+          sessionId: z.number().int().positive(),
+          complicationType: z.string().trim().min(1, "Complication type is required").max(64),
+          onsetMinutes: z.number().int().min(0).max(1440).nullable().default(null),
+          intervention: z.string().trim().max(2000).nullable().default(null),
+          resolved: z.boolean().default(false),
+          machineId: z.number().int().positive().nullable().default(null),
+          machineLabel: z.string().trim().max(32).nullable().default(null),
+          floorId: z.number().int().positive().nullable().default(null),
+          patientId: z.string().trim().max(64).nullable().default(null),
+          patientDisplayAlias: z.string().trim().max(64).nullable().default(null),
+          date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().default(null),
+          timeOfDay: z.string().trim().max(8).nullable().default(null),
+          nurseName: z.string().trim().max(96).nullable().default(null),
+          severity: z.string().trim().max(32).nullable().default(null),
+          preEventBp: z.string().trim().max(16).nullable().default(null),
+          eventBp: z.string().trim().max(16).nullable().default(null),
+          heartRate: z.number().int().min(0).max(300).nullable().default(null),
+          spo2: z.number().int().min(0).max(100).nullable().default(null),
+          bfr: z.number().int().min(0).max(1000).nullable().default(null),
+          ufr: z.number().int().min(0).max(10000).nullable().default(null),
+          interventions: z.array(z.string().trim().max(200)).max(20).nullable().default(null),
+          salineBolusVolumeMl: z.number().int().min(0).max(5000).nullable().default(null),
+          physicianNotified: z.string().trim().max(96).nullable().default(null),
+          outcome: z.string().trim().max(64).nullable().default(null),
+          notes: z.string().trim().max(4000).nullable().default(null),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const floorId = await machineDb.getSessionFloorId(input.sessionId);
+        if (floorId) requireFloorAccess(ctx.staff, floorId, ctx.user);
+        try {
+          const result = await machineDb.createSessionComplication(input);
+          return { success: true, id: result.id } as const;
+        } catch (error) {
+          mapBackendError(error);
+        }
+      }),
+
+    update: staffOrAdminProcedure
+      .input(
+        z.object({
+          id: z.number().int().positive(),
+          complicationType: z.string().trim().min(1).max(64).optional(),
+          onsetMinutes: z.number().int().min(0).max(1440).nullable().optional(),
+          intervention: z.string().trim().max(2000).nullable().optional(),
+          resolved: z.boolean().optional(),
+        })
+      )
+      .mutation(async ({ input }) => {
+        try {
+          const { id, ...updates } = input;
+          await machineDb.updateSessionComplication(id, updates);
+          return { success: true } as const;
+        } catch (error) {
+          mapBackendError(error);
+        }
+      }),
+
+    remove: staffOrAdminProcedure
+      .input(z.object({ id: z.number().int().positive() }))
+      .mutation(async ({ input }) => {
+        try {
+          await machineDb.deleteSessionComplication(input.id);
+          return { success: true } as const;
+        } catch (error) {
+          mapBackendError(error);
+        }
+      }),
+  }),
+
+  /**
+   * Water Treatment & RO quality surveillance logs.
+   */
+  waterQualityLogs: router({
+    list: staffReadProcedure
+      .input(
+        z
+          .object({
+            floorId: z.number().int().positive().optional(),
+            date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+          })
+          .optional()
+      )
+      .query(async ({ ctx, input }) => {
+        if (input?.floorId) {
+          requireFloorAccess(ctx.staff, input.floorId, ctx.user);
+        }
+        return machineDb.listWaterQualityLogs(input);
+      }),
+
+    byId: staffReadProcedure
+      .input(z.object({ id: z.number().int().positive() }))
+      .query(async ({ ctx, input }) => {
+        const item = await machineDb.getWaterQualityLogById(input.id);
+        if (!item) throw new TRPCError({ code: "NOT_FOUND", message: "Water quality log not found." });
+        if (item.floorId) requireFloorAccess(ctx.staff, item.floorId, ctx.user);
+        return item;
+      }),
+
+    create: staffOrAdminProcedure
+      .input(
+        z.object({
+          date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date format"),
+          floorId: z.number().int().positive(),
+          tdsIn: z.number().int().nullable().default(null),
+          tdsOut: z.number().int().nullable().default(null),
+          chlorineLevel: z.string().trim().max(32).nullable().default(null),
+          hardness: z.string().trim().max(32).nullable().default(null),
+          waterTemp: z.string().trim().max(32).nullable().default(null),
+          technician: z.string().trim().min(1, "Technician name is required").max(64),
+          status: z.string().trim().max(32).default("pass"),
+          timeOfDay: z.string().trim().max(8).nullable().default(null),
+          shift: z.string().trim().max(48).nullable().default(null),
+          inspectorRole: z.string().trim().max(32).nullable().default(null),
+          feedTds: z.number().min(0).max(100000).nullable().default(null),
+          productTds: z.number().min(0).max(100000).nullable().default(null),
+          productConductivity: z.number().min(0).max(100000).nullable().default(null),
+          waterHardnessPpm: z.number().min(0).max(10000).nullable().default(null),
+          loopFeedPressure: z.number().min(0).max(500).nullable().default(null),
+          loopReturnPressure: z.number().min(0).max(500).nullable().default(null),
+          waterTemperatureC: z.number().min(0).max(120).nullable().default(null),
+          totalChlorine: z.number().min(0).max(100).nullable().default(null),
+          chloramineBreakthrough: z.boolean().default(false),
+          heatDisinfectionCompleted: z.boolean().default(false),
+          heatPeakTemp: z.number().min(0).max(150).nullable().default(null),
+          heatHoldMinutes: z.number().int().min(0).max(600).nullable().default(null),
+          chemicalAgentUsed: z.string().trim().max(48).nullable().default(null),
+          residualChemicalTestNegative: z.boolean().default(false),
+          endotoxinLevel: z.number().min(0).max(1000).nullable().default(null),
+          colonyCount: z.number().int().min(0).max(1000000).nullable().default(null),
+          correctiveAction: z.string().trim().max(4000).nullable().default(null),
+          notes: z.string().trim().max(4000).nullable().default(null),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        requireFloorAccess(ctx.staff, input.floorId, ctx.user);
+        try {
+          const result = await machineDb.createWaterQualityLog(input);
+          return { success: true, id: result.id } as const;
+        } catch (error) {
+          mapBackendError(error);
+        }
+      }),
+
+    update: staffOrAdminProcedure
+      .input(
+        z.object({
+          id: z.number().int().positive(),
+          tdsIn: z.number().int().nullable().optional(),
+          tdsOut: z.number().int().nullable().optional(),
+          chlorineLevel: z.string().trim().max(32).nullable().optional(),
+          hardness: z.string().trim().max(32).nullable().optional(),
+          waterTemp: z.string().trim().max(32).nullable().optional(),
+          technician: z.string().trim().min(1).max(64).optional(),
+          status: z.string().trim().max(32).optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const item = await machineDb.getWaterQualityLogById(input.id);
+        if (!item) throw new TRPCError({ code: "NOT_FOUND", message: "Water quality log not found." });
+        if (item.floorId) requireFloorAccess(ctx.staff, item.floorId, ctx.user);
+        try {
+          const { id, ...updates } = input;
+          await machineDb.updateWaterQualityLog(id, updates);
+          return { success: true } as const;
+        } catch (error) {
+          mapBackendError(error);
+        }
+      }),
+
+    remove: staffOrAdminProcedure
+      .input(z.object({ id: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        const item = await machineDb.getWaterQualityLogById(input.id);
+        if (!item) throw new TRPCError({ code: "NOT_FOUND", message: "Water quality log not found." });
+        if (item.floorId) requireFloorAccess(ctx.staff, item.floorId, ctx.user);
+        try {
+          await machineDb.deleteWaterQualityLog(input.id);
+          return { success: true } as const;
+        } catch (error) {
+          mapBackendError(error);
+        }
+      }),
+  }),
+
+  /**
+   * Infection surveillance and bloodborne viral hepatitis/HIV/MDR screening.
+   */
+  infectionSurveillance: router({
+    list: staffReadProcedure
+      .input(z.object({ patientId: z.string().trim().optional() }).optional())
+      .query(async ({ input }) => machineDb.listInfectionSurveillance(input)),
+
+    byPatientId: staffReadProcedure
+      .input(z.object({ patientId: z.string().trim().min(1) }))
+      .query(async ({ input }) => {
+        const row = await machineDb.getInfectionSurveillanceByPatientId(input.patientId);
+        if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Infection surveillance record not found." });
+        return row;
+      }),
+
+    upsert: staffOrAdminProcedure
+      .input(
+        z.object({
+          patientId: z.string().trim().min(1, "Patient ID is required").max(64),
+          hbsagStatus: z.string().trim().max(32).default("negative"),
+          hcvStatus: z.string().trim().max(32).default("negative"),
+          hivStatus: z.string().trim().max(32).default("negative"),
+          mdrStatus: z.string().trim().max(32).default("negative"),
+          lastTestedDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date format").nullable().optional(),
+          assignedIsolationRoom: z.string().trim().max(64).nullable().optional(),
+        })
+      )
+      .mutation(async ({ input }) => {
+        try {
+          const result = await machineDb.upsertInfectionSurveillance(input);
+          return { success: true, id: result.id } as const;
+        } catch (error) {
+          mapBackendError(error);
+        }
+      }),
+
+    remove: staffOrAdminProcedure
+      .input(z.object({ id: z.number().int().positive() }))
+      .mutation(async ({ input }) => {
+        try {
+          await machineDb.deleteInfectionSurveillance(input.id);
+          return { success: true } as const;
+        } catch (error) {
+          mapBackendError(error);
+        }
+      }),
+  }),
+
+  /**
+   * Hemodialysis medical supplies and consumable inventory.
+   */
+  inventorySupplies: router({
+    list: staffReadProcedure
+      .input(
+        z
+          .object({
+            category: z.string().trim().optional(),
+            lowStockOnly: z.boolean().optional(),
+          })
+          .optional()
+      )
+      .query(async ({ input }) => machineDb.listInventorySupplies(input)),
+
+    byItemCode: staffReadProcedure
+      .input(z.object({ itemCode: z.string().trim().min(1) }))
+      .query(async ({ input }) => {
+        const item = await machineDb.getInventorySupplyByItemCode(input.itemCode);
+        if (!item) throw new TRPCError({ code: "NOT_FOUND", message: "Item not found in inventory." });
+        return item;
+      }),
+
+    add: staffOrAdminProcedure
+      .input(
+        z.object({
+          itemCode: z.string().trim().min(1, "Item code is required").max(64),
+          itemName: z.string().trim().min(1, "Item name is required").max(128),
+          unit: z.string().trim().min(1, "Unit is required").max(32),
+          currentStock: z.number().int().min(0).default(0),
+          reorderLevel: z.number().int().min(0).default(10),
+          category: z.string().trim().max(64).default("general"),
+        })
+      )
+      .mutation(async ({ input }) => {
+        try {
+          const result = await machineDb.addInventorySupply(input);
+          return { success: true, id: result.id } as const;
+        } catch (error) {
+          if ((error as Error)?.message === "ITEM_CODE_EXISTS") {
+            throw new TRPCError({ code: "CONFLICT", message: "An item with this item code already exists." });
+          }
+          mapBackendError(error);
+        }
+      }),
+
+    update: staffOrAdminProcedure
+      .input(
+        z.object({
+          id: z.number().int().positive(),
+          itemName: z.string().trim().min(1).max(128).optional(),
+          unit: z.string().trim().min(1).max(32).optional(),
+          currentStock: z.number().int().min(0).optional(),
+          reorderLevel: z.number().int().min(0).optional(),
+          category: z.string().trim().max(64).optional(),
+        })
+      )
+      .mutation(async ({ input }) => {
+        try {
+          const { id, ...updates } = input;
+          await machineDb.updateInventorySupply(id, updates);
+          return { success: true } as const;
+        } catch (error) {
+          mapBackendError(error);
+        }
+      }),
+
+    adjustStock: staffOrAdminProcedure
+      .input(
+        z.object({
+          id: z.number().int().positive(),
+          delta: z.number().int(),
+        })
+      )
+      .mutation(async ({ input }) => {
+        try {
+          await machineDb.adjustInventoryStock(input.id, input.delta);
+          return { success: true } as const;
+        } catch (error) {
+          mapBackendError(error);
+        }
+      }),
+
+    remove: staffOrAdminProcedure
+      .input(z.object({ id: z.number().int().positive() }))
+      .mutation(async ({ input }) => {
+        try {
+          await machineDb.deleteInventorySupply(input.id);
+          return { success: true } as const;
+        } catch (error) {
+          mapBackendError(error);
+        }
+      }),
+  }),
 });
 
 export type AppRouter = typeof appRouter;
+

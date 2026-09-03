@@ -7,11 +7,13 @@ import { Button } from "@/components/ui/button";
 import NurseAssignmentsPanel from "@/components/NurseAssignmentsPanel";
 import StaffBar from "@/components/StaffBar";
 import WaitingListPanel from "@/components/WaitingListPanel";
-import { NarrativeReport } from "@/pages/EndOfDayReport";
+import ShiftHandoffPanel from "@/components/ShiftHandoffPanel";
+import WaterQualityQCModal from "@/components/WaterQualityQCModal";
+import { NarrativeReport } from "@/components/NarrativeReport";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useCanWrite } from "@/hooks/useCanWrite";
 import { trpc } from "@/lib/trpc";
-import { Activity, Plus } from "lucide-react";
+import { Activity, ClipboardCheck, Droplets, Plus, Tv } from "lucide-react";
 import { ScrollReveal } from "@/components/ScrollReveal";
 
 import { useMemo, useState } from "react";
@@ -32,7 +34,7 @@ type FloorGroup = {
 function WaitingCount({ floorId }: { floorId: number }) {
   const { data: waiting } = trpc.waiting.list.useQuery(
     { floorId },
-    { refetchInterval: 5_000 }
+    { refetchInterval: 8_000 }
   );
   const total = waiting?.length ?? 0;
   const veryUrgent = waiting?.filter(w => w.priority === "veryUrgent").length ?? 0;
@@ -56,8 +58,9 @@ function WaitingCount({ floorId }: { floorId: number }) {
 export function OccupancyBoardContent({ floorId }: { floorId?: number }) {
   const { canWrite, isClinicalHidden } = useCanWrite();
   const { data, isLoading } = trpc.machines.list.useQuery(undefined, {
-    // Cross-device real-time sync: re-sync board state every 5 seconds
-    refetchInterval: 5_000,
+    // Cross-device real-time sync. The server caches the board for 2 s and
+    // drops that cache on any write, so a slower poll still shows fresh data.
+    refetchInterval: 8_000,
   });
   const { data: staff } = trpc.staff.me.useQuery(undefined, { refetchInterval: 15_000 });
   const { data: floors } = trpc.machines.listFloors.useQuery(undefined, {
@@ -67,6 +70,7 @@ export function OccupancyBoardContent({ floorId }: { floorId?: number }) {
   const [assignTarget, setAssignTarget] = useState<number | null>(null);
   const scoped = floorId !== undefined;
   const [addOpen, setAddOpen] = useState(false);
+  const [waterQcOpen, setWaterQcOpen] = useState(false);
   const [addInitialFloor, setAddInitialFloor] = useState<number | null>(null);
   const [endTarget, setEndTarget] = useState<{
     sessionId: number;
@@ -263,26 +267,58 @@ export function OccupancyBoardContent({ floorId }: { floorId?: number }) {
           </div>
         </header>
 
-        {/* Legend */}
-        <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2">
-          <span className="flex items-center gap-2">
-            <span className="h-3 w-3 border border-[#D4DFE5] bg-[#F4F7F8]" />
-            <span className="smallcaps-detail text-[#556680]">Vacant</span>
-          </span>
-          <span className="flex items-center gap-2">
-            <span className="h-3 w-3 bg-[#3E8A6A]" />
-            <span className="smallcaps-detail text-[#556680]">In Treatment</span>
-          </span>
-          <span className="flex items-center gap-2">
-            <span className="h-3 w-3 bg-[#9E1F2B]" />
-            <span className="smallcaps-detail text-[#556680]">Urgent Case</span>
-          </span>
-          <span className="flex items-center gap-2">
-            <span className="smallcaps-detail text-[#3E8A6A]">Clean</span>
-            <span className="text-[#D4DFE5]">·</span>
-            <span className="smallcaps-detail text-[#2E9A9B]">Dirty</span>
-            <span className="smallcaps-detail text-[#7684A0]">isolation tag</span>
-          </span>
+        {/* Legend & Quick Clinical Suite Strip */}
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-4 border-b border-[#D4DFE5] pb-3">
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+            <span className="flex items-center gap-2">
+              <span className="h-3 w-3 border border-[#D4DFE5] bg-[#F4F7F8]" />
+              <span className="smallcaps-detail text-[#556680]">Vacant</span>
+            </span>
+            <span className="flex items-center gap-2">
+              <span className="h-3 w-3 bg-[#3E8A6A]" />
+              <span className="smallcaps-detail text-[#556680]">In Treatment</span>
+            </span>
+            <span className="flex items-center gap-2">
+              <span className="h-3 w-3 bg-[#9E1F2B]" />
+              <span className="smallcaps-detail text-[#556680]">Urgent Case</span>
+            </span>
+            <span className="flex items-center gap-2">
+              <span className="smallcaps-detail text-[#3E8A6A]">Clean</span>
+              <span className="text-[#D4DFE5]">·</span>
+              <span className="smallcaps-detail text-[#2E9A9B]">Dirty</span>
+              <span className="smallcaps-detail text-[#7684A0]">isolation tag</span>
+            </span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => window.open("/display", "_blank")}
+              className="h-8 text-xs font-semibold bg-cyan-50/70 border-cyan-300 text-cyan-900 hover:bg-cyan-100"
+            >
+              <Tv className="mr-1.5 h-3.5 w-3.5 text-cyan-600" />
+              Lounge TV Kiosk View ↗
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => navigate("/endorsement")}
+              className="h-8 text-xs font-semibold bg-blue-50/70 border-blue-300 text-blue-900 hover:bg-blue-100"
+            >
+              <ClipboardCheck className="mr-1.5 h-3.5 w-3.5 text-blue-600" />
+              Shift Endorsement (SBAR)
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setWaterQcOpen(true)}
+              className="h-8 text-xs font-semibold bg-emerald-50/70 border-emerald-300 text-emerald-900 hover:bg-emerald-100"
+            >
+              <Droplets className="mr-1.5 h-3.5 w-3.5 text-emerald-600" />
+              RO Water QC Form
+            </Button>
+          </div>
         </div>
 
         {/* Auth gate for actions */}
@@ -422,6 +458,18 @@ export function OccupancyBoardContent({ floorId }: { floorId?: number }) {
           </div>
         )}
 
+        {/* Shift Handoff & Clinical Endorsement for this floor board */}
+        {!flowEnabled && waitingFloorId !== undefined && !isClinicalHidden && canWrite && (
+          <div className="mt-16">
+            <ScrollReveal yOffset={32}>
+              <ShiftHandoffPanel
+                floorId={waitingFloorId}
+                floorName={floorNameForScope ?? "Floor Board"}
+              />
+            </ScrollReveal>
+          </div>
+        )}
+
         <AddMachineDialog
           open={addOpen}
           onClose={() => setAddOpen(false)}
@@ -442,6 +490,11 @@ export function OccupancyBoardContent({ floorId }: { floorId?: number }) {
           machineLabel={endMachine?.machine.label ?? ""}
           onClose={() => setEndTarget(null)}
           onEnded={() => setEndTarget(null)}
+        />
+
+        <WaterQualityQCModal
+          open={waterQcOpen}
+          onClose={() => setWaterQcOpen(false)}
         />
       </div>
   );

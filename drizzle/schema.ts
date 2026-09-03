@@ -1,8 +1,11 @@
+import { sql } from "drizzle-orm";
 import {
   boolean,
+  index,
   integer,
   pgEnum,
   pgTable,
+  real,
   serial,
   text,
   timestamp,
@@ -59,7 +62,10 @@ export const machines = pgTable("machines", {
   sortOrder: integer("sortOrder").notNull().default(0),
   createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
   updatedAt: timestamp("updatedAt", { mode: "date" }).defaultNow().notNull(),
-});
+}, table => [
+  // Every floor board and report filters machines by floor and status.
+  index("machines_floor_status_idx").on(table.floorId, table.status),
+]);
 
 export type Machine = typeof machines.$inferSelect;
 export type InsertMachine = typeof machines.$inferInsert;
@@ -121,7 +127,20 @@ export const sessions = pgTable("sessions", {
   startedBy: text("startedBy"),
   createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
   updatedAt: timestamp("updatedAt", { mode: "date" }).defaultNow().notNull(),
-});
+}, table => [
+  // Partial indexes: only a few dozen rows are ever "active", while the table
+  // grows without bound, so these stay small no matter how much history piles up.
+  index("sessions_active_machine_idx")
+    .on(table.machineId)
+    .where(sql`status = 'active'`),
+  index("sessions_active_started_idx")
+    .on(table.startedAt)
+    .where(sql`status = 'active'`),
+  // End of Day and End of Month scan completed sessions by end time.
+  index("sessions_ended_at_idx")
+    .on(table.endedAt)
+    .where(sql`status = 'ended'`),
+]);
 
 export type Session = typeof sessions.$inferSelect;
 export type InsertSession = typeof sessions.$inferInsert;
@@ -155,7 +174,10 @@ export const waitingList = pgTable("waiting_list", {
   admittedAt: timestamp("admittedAt", { mode: "date" }),
   status: waitingStatusEnum("status").notNull().default("waiting"),
   createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
-});
+}, table => [
+  // The queue is always read as "still waiting, on this floor".
+  index("waiting_list_status_floor_idx").on(table.status, table.floorId),
+]);
 
 export type WaitingEntry = typeof waitingList.$inferSelect;
 export type InsertWaitingEntry = typeof waitingList.$inferInsert;
@@ -211,7 +233,9 @@ export const narrativeReports = pgTable("narrative_reports", {
   body: text("body").notNull(),
   createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
   updatedAt: timestamp("updatedAt", { mode: "date" }).defaultNow().notNull(),
-});
+}, table => [
+  index("narrative_reports_floor_date_idx").on(table.floorId, table.reportDate),
+]);
 
 export type NarrativeReport = typeof narrativeReports.$inferSelect;
 export type InsertNarrativeReport = typeof narrativeReports.$inferInsert;
@@ -234,7 +258,173 @@ export const narrativeHistory = pgTable("narrative_history", {
   /** Snapshot of the narrative body (null for deletes). */
   bodySnapshot: text("body_snapshot"),
   createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
-});
+}, table => [
+  index("narrative_history_floor_date_idx").on(table.floorId, table.reportDate),
+]);
 
 export type NarrativeHistory = typeof narrativeHistory.$inferSelect;
 export type InsertNarrativeHistory = typeof narrativeHistory.$inferInsert;
+
+/**
+ * Shift handover endorsements between outgoing and incoming charge nurses.
+ */
+export const shiftEndorsements = pgTable("shift_endorsements", {
+  id: serial("id").primaryKey(),
+  shift: varchar("shift", { length: 32 }).notNull(),
+  floorId: integer("floorId").notNull(),
+  date: varchar("date", { length: 16 }).notNull(),
+  incomingNurse: varchar("incomingNurse", { length: 64 }).notNull(),
+  outgoingNurse: varchar("outgoingNurse", { length: 64 }).notNull(),
+  patientNotes: text("patientNotes"),
+  accessIssues: text("accessIssues"),
+  equipmentNotes: text("equipmentNotes"),
+  floorName: varchar("floorName", { length: 64 }),
+  // SBAR handover narrative.
+  situation: text("situation"),
+  background: text("background"),
+  assessment: text("assessment"),
+  recommendations: text("recommendations"),
+  // JSON payloads: the census snapshot, the safety checklist, and the
+  // special-watch patient list. They are read and written whole, never queried
+  // field by field, so a column per key would buy nothing.
+  censusJson: text("censusJson"),
+  checklistJson: text("checklistJson"),
+  specialWatchJson: text("specialWatchJson"),
+  status: varchar("status", { length: 32 }).notNull().default("DRAFT"),
+  endorsedAt: timestamp("endorsedAt", { mode: "date" }),
+  createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt", { mode: "date" }).defaultNow().notNull(),
+}, table => [
+  index("shift_endorsements_floor_date_idx").on(table.floorId, table.date),
+]);
+
+export type ShiftEndorsement = typeof shiftEndorsements.$inferSelect;
+export type InsertShiftEndorsement = typeof shiftEndorsements.$inferInsert;
+
+/**
+ * Intra-dialytic complication records tied to treatment sessions.
+ */
+export const sessionComplications = pgTable("session_complications", {
+  id: serial("id").primaryKey(),
+  sessionId: integer("sessionId").notNull(),
+  complicationType: varchar("complicationType", { length: 64 }).notNull(),
+  onsetMinutes: integer("onsetMinutes"),
+  intervention: text("intervention"),
+  resolved: boolean("resolved").notNull().default(false),
+  machineId: integer("machineId"),
+  machineLabel: varchar("machineLabel", { length: 32 }),
+  floorId: integer("floorId"),
+  patientId: varchar("patientId", { length: 64 }),
+  patientDisplayAlias: varchar("patientDisplayAlias", { length: 64 }),
+  date: varchar("date", { length: 16 }),
+  timeOfDay: varchar("timeOfDay", { length: 8 }),
+  nurseName: varchar("nurseName", { length: 96 }),
+  severity: varchar("severity", { length: 32 }),
+  // Vitals at the moment of the event.
+  preEventBp: varchar("preEventBp", { length: 16 }),
+  eventBp: varchar("eventBp", { length: 16 }),
+  heartRate: integer("heartRate"),
+  spo2: integer("spo2"),
+  bfr: integer("bfr"),
+  ufr: integer("ufr"),
+  /** Interventions performed, JSON string array. */
+  interventionsJson: text("interventionsJson"),
+  salineBolusVolumeMl: integer("salineBolusVolumeMl"),
+  physicianNotified: varchar("physicianNotified", { length: 96 }),
+  outcome: varchar("outcome", { length: 64 }),
+  notes: text("notes"),
+  createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
+}, table => [
+  index("session_complications_session_idx").on(table.sessionId),
+]);
+
+export type SessionComplication = typeof sessionComplications.$inferSelect;
+export type InsertSessionComplication = typeof sessionComplications.$inferInsert;
+
+/**
+ * Daily hemodialysis water treatment and reverse osmosis (RO) quality logs.
+ */
+export const waterQualityLogs = pgTable("water_quality_logs", {
+  id: serial("id").primaryKey(),
+  date: varchar("date", { length: 16 }).notNull(),
+  floorId: integer("floorId").notNull(),
+  tdsIn: integer("tdsIn"),
+  tdsOut: integer("tdsOut"),
+  chlorineLevel: varchar("chlorineLevel", { length: 32 }),
+  hardness: varchar("hardness", { length: 32 }),
+  waterTemp: varchar("waterTemp", { length: 32 }),
+  technician: varchar("technician", { length: 64 }).notNull(),
+  status: varchar("status", { length: 32 }).notNull().default("pass"),
+  timeOfDay: varchar("timeOfDay", { length: 8 }),
+  shift: varchar("shift", { length: 48 }),
+  inspectorRole: varchar("inspectorRole", { length: 32 }),
+  // RO performance. Fractional by nature (product TDS runs around 3.2 ppm),
+  // so these are real, not the integer tdsIn/tdsOut kept above for the
+  // pre-existing rows.
+  feedTds: real("feedTds"),
+  productTds: real("productTds"),
+  rejectionRate: real("rejectionRate"),
+  productConductivity: real("productConductivity"),
+  waterHardnessPpm: real("waterHardnessPpm"),
+  loopFeedPressure: real("loopFeedPressure"),
+  loopReturnPressure: real("loopReturnPressure"),
+  waterTemperatureC: real("waterTemperatureC"),
+  // Chlorine and chloramine: the hemolysis barrier.
+  totalChlorine: real("totalChlorine"),
+  chloramineBreakthrough: boolean("chloramineBreakthrough").notNull().default(false),
+  // Disinfection cycle.
+  heatDisinfectionCompleted: boolean("heatDisinfectionCompleted").notNull().default(false),
+  heatPeakTemp: real("heatPeakTemp"),
+  heatHoldMinutes: integer("heatHoldMinutes"),
+  chemicalAgentUsed: varchar("chemicalAgentUsed", { length: 48 }),
+  residualChemicalTestNegative: boolean("residualChemicalTestNegative").notNull().default(false),
+  // Microbial surveillance.
+  endotoxinLevel: real("endotoxinLevel"),
+  colonyCount: integer("colonyCount"),
+  correctiveAction: text("correctiveAction"),
+  notes: text("notes"),
+  createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
+}, table => [
+  index("water_quality_logs_floor_date_idx").on(table.floorId, table.date),
+]);
+
+export type WaterQualityLog = typeof waterQualityLogs.$inferSelect;
+export type InsertWaterQualityLog = typeof waterQualityLogs.$inferInsert;
+
+/**
+ * Infection control and serology surveillance tracking for dialysis patients.
+ */
+export const infectionSurveillance = pgTable("infection_surveillance", {
+  id: serial("id").primaryKey(),
+  patientId: varchar("patientId", { length: 64 }).notNull(),
+  hbsagStatus: varchar("hbsagStatus", { length: 32 }).notNull().default("negative"),
+  hcvStatus: varchar("hcvStatus", { length: 32 }).notNull().default("negative"),
+  hivStatus: varchar("hivStatus", { length: 32 }).notNull().default("negative"),
+  mdrStatus: varchar("mdrStatus", { length: 32 }).notNull().default("negative"),
+  lastTestedDate: varchar("lastTestedDate", { length: 16 }),
+  assignedIsolationRoom: varchar("assignedIsolationRoom", { length: 64 }),
+  createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt", { mode: "date" }).defaultNow().notNull(),
+});
+
+export type InfectionSurveillance = typeof infectionSurveillance.$inferSelect;
+export type InsertInfectionSurveillance = typeof infectionSurveillance.$inferInsert;
+
+/**
+ * Dialysis supply inventory, dialyzers, bloodlines, concentrates, and PPE stock.
+ */
+export const inventorySupplies = pgTable("inventory_supplies", {
+  id: serial("id").primaryKey(),
+  itemCode: varchar("itemCode", { length: 64 }).notNull().unique(),
+  itemName: varchar("itemName", { length: 128 }).notNull(),
+  unit: varchar("unit", { length: 32 }).notNull(),
+  currentStock: integer("currentStock").notNull().default(0),
+  reorderLevel: integer("reorderLevel").notNull().default(10),
+  category: varchar("category", { length: 64 }).notNull().default("general"),
+  createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt", { mode: "date" }).defaultNow().notNull(),
+});
+
+export type InventorySupply = typeof inventorySupplies.$inferSelect;
+export type InsertInventorySupply = typeof inventorySupplies.$inferInsert;
+

@@ -48,7 +48,7 @@ export function formatRemaining(endsAt: Date, now: Date): { text: string; overdu
 export default function NurseAssignmentsPanel({ floorId }: { floorId: number }) {
   const { data: rows, isLoading } = trpc.waiting.nurseAssignments.useQuery(
     { floorId },
-    { refetchInterval: 5_000 }
+    { refetchInterval: 8_000 }
   );
   const [now, setNow] = useState(() => new Date());
 

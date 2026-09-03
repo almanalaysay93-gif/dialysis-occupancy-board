@@ -4,6 +4,7 @@ import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
 
 vi.mock("./machines", () => ({
+  invalidateBoardCache: vi.fn(),
   listFloors: vi.fn(),
   listMachines: vi.fn(),
   addRoom: vi.fn(),

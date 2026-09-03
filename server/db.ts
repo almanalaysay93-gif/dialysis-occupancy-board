@@ -34,10 +34,17 @@ function resolveUrl(): string | null {
 //    responds, so warmed requests skip the handshake entirely.
 let _pool: Pool | null = null;
 
+/**
+ * Serverless instances each hold their own pool, so a high per-instance cap
+ * multiplies across concurrent lambdas and exhausts the Supabase connection
+ * limit. A long-running node process is the opposite case and wants headroom.
+ */
+const POOL_MAX = process.env.VERCEL ? 2 : 8;
+
 function buildPool(url: string): Pool {
-  return new Pool({
+  const pool = new Pool({
     connectionString: url,
-    max: 8,
+    max: POOL_MAX,
     min: 0,
     idleTimeoutMillis: 30_000,
     connectionTimeoutMillis: 8_000,
@@ -51,6 +58,32 @@ function buildPool(url: string): Pool {
       ? { rejectUnauthorized: false }
       : undefined,
   });
+
+  // node-postgres emits "error" on the pool when an IDLE client dies — which
+  // the Supabase pooler does routinely. With no listener this is an
+  // uncaughtException and the process exits, taking the whole site down.
+  // Handle it and drop the pool so the next getDb() rebuilds a healthy one.
+  pool.on("error", err => {
+    console.error("[Database] Idle client error, resetting pool:", err);
+    void resetPool();
+  });
+
+  return pool;
+}
+
+/**
+ * Discard the cached pool and drizzle handle.
+ *
+ * getDb() short-circuits on the cached handle, so without this a pool that
+ * died stays cached and every later request fails until the process restarts.
+ */
+export async function resetPool(): Promise<void> {
+  const dying = _pool;
+  _pool = null;
+  _db = null;
+  if (dying) {
+    try { await dying.end(); } catch { /* already gone */ }
+  }
 }
 
 function sleep(ms: number) {
@@ -76,8 +109,7 @@ export async function getDb(): Promise<ReturnType<typeof drizzle> | null> {
       if (!message.includes("terminated") && !message.includes("timeout") && !message.includes("unexpectedly")) break;
       await sleep(500 * (attempt + 1));
       // A dropped pool cannot be reused — rebuild it for the next attempt.
-      try { await _pool?.end(); } catch { /* ignore */ }
-      _pool = null;
+      await resetPool();
     }
   }
   console.warn("[Database] Failed to connect after retries:", lastError);

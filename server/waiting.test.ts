@@ -4,6 +4,7 @@ import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
 
 vi.mock("./machines", () => ({
+  invalidateBoardCache: vi.fn(),
   listFloors: vi.fn(async () => []),
   listMachines: vi.fn(async () => []),
   addRoom: vi.fn(async () => ({ id: 42 })),
@@ -81,7 +82,11 @@ describe("waiting.list", () => {
     expect(result[0]?.priority).toBe("veryUrgent");
     expect(result[1]?.priority).toBe("urgent");
     expect(result[2]?.priority).toBe("normal");
-    expect(vi.mocked(machineDb.listWaiting)).toHaveBeenCalledWith({ floorId: 30001 });
+    // A staff caller carries PHI access through to the data layer.
+    expect(vi.mocked(machineDb.listWaiting)).toHaveBeenCalledWith(
+      { floorId: 30001 },
+      { canSeePhi: true }
+    );
   });
 });
 
@@ -579,7 +584,7 @@ describe("guest viewers never receive clinical panel data", () => {
     };
   }
 
-  it("waiting.list returns an empty queue for guest cookie sessions", async () => {
+  it("waiting.list masks the queue for guest cookie sessions", async () => {
     const { resolveStaffSession } = await import("./staffAuth");
     vi.mocked(resolveStaffSession).mockResolvedValueOnce({
       accountId: 0,
@@ -589,15 +594,16 @@ describe("guest viewers never receive clinical panel data", () => {
       assignedFloorId: null,
       fromCookie: true,
     });
-    vi.mocked(machineDb.listWaiting).mockResolvedValueOnce([
-      { id: 1, patientId: "P-1", floorId: 30001, priority: "veryUrgent", addedBy: "staff", joinedAt: new Date() },
-    ]);
 
     const caller = appRouter.createCaller(guestContext());
-    const result = await caller.waiting.list({ floorId: 30001 });
+    await caller.waiting.list({ floorId: 30001 });
 
-    expect(result).toEqual([]);
-    expect(vi.mocked(machineDb.listWaiting)).not.toHaveBeenCalled();
+    // The waiting-room kiosk still shows the queue, so the rows survive, but
+    // the data layer is told to withhold the identifiers.
+    expect(vi.mocked(machineDb.listWaiting)).toHaveBeenCalledWith(
+      { floorId: 30001 },
+      { canSeePhi: false }
+    );
   });
 
   it("waiting.urgentRegister returns empty registers for guest cookie sessions", async () => {

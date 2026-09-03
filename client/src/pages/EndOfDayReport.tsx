@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "wouter";
-import { ClipboardList, Dumbbell, FileDown, Filter, PenLine, Printer, Trash2, UserRound, Users } from "lucide-react";
+import { BarChart3, ClipboardList, Dumbbell, FileDown, Filter, PenLine, Printer, Trash2, UserRound, Users } from "lucide-react";
 import { toast } from "sonner";
 import DashboardLayout from "@/components/DashboardLayout";
+import MonthlySummaryView from "@/components/MonthlySummaryView";
 import { ScrollReveal } from "@/components/ScrollReveal";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,16 +17,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { trpc } from "@/lib/trpc";
-
-const REPORT_PERIODS: { key: string; label: string }[] = [
-  { key: "session1", label: "Session 1 · 5:00 – 10:00 AM" },
-  { key: "transition1", label: "Transition 1 · Hooking & Terminating · 9:00 – 11:00 AM" },
-  { key: "session2", label: "Session 2 · 10:00 AM – 2:00 PM" },
-  { key: "transition2", label: "Transition 2 · Hooking & Terminating · 1:00 – 3:00 PM" },
-  { key: "session3", label: "Session 3 · 2:00 – 6:00 PM" },
-  { key: "transition3", label: "Transition 3 · Hooking & Terminating · 5:00 – 8:00 PM" },
-  { key: "session4", label: "Session 4 · 6:00 – 10:00 PM" },
-];
+import { NarrativeReport, REPORT_PERIODS, REPORT_SHIFTS } from "@/components/NarrativeReport";
 
 const SUPERVISOR_PERIODS: { key: string; label: string }[] = [
   { key: "supShift1", label: "Supervisor Shift · 7:00 AM – 3:00 PM" },
@@ -37,15 +29,6 @@ const SUPERVISOR_SHIFTS: { key: string; label: string }[] = [
   { key: "15-23", label: "3:00 – 11:00 PM" },
   { key: "23-07", label: "11:00 PM – 7:00 AM" },
 ];
-const REPORT_SHIFTS: { key: string; label: string }[] = [
-  { key: "05-13", label: "5:00 AM – 1:00 PM" },
-  { key: "13-21", label: "1:00 – 9:00 PM" },
-  { key: "21-05", label: "9:00 PM – 5:00 AM" },
-  { key: "07-15", label: "7:00 AM – 3:00 PM" },
-  { key: "15-23", label: "3:00 – 11:00 PM" },
-  { key: "23-07", label: "11:00 PM – 7:00 AM" },
-];
-
 type ReportBoard = {
   floorName: string | null;
   reportDate: string;
@@ -217,6 +200,7 @@ export default function EndOfDayReport() {
   // Print-mode toggle: when true, the daily report (and controls) is hidden in
   // the print layout so "Export Month PDF" yields a clean month-only PDF.
   const [printMonthOnly, setPrintMonthOnly] = useState(false);
+  const [activeReportTab, setActiveReportTab] = useState<"daily" | "monthly">("daily");
   // Reset printMonthOnly when the browser print / PDF dialog closes
   useEffect(() => {
     const handleAfterPrint = () => setPrintMonthOnly(false);
@@ -242,50 +226,64 @@ export default function EndOfDayReport() {
       ) : (
         <>
         <div className="w-full px-4 sm:px-6 py-6">
-        <div className={`flex flex-wrap items-start justify-between gap-4 ${printMonthOnly ? "print:screen-only" : ""}`}>
-          <div>
-            <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.22em] text-[#7684A0]">
-              <ClipboardList className="h-3.5 w-3.5" />
-              Clinical Summary
+          {/* Report Mode Tabs (Screen Only) */}
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-4 border-b border-[#D4DFE5] pb-4 print:hidden">
+            <div className="flex items-center gap-1.5 rounded-sm bg-[#E8EFF1] p-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveReportTab("daily");
+                  setPrintMonthOnly(false);
+                }}
+                className={`flex items-center gap-2 rounded-xs px-4 py-2 text-xs font-semibold uppercase tracking-[0.14em] transition-all ${
+                  activeReportTab === "daily"
+                    ? "bg-[#1F2A52] text-white shadow-xs"
+                    : "text-[#556680] hover:text-[#1F2A52]"
+                }`}
+              >
+                <ClipboardList className="h-4 w-4" />
+                Daily Report
+              </button>
+              {isSupervisor && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveReportTab("monthly");
+                    setPrintMonthOnly(false);
+                  }}
+                  className={`flex items-center gap-2 rounded-xs px-4 py-2 text-xs font-semibold uppercase tracking-[0.14em] transition-all ${
+                    activeReportTab === "monthly"
+                      ? "bg-[#9E1F2B] text-white shadow-xs"
+                      : "text-[#556680] hover:text-[#9E1F2B]"
+                  }`}
+                >
+                  <BarChart3 className="h-4 w-4" />
+                  Monthly Summary &amp; Analytics
+                </button>
+              )}
             </div>
-            <h1 className="font-display text-3xl tracking-tight text-[#1F2A52]">
-              End of Day Report
-            </h1>
-            <p className="mt-1 text-sm text-[#556680]">
-              Sessions concluded, machines utilized and patients catered on the
-              board{isMulti ? "s" : ""} for {dateLabel}.
-            </p>
-          </div>
-          <div className="flex items-center gap-2 print:screen-only">
-            <input
-              type="date"
-              value={date}
-              max={localDateStr(0)}
-              onChange={e => {
-                setDate(e.target.value || localDateStr(0));
-              }}
-              className="h-9 rounded-sm border border-[#D4DFE5] bg-white px-2 text-sm text-[#1F2A52] outline-none focus:border-[#2E9A9B]"
-            />
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-9 border-[#D4DFE5] text-[#1F2A52] hover:bg-[#E8EFF1]"
-              onClick={() => {
-                setPrintMonthOnly(false);
-                window.print();
-              }}
-              aria-label="Print Daily Report as PDF"
-            >
-              <Printer className="mr-1.5 h-4 w-4 text-[#2E9A9B]" />
-              Print Daily Report as PDF
-            </Button>
-            {isSupervisor && (
+
+            {activeReportTab === "daily" ? (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-9 border-[#D4DFE5] text-[#1F2A52] hover:bg-[#E8EFF1]"
+                onClick={() => {
+                  setPrintMonthOnly(false);
+                  window.print();
+                }}
+                aria-label="Print Daily Report as PDF"
+              >
+                <Printer className="mr-1.5 h-4 w-4 text-[#2E9A9B]" />
+                Print Daily Report as PDF
+              </Button>
+            ) : (
               <Button
                 size="sm"
                 className="h-9 bg-[#9E1F2B] text-white hover:bg-[#7a1822]"
                 onClick={() => {
                   setPrintMonthOnly(true);
-                  window.print();
+                  setTimeout(() => window.print(), 50);
                 }}
                 aria-label="Print Monthly Report as PDF"
               >
@@ -294,188 +292,219 @@ export default function EndOfDayReport() {
               </Button>
             )}
           </div>
-        </div>
-        <div className={`mt-4 flex items-center gap-3 ${!isSupervisor || printMonthOnly ? "print:screen-only" : ""}`}>
-          <label
-            htmlFor="month-picker"
-            className="text-xs font-medium uppercase tracking-[0.18em] text-[#7684A0]"
-          >
-            Month
-          </label>
-          <input
-            id="month-picker"
-            type="month"
-            value={month}
-            max={manilaMonthStr(0)}
-            onChange={e => {
-              setMonth(e.target.value || manilaMonthStr(0));
-            }}
-            className="h-9 rounded-sm border border-[#D4DFE5] bg-white px-2 text-sm text-[#1F2A52] outline-none focus:border-[#2E9A9B]"
-          />
-        </div>
-        {isSupervisor && (
-          <div className={`mt-3 flex flex-wrap items-center gap-3 ${printMonthOnly ? "print:screen-only" : ""}`}>
-            <label
-              htmlFor="shift-selector"
-              className="text-xs font-medium uppercase tracking-[0.18em] text-[#7684A0]"
-            >
-              Narrative Shift Filter
-            </label>
-            <select
-              id="shift-selector"
-              value={shiftKey}
-              onChange={e => setShiftKey(e.target.value)}
-              className="h-9 rounded-sm border border-[#D4DFE5] bg-white px-2 text-sm text-[#1F2A52] outline-none focus:border-[#2E9A9B]"
-            >
-              <option value="all">All Shifts</option>
-              {REPORT_SHIFTS.map(s => (
-                <option key={s.key} value={s.key}>
-                  {s.label}
-                </option>
-              ))}
-            </select>
-            <span className="text-xs text-[#556680]">
-              Shows narrative entries whose session/transition window overlaps
-              the selected shift (supervisor shifts included).
-            </span>
-          </div>
-        )}
 
-        {/* Active shift filter banner — also visible in print so the PDF
-            states which shift the narrative tables reflect. */}
-        {shiftLabel && (
-          <div className="mt-3 inline-flex items-center gap-2 rounded-sm border border-[#2E9A9B]/40 bg-[#2E9A9B]/10 px-3 py-1.5 text-xs font-medium text-[#17696A]">
-            <Filter className="h-3.5 w-3.5" />
-            {shiftLabel}
-          </div>
-        )}
-
-        {/* Daily report content — hidden during a month-only print so the
-            End of Month PDF never includes the End of Day Report. */}
-        <div className={printMonthOnly ? "print:screen-only" : ""}>
-        {isLoading && (
-          <div className="mt-8 grid gap-8 md:grid-cols-2">
-            <Skeleton className="h-72" />
-            <Skeleton className="h-72" />
-          </div>
-        )}
-
-        {!isLoading && !isMulti && singleQuery.error && (
-          <Card className="glass-panel mt-8 border-[#9E1F2B]/40 bg-[#FBF5F5]/80">
-            <CardContent className="flex items-center justify-between gap-4 py-5">
-              <p className="text-sm text-[#9E1F2B]">
-                The report could not be loaded: {singleQuery.error.message}
-              </p>
-              <Button
-                size="sm"
-                className="bg-[#9E1F2B] text-white hover:bg-[#7a1822]"
-                onClick={() => void singleQuery.refetch()}
-              >
-                Try again
-              </Button>
-            </CardContent>
-          </Card>
-        )}
-
-        {!isLoading && !isMulti && !singleQuery.data && (
-          <Card className="glass-panel mt-8 border-[#D4DFE5]/70">
-            <CardContent className="flex flex-col items-center gap-3 py-10">
-              <span className="glass-icon h-12 w-12 p-2.5"><Dumbbell className="h-6 w-6 text-[#7684A0]" /></span>
-              <p className="font-serif-light text-lg italic text-[#556680]">
-                No sessions were concluded on {dateLabel} — the report stays
-                empty until a treatment ends.
-              </p>
-              <Button size="sm" variant="outline" asChild className="border-[#D4DFE5] text-[#1F2A52]">
-                <Link href="/">Back to the board</Link>
-              </Button>
-            </CardContent>
-          </Card>
-        )}
-
-        {!isMulti && singleQuery.data && (
-          <ScrollReveal>
-          <div className="mt-8 grid gap-8 lg:grid-cols-2 print:grid-cols-1">
-            <div className="flex flex-col gap-8">
-              <DailySummaryTable boards={[singleQuery.data]} />
-              {singleQuery.data.floorName && (
-                <NarrativeSection
-                  floorId={(floors ?? []).find(f => f.name === singleQuery.data.floorName)?.id ?? 0}
-                  floorName={singleQuery.data.floorName}
-                  date={date}
-                  staff={staff}
-                />
-              )}
+          {/* Monthly Summary View (Screen & Print) */}
+          {(activeReportTab === "monthly" || printMonthOnly) && (
+            <div className={printMonthOnly ? "block" : activeReportTab === "monthly" ? "block print:hidden" : "hidden"}>
+              <MonthlySummaryView
+                monthly={monthly}
+                month={month}
+                onMonthChange={setMonth}
+                isLoading={monthlyLoading}
+                onPrint={() => {
+                  setPrintMonthOnly(true);
+                  setTimeout(() => window.print(), 50);
+                }}
+              />
             </div>
-          </div>
-          </ScrollReveal>
-        )}
+          )}
 
-        {isMulti && (
-          <ScrollReveal>
-          <div className="mt-8">
-            <DailySummaryTable
-              boards={(floors ?? [])
-                .map(f => pageQuery.data?.daily.summaries[String(f.id)] ?? null)
-                .filter(
-                  (b): b is ReportBoard =>
-                    b !== null &&
-                    "floorName" in b &&
-                    "machinesUtilized" in b &&
-                    "urgency" in b
+          {/* Daily Report View (Screen & Print) */}
+          {(activeReportTab === "daily" && !printMonthOnly) && (
+            <div className={printMonthOnly ? "hidden" : "block"}>
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.22em] text-[#7684A0]">
+                    <ClipboardList className="h-3.5 w-3.5" />
+                    Clinical Summary
+                  </div>
+                  <h1 className="font-display text-3xl tracking-tight text-[#1F2A52]">
+                    End of Day Report
+                  </h1>
+                  <p className="mt-1 text-sm text-[#556680]">
+                    Sessions concluded, machines utilized and patients catered on the
+                    board{isMulti ? "s" : ""} for {dateLabel}.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 print:screen-only">
+                  <input
+                    type="date"
+                    value={date}
+                    max={localDateStr(0)}
+                    onChange={e => {
+                      setDate(e.target.value || localDateStr(0));
+                    }}
+                    className="h-9 rounded-sm border border-[#D4DFE5] bg-white px-2 text-sm text-[#1F2A52] outline-none focus:border-[#2E9A9B]"
+                  />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-9 border-[#D4DFE5] text-[#1F2A52] hover:bg-[#E8EFF1]"
+                    onClick={() => {
+                      setPrintMonthOnly(false);
+                      window.print();
+                    }}
+                    aria-label="Print Daily Report as PDF"
+                  >
+                    <Printer className="mr-1.5 h-4 w-4 text-[#2E9A9B]" />
+                    Print Daily Report as PDF
+                  </Button>
+                </div>
+              </div>
+
+              {isSupervisor && (
+                <div className="mt-3 flex flex-wrap items-center gap-3 print:screen-only">
+                  <label
+                    htmlFor="shift-selector"
+                    className="text-xs font-medium uppercase tracking-[0.18em] text-[#7684A0]"
+                  >
+                    Narrative Shift Filter
+                  </label>
+                  <select
+                    id="shift-selector"
+                    value={shiftKey}
+                    onChange={e => setShiftKey(e.target.value)}
+                    className="h-9 rounded-sm border border-[#D4DFE5] bg-white px-2 text-sm text-[#1F2A52] outline-none focus:border-[#2E9A9B]"
+                  >
+                    <option value="all">All Shifts</option>
+                    {REPORT_SHIFTS.map(s => (
+                      <option key={s.key} value={s.key}>
+                        {s.label}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="text-xs text-[#556680]">
+                    Shows narrative entries whose session/transition window overlaps
+                    the selected shift (supervisor shifts included).
+                  </span>
+                </div>
+              )}
+
+              {/* Active shift filter banner */}
+              {shiftLabel && (
+                <div className="mt-3 inline-flex items-center gap-2 rounded-sm border border-[#2E9A9B]/40 bg-[#2E9A9B]/10 px-3 py-1.5 text-xs font-medium text-[#17696A]">
+                  <Filter className="h-3.5 w-3.5" />
+                  {shiftLabel}
+                </div>
+              )}
+
+              {/* Daily report content */}
+              <div>
+                {isLoading && (
+                  <div className="mt-8 grid gap-8 md:grid-cols-2">
+                    <Skeleton className="h-72" />
+                    <Skeleton className="h-72" />
+                  </div>
                 )}
-            />
-          </div>
-          </ScrollReveal>
-        )}
 
-        <ScrollReveal>
-        {isMulti && (
-          <div className="mt-10 grid flex-col gap-10 lg:grid lg:grid-cols-2 print:grid-cols-1">
-          {(floors ?? []).map(f => (
-            <NarrativeSection
-              key={`narrative-${f.id}`}
-              floorId={f.id}
-              floorName={f.name}
-              date={date}
-              staff={staff}
-              entries={pageQuery.data?.daily.narratives[String(f.id)]}
-            />
-          ))}
-          </div>
-        )}
-        </ScrollReveal>
+                {!isLoading && !isMulti && singleQuery.error && (
+                  <Card className="glass-panel mt-8 border-[#9E1F2B]/40 bg-[#FBF5F5]/80">
+                    <CardContent className="flex items-center justify-between gap-4 py-5">
+                      <p className="text-sm text-[#9E1F2B]">
+                        The report could not be loaded: {singleQuery.error.message}
+                      </p>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => void singleQuery.refetch()}
+                      >
+                        Retry
+                      </Button>
+                    </CardContent>
+                  </Card>
+                )}
 
-        <ScrollReveal>
-        {(floors ?? []).length > 0 && (
-          <div className="mt-10">
-          <SupervisorNarrativeSection
-            floors={floors}
-            date={date}
-            staff={staff}
-            multi={isMulti}
-            floorNarratives={pageQuery.data?.daily.narratives}
-          />
-          </div>
-        )}
+                {!isLoading && !isMulti && !singleQuery.data && (
+                  <Card className="glass-panel mt-8 border-[#D4DFE5]/70">
+                    <CardContent className="flex flex-col items-center gap-3 py-10">
+                      <span className="glass-icon h-12 w-12 p-2.5"><Dumbbell className="h-6 w-6 text-[#7684A0]" /></span>
+                      <p className="font-serif-light text-lg italic text-[#556680]">
+                        No sessions were concluded on {dateLabel} — the report stays
+                        empty until a treatment ends.
+                      </p>
+                      <Button size="sm" variant="outline" asChild className="border-[#D4DFE5] text-[#1F2A52]">
+                        <Link href="/">Back to the board</Link>
+                      </Button>
+                    </CardContent>
+                  </Card>
+                )}
 
-        {staff?.role === "auditor" && (
-          <div className="mt-10">
-          <NarrativeHistorySection floors={floors} date={date} />
-          </div>
-        )}
-        </ScrollReveal>
+                {!isMulti && singleQuery.data && (
+                  <ScrollReveal>
+                    <div className="mt-8 grid gap-8 lg:grid-cols-2 print:grid-cols-1">
+                      <div className="flex flex-col gap-8">
+                        <DailySummaryTable boards={[singleQuery.data]} />
+                        {singleQuery.data.floorName && (
+                          <NarrativeSection
+                            floorId={(floors ?? []).find(f => f.name === singleQuery.data.floorName)?.id ?? 0}
+                            floorName={singleQuery.data.floorName}
+                            date={date}
+                            staff={staff}
+                          />
+                        )}
+                      </div>
+                    </div>
+                  </ScrollReveal>
+                )}
 
+                {isMulti && (
+                  <ScrollReveal>
+                    <div className="mt-8">
+                      <DailySummaryTable
+                        boards={(floors ?? [])
+                          .map(f => pageQuery.data?.daily.summaries[String(f.id)] ?? null)
+                          .filter(
+                            (b): b is ReportBoard =>
+                              b !== null &&
+                              "floorName" in b &&
+                              "machinesUtilized" in b &&
+                              "urgency" in b
+                          )}
+                      />
+                    </div>
+                  </ScrollReveal>
+                )}
+
+                <ScrollReveal>
+                  {isMulti && (
+                    <div className="mt-10 grid flex-col gap-10 lg:grid lg:grid-cols-2 print:grid-cols-1">
+                      {(floors ?? []).map(f => (
+                        <NarrativeSection
+                          key={`narrative-${f.id}`}
+                          floorId={f.id}
+                          floorName={f.name}
+                          date={date}
+                          staff={staff}
+                          entries={pageQuery.data?.daily.narratives[String(f.id)]}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </ScrollReveal>
+
+                <ScrollReveal>
+                  {(floors ?? []).length > 0 && (
+                    <div className="mt-10">
+                      <SupervisorNarrativeSection
+                        floors={floors}
+                        date={date}
+                        staff={staff}
+                        multi={isMulti}
+                        floorNarratives={pageQuery.data?.daily.narratives}
+                      />
+                    </div>
+                  )}
+
+                  {staff?.role === "auditor" && (
+                    <div className="mt-10">
+                      <NarrativeHistorySection floors={floors} date={date} />
+                    </div>
+                  )}
+                </ScrollReveal>
+              </div>
+            </div>
+          )}
         </div>
-        {/* Month export container: invisible on screen and in the daily PDF —
-            it only prints when the supervisor runs a month-only export. */}
-        <div className={printMonthOnly ? "screen:hidden print:block mt-12" : "hidden"}>
-          {monthlyLoading ? (
-            <Skeleton className="h-96" />
-          ) : monthly ? (
-            <PrintableMonthReport data={monthly} month={month} />
-          ) : null}
-        </div>
-      </div>
         </>
       )}
     </DashboardLayout>
@@ -1228,373 +1257,6 @@ function NarrativeSection({
   return <NarrativeReport floorId={floorId} floorName={floorName} date={date} staff={staff} editable={false} entries={entries} />;
 }
 
-/**
- * Charge-nurse narrative report: shared between the board pages (editable,
- * nurses write it during the shift) and the End of Day Report (read-only
- * reflection of what was written).
- */
-export function NarrativeReport({
-  floorId,
-  floorName,
-  date,
-  staff,
-  editable,
-  entries,
-}: {
-  floorId: number;
-  floorName: string;
-  date: string;
-  staff: { role: string; displayName?: string | null; name?: string } | null;
-  editable: boolean;
-  /** Pre-fetched narratives for this floor (supervisor bulk call). Skips its own query. */
-  entries?: { id: number; periodKey: string; shiftKey: string | null; author: string; body: string; updatedAt: Date }[];
-}) {
-  if (!floorId) return null;
-  const utils = trpc.useUtils();
-  const { data: narratives, isLoading, isError, error } = trpc.narratives.list.useQuery(
-    { floorId, reportDate: date },
-    { refetchInterval: editable ? 15_000 : false, enabled: entries === undefined }
-  );
-  const resolvedNarratives = entries ?? narratives;
-  const createMutation = trpc.narratives.create.useMutation({
-    onSuccess: () => {
-      toast.success("Narrative saved");
-      void utils.narratives.list.invalidate({ floorId, reportDate: date });
-    },
-    onError: e => toast.error(e.message),
-  });
-  const updateMutation = trpc.narratives.update.useMutation({
-    onSuccess: () => {
-      toast.success("Narrative updated");
-      void utils.narratives.list.invalidate({ floorId, reportDate: date });
-    },
-    onError: e => toast.error(e.message),
-  });
-  const removeMutation = trpc.narratives.remove.useMutation({
-    onSuccess: () => {
-      toast.success("Narrative removed");
-      void utils.narratives.list.invalidate({ floorId, reportDate: date });
-    },
-    onError: e => toast.error(e.message),
-  });
-
-  // Charge nurses write the board narratives; supervisors only view them.
-  const canWriteBoard = editable && staff?.role !== "supervisor";
-
-  const [openPeriod, setOpenPeriod] = useState<string | null>(null);
-  const [openShift, setOpenShift] = useState<string>("05-13");
-  const [openAuthor, setOpenAuthor] = useState(() => staff?.displayName ?? "");
-  // Entry being edited in the inline form — updates instead of creating.
-  const [editEntry, setEditEntry] = useState<{
-    id: number;
-    periodKey: string;
-    author: string;
-    body: string;
-  } | null>(null);
-  // Draft auto-save: the writer's draft survives form close, refresh, and
-  // device restarts; cleared only on a successful save.
-  const draftKey = useMemo(
-    () => `narrative-board-draft:${floorId}:${date}`,
-    [floorId, date]
-  );
-  const [openBody, setOpenBody] = useState(() => {
-    try {
-      return localStorage.getItem(draftKey) ?? "";
-    } catch {
-      return "";
-    }
-  });
-  const draftSaved = useRef(false);
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      try {
-        localStorage.setItem(draftKey, openBody);
-        draftSaved.current = true;
-      } catch {
-        draftSaved.current = false;
-      }
-    }, 400);
-    return () => clearTimeout(timer);
-  }, [openBody, draftKey]);
-
-  const entriesByPeriod = useMemo(() => {
-    const map = new Map<string, { id: number; periodKey: string; shiftKey: string | null; author: string; body: string; updatedAt: Date }>();
-    (resolvedNarratives ?? []).forEach(n => map.set(n.periodKey, n as never));
-    return map;
-  }, [resolvedNarratives]);
-
-  const authorName = staff?.displayName ?? "";
-  if (!authorName && openAuthor === "") setOpenAuthor("");
-
-  return (
-    <Card className="glass-panel print:bg-white print:backdrop-none print:shadow-none print:border print:border-[#D4DFE5] print:break-inside-avoid">
-      <CardHeader className="border-b border-[#D4DFE5]/70 pb-4">
-        <div className="flex items-center gap-2">
-          <PenLine className="h-4 w-4 text-[#2E9A9B]" />
-          <CardTitle className="font-display text-lg text-[#1F2A52]">
-            Narrative Report · {floorName}
-          </CardTitle>
-        </div>
-        <p className="text-xs text-[#556680]">
-          {canWriteBoard
-            ? "Charge nurse narratives for each session and hooking/terminating transition of the day — write during the shift."
-            : "Charge nurse narratives recorded for this day — supervisors view only."}
-        </p>
-      </CardHeader>
-      <CardContent className="space-y-3 pt-4">
-        {isLoading ? (
-          <Skeleton className="h-40" />
-        ) : isError ? (
-          <p className="px-3.5 py-3 text-xs text-[#9E1F2B]">
-            Narratives could not be loaded ({String(error?.message ?? "network error")}) — try signing in as clinical staff or refresh the page.
-          </p>
-        ) : !canWriteBoard && resolvedNarratives !== undefined ? (
-          // Read-only rendering for supervisors / anyone without write rights.
-          REPORT_PERIODS.map(period => {
-            const entry = entriesByPeriod.get(period.key);
-            return (
-              <div
-                key={period.key}
-                className="rounded-sm border border-[#D4DFE5] bg-[#FBFCFD] py-2"
-              >
-                {entry ? (
-                  <div className="flex items-start justify-between gap-3 px-3.5 py-3">
-                    <div>
-                      <p className="font-serif-light text-[13px] font-semibold text-[#1F2A52]">
-                        {period.label}
-                      </p>
-                      {entry.shiftKey && (
-                        <p className="mt-0.5 text-[10px] uppercase tracking-[0.12em] text-[#7684A0]">
-                          Shift {REPORT_SHIFTS.find(s => s.key === entry.shiftKey)?.label ?? entry.shiftKey}
-                        </p>
-                      )}
-                      <p className="mt-1 whitespace-pre-wrap text-xs leading-relaxed text-[#556680]">
-                        {entry.body}
-                      </p>
-                      <p className="mt-1.5 text-[10px] text-[#7684A0]">
-                        by {entry.author} · updated{" "}
-                        {new Date(entry.updatedAt).toLocaleString([], { timeZone: "Asia/Manila", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
-                      </p>
-                    </div>
-                    {canWriteBoard && (
-                      <div className="flex shrink-0 items-center gap-1.5">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-7 border-[#2E9A9B]/50 text-[#1d6b6c]"
-                          onClick={() => {
-                            setOpenPeriod(period.key);
-                            setEditEntry({ id: entry.id, periodKey: period.key, author: entry.author, body: entry.body });
-                            setOpenBody(entry.body);
-                            setOpenAuthor(entry.author);
-                            setOpenShift(entry.shiftKey ?? "05-13");
-                          }}
-                          title="Edit this narrative"
-                        >
-                          <PenLine className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-7 border-[#D4DFE5] text-[#1F2A52]"
-                          onClick={() => void removeMutation.mutate({ id: entry.id, floorId })}
-                          title="Delete this narrative"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-between gap-3 px-3.5 py-3">
-                    <p className="text-[13px] font-serif-light text-[#7684A0]">{period.label}</p>
-                    {canWriteBoard ? (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-7 shrink-0 border-[#2E9A9B]/50 text-[#1d6b6c]"
-                        onClick={() => {
-                          setOpenPeriod(period.key);
-                          setEditEntry(null);
-                          try {
-                            setOpenBody(localStorage.getItem(draftKey) ?? "");
-                          } catch {
-                            setOpenBody("");
-                          }
-                          setOpenAuthor(authorName);
-                          setOpenShift("05-13");
-                        }}
-                      >
-                        Write narrative
-                      </Button>
-                    ) : (
-                      <span className="text-[10px] uppercase tracking-[0.12em] text-[#9E1F2B]/70">No entry</span>
-                    )}
-                  </div>
-                )}
-              </div>
-            );
-          })
-        ) : canWriteBoard ? (
-          // Writable rendering for charge nurses on the board pages.
-          REPORT_PERIODS.map(period => {
-            const entry = entriesByPeriod.get(period.key);
-            return (
-              <div
-                key={period.key}
-                className="rounded-sm border border-[#D4DFE5] bg-[#FBFCFD] py-2"
-              >
-                {entry ? (
-                  <div className="flex items-start justify-between gap-3 px-3.5 py-3">
-                    <div>
-                      <p className="font-serif-light text-[13px] font-semibold text-[#1F2A52]">
-                        {period.label}
-                      </p>
-                      {entry.shiftKey && (
-                        <p className="mt-0.5 text-[10px] uppercase tracking-[0.12em] text-[#7684A0]">
-                          Shift {REPORT_SHIFTS.find(s => s.key === entry.shiftKey)?.label ?? entry.shiftKey}
-                        </p>
-                      )}
-                      <p className="mt-1 whitespace-pre-wrap text-xs leading-relaxed text-[#556680]">
-                        {entry.body}
-                      </p>
-                      <p className="mt-1.5 text-[10px] text-[#7684A0]">
-                        by {entry.author} · updated{" "}
-                        {new Date(entry.updatedAt).toLocaleString([], { timeZone: "Asia/Manila", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
-                      </p>
-                    </div>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-7 shrink-0 border-[#D4DFE5] text-[#1F2A52]"
-                      onClick={() => void removeMutation.mutate({ id: entry.id, floorId })}
-                      title="Delete this narrative"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-between gap-3 px-3.5 py-3">
-                    <p className="text-[13px] font-serif-light text-[#7684A0]">{period.label}</p>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-7 shrink-0 border-[#2E9A9B]/50 text-[#1d6b6c]"
-                      onClick={() => {
-                        setOpenPeriod(period.key);
-                        setOpenBody("");
-                        setOpenAuthor(authorName);
-                        setOpenShift("05-13");
-                      }}
-                    >
-                      Write narrative
-                    </Button>
-                  </div>
-                )}
-              </div>
-            );
-          })
-        ) : null}
-
-        {canWriteBoard && openPeriod && (
-          <div className="rounded-sm border border-[#2E9A9B]/40 bg-[#EFF8F8] p-4">
-            <p className="text-[11px] uppercase tracking-[0.18em] text-[#1d6b6c]">
-              {REPORT_PERIODS.find(p => p.key === openPeriod)?.label}
-            </p>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              <div>
-                <label className="text-[10px] uppercase tracking-[0.14em] text-[#556680]">
-                  Shift on duty
-                </label>
-                <select
-                  value={openShift}
-                  onChange={e => setOpenShift(e.target.value)}
-                  className="mt-1 h-9 w-full rounded-sm border border-[#D4DFE5] bg-white px-2 text-sm text-[#1F2A52] outline-none focus:border-[#2E9A9B]"
-                >
-                  {REPORT_SHIFTS.map(s => (
-                    <option key={s.key} value={s.key}>
-                      {s.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="text-[10px] uppercase tracking-[0.14em] text-[#556680]">
-                  Charge nurse (author)
-                </label>
-                <input
-                  value={openAuthor}
-                  onChange={e => setOpenAuthor(e.target.value)}
-                  placeholder="e.g. RN Maria Cruz"
-                  className="mt-1 h-9 w-full rounded-sm border border-[#D4DFE5] bg-white px-2 text-sm text-[#1F2A52] outline-none focus:border-[#2E9A9B]"
-                />
-              </div>
-            </div>
-            <label className="mt-3 block text-[10px] uppercase tracking-[0.14em] text-[#556680]">
-              Narrative · what happened during this period
-            </label>
-            <textarea
-              value={openBody}
-              onChange={e => setOpenBody(e.target.value)}
-              placeholder="Patients hooked / terminated, transfers, incidents, supply issues, equipment notes…"
-              rows={4}
-              className="mt-1 w-full rounded-sm border border-[#D4DFE5] bg-white px-2 py-1.5 text-sm text-[#1F2A52] outline-none focus:border-[#2E9A9B]"
-            />
-            {openBody.trim() && !editEntry && (
-              <p className="mt-1.5 text-[10px] text-[#7684A0]">
-                {draftSaved.current ? "Draft saved — nothing is lost if you close this." : "Draft saving…"}
-              </p>
-            )}
-            <div className="mt-3 flex items-center gap-2">
-              <Button
-                size="sm"
-                className="bg-[#2E9A9B] text-white hover:bg-[#1d6b6c]"
-                disabled={!openBody.trim() || !openAuthor.trim() || createMutation.isPending || updateMutation.isPending}
-                onClick={() => {
-                  if (!openBody.trim() || !openAuthor.trim()) return;
-                  const onFinish = () => {
-                    try {
-                      localStorage.removeItem(draftKey);
-                    } catch {
-                      // localStorage unavailable — leave the draft key harmless.
-                    }
-                    setOpenPeriod(null);
-                    setEditEntry(null);
-                  };
-                  if (editEntry) {
-                    updateMutation.mutate({ id: editEntry.id, floorId, body: openBody.trim() }, { onSuccess: onFinish });
-                  } else {
-                    createMutation.mutate(
-                      {
-                        floorId,
-                        reportDate: date,
-                        periodKey: openPeriod,
-                        shiftKey: openShift,
-                        author: openAuthor.trim(),
-                        body: openBody.trim(),
-                      },
-                      { onSuccess: onFinish }
-                    );
-                  }
-                }}
-              >
-                {createMutation.isPending || updateMutation.isPending ? "Saving…" : editEntry ? "Update narrative" : "Save narrative"}
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-8 border-[#D4DFE5] text-[#556680]"
-                onClick={() => setOpenPeriod(null)}
-              >
-                Cancel
-              </Button>
-            </div>
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
 
 /**
  * Narrative Edit History: auditor-only view of every narrative change
@@ -1752,180 +1414,4 @@ function BreakdownCell({
   );
 }
 
-/**
- * End of Month report, formatted specifically for PDF export via the
- * browser's print dialog. Hidden from normal screen viewing (screen:hidden)
- * and only visible in the print layout (print:block).
- */
-function PrintableMonthReport({
-  data,
-  month,
-}: {
-  data: {
-    floorId: number;
-    floorName: string | null;
-    month: string;
-    days: {
-      date: string;
-      sessionsEnded: number;
-      patientsCatered: number;
-      machinesUtilized: number;
-      totalMachinesOnFloor: number;
-      urgency: { normal: number; urgent: number; veryUrgent: number };
-      isolation: { clean: number; dirty: number };
-      totalTreatmentHours: number;
-      waitingAdds: number;
-      totalPausedMinutes: number;
-    }[];
-    totals: {
-      sessionsEnded: number;
-      peakMachinesUtilized: number;
-      totalMachinesOnFloor: number;
-      patientsCatered: number;
-      urgency: { normal: number; urgent: number; veryUrgent: number };
-      isolation: { clean: number; dirty: number };
-      totalTreatmentHours: number;
-      waitingAdds: { normal: number; urgent: number; veryUrgent: number; total: number };
-      totalPausedMinutes: number;
-      daysWithActivity: number;
-    };
-  }[];
-  month: string;
-}) {
-  const monthLabel = new Date(`${month}-15T12:00:00+08:00`).toLocaleDateString([], {
-    month: "long",
-    year: "numeric",
-    timeZone: "Asia/Manila",
-  });
 
-  const fmtMin = (min: number) => {
-    if (min < 60) return `${min} min`;
-    const h = Math.floor(min / 60);
-    const m = min % 60;
-    return m > 0 ? `${h} h ${m} min` : `${h} h`;
-  };
-
-  return (
-    <div className="screen:hidden print:block">
-      <div className="mb-8 border-b-2 border-[#9E1F2B] pb-4">
-        <p className="text-xs uppercase tracking-[0.2em] text-[#7684A0]">Hemodialysis Occupancy Board</p>
-        <h2 className="font-display text-2xl text-[#1F2A52]">End of Month Report</h2>
-        <p className="mt-1 text-sm text-[#556680]">{monthLabel} · All boards · Asia/Manila time</p>
-      </div>
-
-      {data.map((board, idx) => (
-        <div key={board.floorId} className={`mb-8 ${idx > 0 ? "break-before-page" : ""}`}>
-          <h3 className="mb-3 font-display text-xl text-[#1F2A52]">
-            {board.floorName ?? `Floor ${board.floorId}`}
-          </h3>
-
-          <table className="glass-table w-full text-sm">
-            <thead>
-              <tr className="border-b-2 border-[#1F2A52] text-left text-[#1F2A52]">
-                <th className="px-2 py-1.5 font-semibold">Metric</th>
-                <th className="px-2 py-1.5 font-semibold">Total</th>
-              </tr>
-            </thead>
-            <tbody className="text-[#374151]">
-              <tr className="border-b border-[#D4DFE5]">
-                <td className="px-2 py-1">Sessions completed</td>
-                <td className="px-2 py-1 font-medium">{board.totals.sessionsEnded}</td>
-              </tr>
-              <tr className="border-b border-[#D4DFE5]">
-                <td className="px-2 py-1">Patients catered (distinct)</td>
-                <td className="px-2 py-1 font-medium">{board.totals.patientsCatered}</td>
-              </tr>
-              <tr className="border-b border-[#D4DFE5]">
-                <td className="px-2 py-1">Machines on floor</td>
-                <td className="px-2 py-1 font-medium">{board.totals.totalMachinesOnFloor}</td>
-              </tr>
-              <tr className="border-b border-[#D4DFE5]">
-                <td className="px-2 py-1">Peak machines utilized in one day</td>
-                <td className="px-2 py-1 font-medium">{board.totals.peakMachinesUtilized}</td>
-              </tr>
-              <tr className="border-b border-[#D4DFE5]">
-                <td className="px-2 py-1">Total treatment hours</td>
-                <td className="px-2 py-1 font-medium">{board.totals.totalTreatmentHours} h</td>
-              </tr>
-              <tr className="border-b border-[#D4DFE5]">
-                <td className="px-2 py-1">Normal / Urgent / Very urgent cases</td>
-                <td className="px-2 py-1 font-medium">
-                  {board.totals.urgency.normal} / {board.totals.urgency.urgent} /{" "}
-                  {board.totals.urgency.veryUrgent}
-                </td>
-              </tr>
-              <tr className="border-b border-[#D4DFE5]">
-                <td className="px-2 py-1">Clean / Dirty isolation tags</td>
-                <td className="px-2 py-1 font-medium">
-                  {board.totals.isolation.clean} / {board.totals.isolation.dirty}
-                </td>
-              </tr>
-              <tr className="border-b border-[#D4DFE5]">
-                <td className="px-2 py-1">Waiting-list additions (normal / urgent / very urgent / total)</td>
-                <td className="px-2 py-1 font-medium">
-                  {board.totals.waitingAdds.normal} / {board.totals.waitingAdds.urgent} /{" "}
-                  {board.totals.waitingAdds.veryUrgent} / {board.totals.waitingAdds.total}
-                </td>
-              </tr>
-              <tr className="border-b border-[#D4DFE5]">
-                <td className="px-2 py-1">Total machine pause time</td>
-                <td className="px-2 py-1 font-medium">{fmtMin(board.totals.totalPausedMinutes)}</td>
-              </tr>
-              <tr>
-                <td className="px-2 py-1">Days with activity</td>
-                <td className="px-2 py-1 font-medium">
-                  {board.totals.daysWithActivity} of {board.days.length}
-                </td>
-              </tr>
-            </tbody>
-          </table>
-
-          <h4 className="mb-2 mt-6 font-semibold text-[#1F2A52]">Daily breakdown</h4>
-          <table className="glass-table w-full text-sm">
-            <thead>
-              <tr className="border-b-2 border-[#1F2A52] text-left text-[#1F2A52]">
-                <th className="px-2 py-1.5 font-semibold">Date</th>
-                <th className="px-2 py-1.5 text-right font-semibold">Sessions</th>
-                <th className="px-2 py-1.5 text-right font-semibold">Patients</th>
-                <th className="px-2 py-1.5 text-right font-semibold">Machines used</th>
-                <th className="px-2 py-1.5 text-right font-semibold">Hours</th>
-                <th className="px-2 py-1.5 text-right font-semibold">Urgent</th>
-                <th className="px-2 py-1.5 text-right font-semibold">Very urgent</th>
-                <th className="px-2 py-1.5 text-right font-semibold">Waiting added</th>
-                <th className="px-2 py-1.5 text-right font-semibold">Pause</th>
-              </tr>
-            </thead>
-            <tbody className="text-[#374151]">
-              {board.days.map(day => (
-                <tr key={day.date} className="border-b border-[#D4DFE5]">
-                  <td className="px-2 py-1">
-                    {new Date(`${day.date}T12:00:00+08:00`).toLocaleDateString([], {
-                      weekday: "short",
-                      day: "numeric",
-                      timeZone: "Asia/Manila",
-                    })}
-                  </td>
-                  <td className="px-2 py-1 text-right">{day.sessionsEnded}</td>
-                  <td className="px-2 py-1 text-right">{day.patientsCatered}</td>
-                  <td className="px-2 py-1 text-right">
-                    {day.machinesUtilized}/{day.totalMachinesOnFloor}
-                  </td>
-                  <td className="px-2 py-1 text-right">{day.totalTreatmentHours}</td>
-                  <td className="px-2 py-1 text-right">{day.urgency.urgent}</td>
-                  <td className="px-2 py-1 text-right">{day.urgency.veryUrgent}</td>
-                  <td className="px-2 py-1 text-right">{day.waitingAdds}</td>
-                  <td className="px-2 py-1 text-right">{fmtMin(day.totalPausedMinutes)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ))}
-
-      <p className="mt-6 text-xs text-[#7684A0]">
-        Generated {new Date().toLocaleString([], { timeZone: "Asia/Manila" })} ·
-        Hemodialysis Occupancy Board
-      </p>
-    </div>
-  );
-}

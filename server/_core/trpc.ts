@@ -3,6 +3,7 @@ import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 import type { TrpcContext } from "./context";
 import { resolveStaffSession, type StaffSession } from "../staffAuth";
+import { invalidateBoardCache } from "../machines";
 
 const t = initTRPC.context<TrpcContext>().create({
   transformer: superjson,
@@ -115,7 +116,17 @@ export const supervisorProcedure = t.procedure.use(
   }),
 );
 
-export const staffOrAdminProcedure = t.procedure.use(
+/**
+ * Drops the short-lived board cache after any write so the client refetch
+ * that follows a mutation never reads a pre-write snapshot.
+ */
+const invalidateBoardAfterWrite = t.middleware(async opts => {
+  const result = await opts.next();
+  if (opts.type === "mutation") invalidateBoardCache();
+  return result;
+});
+
+export const staffOrAdminProcedure = t.procedure.use(invalidateBoardAfterWrite).use(
   t.middleware(async opts => {
     const { ctx, next } = opts;
         const staff: StaffSession = await resolveStaffSession(ctx.req);

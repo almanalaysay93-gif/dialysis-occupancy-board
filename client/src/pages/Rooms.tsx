@@ -20,10 +20,10 @@ export default function Rooms() {
   const { canWrite: mayWrite, role } = useCanWrite();
   const canWrite = mayWrite && role !== "nurse";
   const { data: rooms, isLoading } = trpc.rooms.list.useQuery(undefined, {
-    refetchInterval: 5_000,
+    refetchInterval: 8_000,
   });
   const { data: machineData } = trpc.machines.list.useQuery(undefined, {
-    refetchInterval: 5_000,
+    refetchInterval: 8_000,
   });
 
   const [addOpen, setAddOpen] = useState(false);

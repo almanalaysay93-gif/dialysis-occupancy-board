@@ -12,8 +12,9 @@ import EndSessionDialog from "@/components/EndSessionDialog";
 import RenameMachineDialog from "@/components/RenameMachineDialog";
 import RenameSessionLabelDialog from "@/components/RenameSessionLabelDialog";
 import RemoveMachineDialog from "@/components/RemoveMachineDialog";
+import AdverseComplicationModal from "@/components/AdverseComplicationModal";
 import { cn } from "@/lib/utils";
-import { Activity, AlertTriangle, BellRing, Clock, Droplets, FilePenLine, Loader2, MoreVertical, Pause, Play, Pencil, Plus, Power, Trash2, Boxes, Wrench } from "lucide-react";
+import { Activity, AlertTriangle, BellRing, Clock, Droplets, FilePenLine, Loader2, MoreVertical, Pause, Play, Pencil, Plus, Power, Trash2, Boxes, Wrench, ShieldAlert, Zap } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import type { MachineWithSession } from "../../../server/machines";
@@ -27,15 +28,20 @@ export function readDraggedMachineId(dt: DataTransfer | null): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-function useCountdown(endsAt: Date | null) {
+/**
+ * Takes epoch milliseconds, not a Date. A Date is a fresh object on every
+ * render, so the effect below used to tear down and rebuild the 1 s interval
+ * on each parent render, and every chip on the board paid for it.
+ */
+function useCountdown(endsAtMs: number | null) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
-    if (!endsAt) return;
+    if (endsAtMs === null) return;
     const interval = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(interval);
-  }, [endsAt]);
-  if (!endsAt) return 0;
-  return Math.max(0, endsAt.getTime() - now);
+  }, [endsAtMs]);
+  if (endsAtMs === null) return 0;
+  return Math.max(0, endsAtMs - now);
 }
 
 function formatHMS(ms: number): string {
@@ -74,17 +80,18 @@ export function FloorMachineChip({
   const isPaused = Boolean(row.session?.pausedAt);
   // While paused the countdown is frozen at the remaining time snapshot; the
   // server shifts endsAt on resume so all clients stay consistent.
-  const effectiveEndsAt =
+  const effectiveEndsAtMs =
     isPaused && row.session?.pausedAt
-      ? new Date((row.session.endsAt.getTime() + row.session.pausedSeconds * 1000))
-      : row.session?.endsAt ?? null;
-  const countdownMs = useCountdown(effectiveEndsAt);
+      ? row.session.endsAt.getTime() + row.session.pausedSeconds * 1000
+      : (row.session?.endsAt.getTime() ?? null);
+  const countdownMs = useCountdown(effectiveEndsAtMs);
   const totalMs = (row.session?.durationMinutes ?? 0) * 60 * 1000;
   const done = countdownMs === 0;
   const [renameOpen, setRenameOpen] = useState(false);
   const [sessionLabelOpen, setSessionLabelOpen] = useState(false);
   const [endSessionOpen, setEndSessionOpen] = useState(false);
   const [removeOpen, setRemoveOpen] = useState(false);
+  const [complicationModalOpen, setComplicationModalOpen] = useState(false);
   const [isDragSource, setIsDragSource] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
 
@@ -331,7 +338,7 @@ export function FloorMachineChip({
                   <MoreVertical className="h-3 w-3" />
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-52">
+              <DropdownMenuContent align="end" className="w-56">
                 <DropdownMenuLabel className="smallcaps-detail text-muted-foreground">
                   {row.machine.label} · {row.machine.location}
                 </DropdownMenuLabel>
@@ -353,6 +360,13 @@ export function FloorMachineChip({
                 </DropdownMenuItem>
               )}
               <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={() => setComplicationModalOpen(true)}
+                className="text-[13px] text-amber-600 dark:text-amber-400 font-semibold focus:text-amber-600 cursor-pointer"
+              >
+                <ShieldAlert className="mr-2 h-4 w-4 text-amber-500" />
+                Log Adverse Complication ⚡
+              </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={() => toggleUrgent.mutate({ sessionId: session.id })}
                 className="text-[13px]"
@@ -430,6 +444,16 @@ export function FloorMachineChip({
         machineLabel={row.machine.label}
         onClose={() => setEndSessionOpen(false)}
         onEnded={() => setEndSessionOpen(false)}
+      />
+      <AdverseComplicationModal
+        open={complicationModalOpen}
+        onClose={() => setComplicationModalOpen(false)}
+        machineLabel={row.machine.label}
+        machineId={row.machine.id}
+        sessionId={session.id}
+        patientId={session.patientId ?? session.ticket}
+        patientDisplayAlias={session.displayLabel ?? undefined}
+        floorId={row.machine.floorId ?? undefined}
       />
     </div>
   );

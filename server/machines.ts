@@ -1,6 +1,19 @@
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { getDb } from "./db";
-import { floors, machines, narrativeHistory, narrativeReports, sessions, waitingList } from "../drizzle/schema";
+import { patientTicket } from "./patient-ticket";
+import {
+  floors,
+  infectionSurveillance,
+  inventorySupplies,
+  machines,
+  narrativeHistory,
+  narrativeReports,
+  sessionComplications,
+  sessions,
+  shiftEndorsements,
+  waitingList,
+  waterQualityLogs,
+} from "../drizzle/schema";
 
 export type MachineStatus = "active" | "backup" | "repair";
 
@@ -9,7 +22,10 @@ export type MachineWithSession = {
   session: {
     id: number;
     machineId: number;
-    patientId: string;
+    /** Real patient identifier. NULL for viewers without PHI access. */
+    patientId: string | null;
+    /** Public-safe code, always present. Safe to render on the kiosk. */
+    ticket: string;
     durationMinutes: number;
     startedAt: Date;
     endsAt: Date;
@@ -26,7 +42,32 @@ export type MachineWithSession = {
   } | null;
 };
 
-export async function listMachines(): Promise<MachineWithSession[]> {
+/** Who is asking for the board. Decides whether PHI leaves the server. */
+export type BoardViewer = { canSeePhi: boolean };
+
+/**
+ * Short-lived board cache.
+ *
+ * Every open board and kiosk polls this endpoint on a timer, so on a busy
+ * unit the same query runs many times per second. A 2s TTL collapses that
+ * into one database round-trip without letting a client see stale state for
+ * longer than one tick — every mutation calls invalidateBoardCache(), so a
+ * nurse's own write is never delayed.
+ *
+ * Keyed on PHI access so a masked guest payload can never be served to staff.
+ */
+const BOARD_CACHE_TTL_MS = 2_000;
+const boardCache = new Map<string, { value: MachineWithSession[]; expiresAt: number }>();
+
+export function invalidateBoardCache(): void {
+  boardCache.clear();
+}
+
+export async function listMachines(viewer: BoardViewer = { canSeePhi: false }): Promise<MachineWithSession[]> {
+  const key = viewer.canSeePhi ? "phi" : "masked";
+  const hit = boardCache.get(key);
+  if (hit && hit.expiresAt > Date.now()) return hit.value;
+
   const db = await getDb();
   if (!db) return [];
 
@@ -43,7 +84,7 @@ export async function listMachines(): Promise<MachineWithSession[]> {
   const byMachine = new Map<number, (typeof rows)[number]>();
   for (const row of rows) byMachine.set(row.machineId, row);
 
-  return allMachines
+  const result = allMachines
     .map(m => ({
     machine: { id: m.id, label: m.label, location: m.location, floorId: m.floorId, sortOrder: m.sortOrder, status: m.status, statusNote: m.statusNote },
     session: (() => {
@@ -52,15 +93,17 @@ export async function listMachines(): Promise<MachineWithSession[]> {
       return {
         id: s.id,
         machineId: s.machineId,
-        patientId: s.patientId,
+        // PHI gate: identifiers and staff names only reach staff sessions.
+        patientId: viewer.canSeePhi ? s.patientId : null,
+        ticket: patientTicket(s.patientId),
         durationMinutes: s.durationMinutes,
         startedAt: s.startedAt,
         endsAt: s.endsAt,
         isolationTag: s.isolationTag,
         urgent: s.urgent,
-        startedBy: s.startedBy,
-        displayLabel: s.displayLabel,
-        assignedNurse: s.assignedNurse,
+        startedBy: viewer.canSeePhi ? s.startedBy : null,
+        displayLabel: viewer.canSeePhi ? s.displayLabel : null,
+        assignedNurse: viewer.canSeePhi ? s.assignedNurse : null,
         needsRepairAfterSession: s.needsRepairAfterSession,
         pausedAt: s.pausedAt,
         pausedSeconds: s.pausedSeconds,
@@ -68,6 +111,9 @@ export async function listMachines(): Promise<MachineWithSession[]> {
     })(),
   }))
     .filter(r => r.machine.status === "active");
+
+  boardCache.set(key, { value: result, expiresAt: Date.now() + BOARD_CACHE_TTL_MS });
+  return result;
 }
 
 export async function assignSession(input: {
@@ -1026,7 +1072,10 @@ export async function removeRoom(input: { roomId: number }) {
 
 export type WaitingEntryView = {
   id: number;
-  patientId: string;
+  /** Real patient identifier. NULL for viewers without PHI access. */
+  patientId: string | null;
+  /** Public-safe code, always present. Safe to render on the kiosk. */
+  ticket: string;
   floorId: number;
   priority: "normal" | "urgent" | "veryUrgent";
   /** Planned treatment length captured when the patient joined the queue. */
@@ -1037,23 +1086,34 @@ export type WaitingEntryView = {
   joinedAt: Date;
 };
 
-/** Shared row → view mapper for the waiting list queries. */
-function toWaitingView(r: typeof waitingList.$inferSelect): WaitingEntryView {
+/**
+ * Shared row → view mapper for the waiting list queries.
+ *
+ * PHI gate: the kiosk shows the queue to a public waiting room, so a viewer
+ * without staff access gets the ticket code and nothing that names a person.
+ */
+function toWaitingView(
+  r: typeof waitingList.$inferSelect,
+  viewer: BoardViewer = { canSeePhi: false },
+): WaitingEntryView {
   return {
     id: r.id,
-    patientId: r.patientId,
+    patientId: viewer.canSeePhi ? r.patientId : null,
+    ticket: patientTicket(r.patientId),
     floorId: r.floorId,
     priority: r.priority,
     durationMinutes: r.durationMinutes,
     isolationTag: r.isolationTag,
-    assignedNurse: r.assignedNurse,
-    addedBy: r.addedBy,
+    assignedNurse: viewer.canSeePhi ? r.assignedNurse : null,
+    addedBy: viewer.canSeePhi ? r.addedBy : null,
     joinedAt: r.joinedAt,
   };
 }
 
 /** Every still-waiting patient across all floors (for the cross-board urgent register). */
-export async function listWaitingAll(): Promise<WaitingEntryView[]> {
+export async function listWaitingAll(
+  viewer: BoardViewer = { canSeePhi: false },
+): Promise<WaitingEntryView[]> {
   const db = await getDb();
   if (!db) return [];
 
@@ -1063,10 +1123,13 @@ export async function listWaitingAll(): Promise<WaitingEntryView[]> {
     .where(eq(waitingList.status, "waiting"))
     .orderBy(desc(waitingList.priority), waitingList.joinedAt, waitingList.id);
 
-  return rows.map(toWaitingView);
+  return rows.map(r => toWaitingView(r, viewer));
 }
 
-export async function listWaiting(input: { floorId: number }): Promise<WaitingEntryView[]> {
+export async function listWaiting(
+  input: { floorId: number },
+  viewer: BoardViewer = { canSeePhi: false },
+): Promise<WaitingEntryView[]> {
   const db = await getDb();
   if (!db) return [];
 
@@ -1076,7 +1139,7 @@ export async function listWaiting(input: { floorId: number }): Promise<WaitingEn
     .where(and(eq(waitingList.floorId, input.floorId), eq(waitingList.status, "waiting")))
     .orderBy(desc(waitingList.priority), waitingList.joinedAt, waitingList.id);
 
-  return rows.map(toWaitingView);
+  return rows.map(r => toWaitingView(r, viewer));
 }
 
 export async function addWaiting(input: {
@@ -1305,7 +1368,8 @@ export async function listNurseAssignments(input: { floorId: number }): Promise<
 
   // Patients still queued for this floor belong on the roster too — the team
   // needs to see who a nurse is about to take on, not only who they hold now.
-  const waiting = await listWaiting({ floorId: input.floorId });
+  // Staff-only endpoint (gated in the router), so the roster carries real IDs.
+  const waiting = await listWaiting({ floorId: input.floorId }, { canSeePhi: true });
 
   const sessionRows: NurseAssignmentRow[] = rows.map(r => ({
     nurse: r.assignedNurse?.trim() || UNASSIGNED_NURSE,
@@ -1329,7 +1393,7 @@ export async function listNurseAssignments(input: { floorId: number }): Promise<
     id: w.id,
     machineId: null,
     machineLabel: null,
-    patientId: w.patientId,
+    patientId: w.patientId ?? patientTicket(""),
     displayLabel: null,
     endsAt: null,
     durationMinutes: w.durationMinutes,
@@ -2042,6 +2106,12 @@ export async function endOfDayReportBulk(opts?: { date?: string }): Promise<{
  */
 const reportCache = new Map<string, { value: unknown; expiresAt: number }>();
 const REPORT_CACHE_TTL_MS = 30_000;
+/**
+ * Hard cap on cached reports. Entries were previously only dropped when the
+ * same key was read again, so browsing many dates grew the map without bound
+ * for the life of the process.
+ */
+const REPORT_CACHE_MAX_ENTRIES = 200;
 
 function cacheKey(prefix: string, input: Record<string, unknown>): string {
   return `${prefix}:${Object.keys(input).sort().map(k => `${k}=${String(input[k] ?? "")}`).join("|")}`;
@@ -2055,7 +2125,17 @@ export function reportCacheGet<T>(prefix: string, input: Record<string, unknown>
 }
 
 export function reportCacheSet(prefix: string, input: Record<string, unknown>, value: unknown): void {
-  reportCache.set(cacheKey(prefix, input), { value, expiresAt: Date.now() + REPORT_CACHE_TTL_MS });
+  const now = Date.now();
+  for (const [key, entry] of Array.from(reportCache.entries())) {
+    if (entry.expiresAt <= now) reportCache.delete(key);
+  }
+  // Map iterates in insertion order, so the first keys are the oldest.
+  while (reportCache.size >= REPORT_CACHE_MAX_ENTRIES) {
+    const oldest = reportCache.keys().next();
+    if (oldest.done) break;
+    reportCache.delete(oldest.value);
+  }
+  reportCache.set(cacheKey(prefix, input), { value, expiresAt: now + REPORT_CACHE_TTL_MS });
 }
 
 /**
@@ -2166,3 +2246,589 @@ function machineDayMetricsInline(input: {
   }
   return out;
 }
+
+/* ------------------------------------------------------------------ */
+/* Shift Endorsements                                                  */
+/* ------------------------------------------------------------------ */
+
+export async function listShiftEndorsements(input?: { floorId?: number; date?: string }) {
+  const db = await getDb();
+  if (!db) return [];
+  const conditions = [];
+  if (input?.floorId !== undefined) conditions.push(eq(shiftEndorsements.floorId, input.floorId));
+  if (input?.date !== undefined) conditions.push(eq(shiftEndorsements.date, input.date));
+
+  if (conditions.length > 0) {
+    return db
+      .select()
+      .from(shiftEndorsements)
+      .where(and(...conditions))
+      .orderBy(desc(shiftEndorsements.createdAt));
+  }
+  return db.select().from(shiftEndorsements).orderBy(desc(shiftEndorsements.createdAt));
+}
+
+export async function getShiftEndorsementById(id: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const rows = await db
+    .select()
+    .from(shiftEndorsements)
+    .where(eq(shiftEndorsements.id, id))
+    .limit(1);
+  return rows[0];
+}
+
+export type ShiftEndorsementInput = {
+  shift: string;
+  floorId: number;
+  date: string;
+  incomingNurse: string;
+  outgoingNurse: string;
+  patientNotes?: string | null;
+  accessIssues?: string | null;
+  equipmentNotes?: string | null;
+  floorName?: string | null;
+  situation?: string | null;
+  background?: string | null;
+  assessment?: string | null;
+  recommendations?: string | null;
+  censusJson?: string | null;
+  checklistJson?: string | null;
+  specialWatchJson?: string | null;
+  status?: string;
+};
+
+const trimmedOrNull = (v: string | null | undefined) => (v ? v.trim() || null : null);
+
+export async function createShiftEndorsement(input: ShiftEndorsementInput) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const status = input.status?.trim() || "DRAFT";
+  const result = await db
+    .insert(shiftEndorsements)
+    .values({
+      shift: input.shift.trim(),
+      floorId: input.floorId,
+      date: input.date.trim(),
+      incomingNurse: input.incomingNurse.trim(),
+      outgoingNurse: input.outgoingNurse.trim(),
+      patientNotes: trimmedOrNull(input.patientNotes),
+      accessIssues: trimmedOrNull(input.accessIssues),
+      equipmentNotes: trimmedOrNull(input.equipmentNotes),
+      floorName: trimmedOrNull(input.floorName),
+      situation: trimmedOrNull(input.situation),
+      background: trimmedOrNull(input.background),
+      assessment: trimmedOrNull(input.assessment),
+      recommendations: trimmedOrNull(input.recommendations),
+      censusJson: input.censusJson ?? null,
+      checklistJson: input.checklistJson ?? null,
+      specialWatchJson: input.specialWatchJson ?? null,
+      status,
+      // A locked endorsement records when the handover was signed off. A draft
+      // has not been handed over yet, so it carries no timestamp.
+      endorsedAt: status === "ENDORSED_AND_LOCKED" ? new Date() : null,
+    })
+    .returning({ id: shiftEndorsements.id });
+
+  return result[0];
+}
+
+export async function updateShiftEndorsement(
+  id: number,
+  input: Partial<Omit<ShiftEndorsementInput, "floorId" | "date">>
+) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const updates: Record<string, unknown> = { updatedAt: new Date() };
+  if (input.shift !== undefined) updates.shift = input.shift.trim();
+  if (input.incomingNurse !== undefined) updates.incomingNurse = input.incomingNurse.trim();
+  if (input.outgoingNurse !== undefined) updates.outgoingNurse = input.outgoingNurse.trim();
+  if (input.patientNotes !== undefined) updates.patientNotes = trimmedOrNull(input.patientNotes);
+  if (input.accessIssues !== undefined) updates.accessIssues = trimmedOrNull(input.accessIssues);
+  if (input.equipmentNotes !== undefined) updates.equipmentNotes = trimmedOrNull(input.equipmentNotes);
+  if (input.floorName !== undefined) updates.floorName = trimmedOrNull(input.floorName);
+  if (input.situation !== undefined) updates.situation = trimmedOrNull(input.situation);
+  if (input.background !== undefined) updates.background = trimmedOrNull(input.background);
+  if (input.assessment !== undefined) updates.assessment = trimmedOrNull(input.assessment);
+  if (input.recommendations !== undefined) updates.recommendations = trimmedOrNull(input.recommendations);
+  if (input.censusJson !== undefined) updates.censusJson = input.censusJson ?? null;
+  if (input.checklistJson !== undefined) updates.checklistJson = input.checklistJson ?? null;
+  if (input.specialWatchJson !== undefined) updates.specialWatchJson = input.specialWatchJson ?? null;
+  if (input.status !== undefined) {
+    updates.status = input.status.trim();
+    if (input.status.trim() === "ENDORSED_AND_LOCKED") updates.endorsedAt = new Date();
+  }
+
+  await db.update(shiftEndorsements).set(updates).where(eq(shiftEndorsements.id, id));
+}
+
+export async function deleteShiftEndorsement(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(shiftEndorsements).where(eq(shiftEndorsements.id, id));
+}
+
+/* ------------------------------------------------------------------ */
+/* Session Complications                                              */
+/* ------------------------------------------------------------------ */
+
+/** Interventions are stored as a JSON array; a malformed value must not break the list. */
+function parseInterventions(raw: string | null): string[] {
+  if (!raw) return [];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function listSessionComplications(input?: { sessionId?: number }) {
+  const db = await getDb();
+  if (!db) return [];
+  const rows =
+    input?.sessionId !== undefined
+      ? await db
+          .select()
+          .from(sessionComplications)
+          .where(eq(sessionComplications.sessionId, input.sessionId))
+          .orderBy(desc(sessionComplications.createdAt))
+      : await db.select().from(sessionComplications).orderBy(desc(sessionComplications.createdAt));
+
+  return rows.map(r => ({ ...r, interventions: parseInterventions(r.interventionsJson) }));
+}
+
+export type SessionComplicationInput = {
+  sessionId: number;
+  complicationType: string;
+  onsetMinutes?: number | null;
+  intervention?: string | null;
+  resolved?: boolean;
+  machineId?: number | null;
+  machineLabel?: string | null;
+  floorId?: number | null;
+  patientId?: string | null;
+  patientDisplayAlias?: string | null;
+  date?: string | null;
+  timeOfDay?: string | null;
+  nurseName?: string | null;
+  severity?: string | null;
+  preEventBp?: string | null;
+  eventBp?: string | null;
+  heartRate?: number | null;
+  spo2?: number | null;
+  bfr?: number | null;
+  ufr?: number | null;
+  interventions?: string[] | null;
+  salineBolusVolumeMl?: number | null;
+  physicianNotified?: string | null;
+  outcome?: string | null;
+  notes?: string | null;
+};
+
+export async function createSessionComplication(input: SessionComplicationInput) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const result = await db
+    .insert(sessionComplications)
+    .values({
+      sessionId: input.sessionId,
+      complicationType: input.complicationType.trim(),
+      onsetMinutes: input.onsetMinutes ?? null,
+      intervention: trimmedOrNull(input.intervention),
+      resolved: input.resolved ?? false,
+      machineId: input.machineId ?? null,
+      machineLabel: trimmedOrNull(input.machineLabel),
+      floorId: input.floorId ?? null,
+      patientId: trimmedOrNull(input.patientId),
+      patientDisplayAlias: trimmedOrNull(input.patientDisplayAlias),
+      date: trimmedOrNull(input.date),
+      timeOfDay: trimmedOrNull(input.timeOfDay),
+      nurseName: trimmedOrNull(input.nurseName),
+      severity: trimmedOrNull(input.severity),
+      preEventBp: trimmedOrNull(input.preEventBp),
+      eventBp: trimmedOrNull(input.eventBp),
+      heartRate: input.heartRate ?? null,
+      spo2: input.spo2 ?? null,
+      bfr: input.bfr ?? null,
+      ufr: input.ufr ?? null,
+      interventionsJson: input.interventions ? JSON.stringify(input.interventions) : null,
+      salineBolusVolumeMl: input.salineBolusVolumeMl ?? null,
+      physicianNotified: trimmedOrNull(input.physicianNotified),
+      outcome: trimmedOrNull(input.outcome),
+      notes: trimmedOrNull(input.notes),
+    })
+    .returning({ id: sessionComplications.id });
+
+  return result[0];
+}
+
+export async function updateSessionComplication(
+  id: number,
+  input: {
+    complicationType?: string;
+    onsetMinutes?: number | null;
+    intervention?: string | null;
+    resolved?: boolean;
+  }
+) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const updates: Record<string, unknown> = {};
+  if (input.complicationType !== undefined) updates.complicationType = input.complicationType.trim();
+  if (input.onsetMinutes !== undefined) updates.onsetMinutes = input.onsetMinutes ?? null;
+  if (input.intervention !== undefined) updates.intervention = input.intervention ? input.intervention.trim() || null : null;
+  if (input.resolved !== undefined) updates.resolved = input.resolved;
+
+  await db.update(sessionComplications).set(updates).where(eq(sessionComplications.id, id));
+}
+
+export async function deleteSessionComplication(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(sessionComplications).where(eq(sessionComplications.id, id));
+}
+
+/* ------------------------------------------------------------------ */
+/* Water Quality Logs                                                 */
+/* ------------------------------------------------------------------ */
+
+export async function listWaterQualityLogs(input?: { floorId?: number; date?: string }) {
+  const db = await getDb();
+  if (!db) return [];
+  const conditions = [];
+  if (input?.floorId !== undefined) conditions.push(eq(waterQualityLogs.floorId, input.floorId));
+  if (input?.date !== undefined) conditions.push(eq(waterQualityLogs.date, input.date));
+
+  if (conditions.length > 0) {
+    return db
+      .select()
+      .from(waterQualityLogs)
+      .where(and(...conditions))
+      .orderBy(desc(waterQualityLogs.createdAt));
+  }
+  return db.select().from(waterQualityLogs).orderBy(desc(waterQualityLogs.createdAt));
+}
+
+export async function getWaterQualityLogById(id: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const rows = await db
+    .select()
+    .from(waterQualityLogs)
+    .where(eq(waterQualityLogs.id, id))
+    .limit(1);
+  return rows[0];
+}
+
+export type WaterQualityLogInput = {
+  date: string;
+  floorId: number;
+  tdsIn?: number | null;
+  tdsOut?: number | null;
+  chlorineLevel?: string | null;
+  hardness?: string | null;
+  waterTemp?: string | null;
+  technician: string;
+  status?: string;
+  timeOfDay?: string | null;
+  shift?: string | null;
+  inspectorRole?: string | null;
+  feedTds?: number | null;
+  productTds?: number | null;
+  productConductivity?: number | null;
+  waterHardnessPpm?: number | null;
+  loopFeedPressure?: number | null;
+  loopReturnPressure?: number | null;
+  waterTemperatureC?: number | null;
+  totalChlorine?: number | null;
+  chloramineBreakthrough?: boolean;
+  heatDisinfectionCompleted?: boolean;
+  heatPeakTemp?: number | null;
+  heatHoldMinutes?: number | null;
+  chemicalAgentUsed?: string | null;
+  residualChemicalTestNegative?: boolean;
+  endotoxinLevel?: number | null;
+  colonyCount?: number | null;
+  correctiveAction?: string | null;
+  notes?: string | null;
+};
+
+/**
+ * Salt rejection is derived here, never taken from the client: two clients
+ * that disagree on the arithmetic would otherwise store two different numbers
+ * for the same membrane reading.
+ */
+function computeRejectionRate(feedTds: number | null | undefined, productTds: number | null | undefined): number | null {
+  if (!feedTds || feedTds <= 0 || productTds === null || productTds === undefined) return null;
+  return Number(((1 - productTds / feedTds) * 100).toFixed(1));
+}
+
+export async function createWaterQualityLog(input: WaterQualityLogInput) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const result = await db
+    .insert(waterQualityLogs)
+    .values({
+      date: input.date.trim(),
+      floorId: input.floorId,
+      tdsIn: input.tdsIn ?? null,
+      tdsOut: input.tdsOut ?? null,
+      chlorineLevel: trimmedOrNull(input.chlorineLevel),
+      hardness: trimmedOrNull(input.hardness),
+      waterTemp: trimmedOrNull(input.waterTemp),
+      technician: input.technician.trim(),
+      status: input.status?.trim() || "pass",
+      timeOfDay: trimmedOrNull(input.timeOfDay),
+      shift: trimmedOrNull(input.shift),
+      inspectorRole: trimmedOrNull(input.inspectorRole),
+      feedTds: input.feedTds ?? null,
+      productTds: input.productTds ?? null,
+      rejectionRate: computeRejectionRate(input.feedTds, input.productTds),
+      productConductivity: input.productConductivity ?? null,
+      waterHardnessPpm: input.waterHardnessPpm ?? null,
+      loopFeedPressure: input.loopFeedPressure ?? null,
+      loopReturnPressure: input.loopReturnPressure ?? null,
+      waterTemperatureC: input.waterTemperatureC ?? null,
+      totalChlorine: input.totalChlorine ?? null,
+      chloramineBreakthrough: input.chloramineBreakthrough ?? false,
+      heatDisinfectionCompleted: input.heatDisinfectionCompleted ?? false,
+      heatPeakTemp: input.heatPeakTemp ?? null,
+      heatHoldMinutes: input.heatHoldMinutes ?? null,
+      chemicalAgentUsed: trimmedOrNull(input.chemicalAgentUsed),
+      residualChemicalTestNegative: input.residualChemicalTestNegative ?? false,
+      endotoxinLevel: input.endotoxinLevel ?? null,
+      colonyCount: input.colonyCount ?? null,
+      correctiveAction: trimmedOrNull(input.correctiveAction),
+      notes: trimmedOrNull(input.notes),
+    })
+    .returning({ id: waterQualityLogs.id });
+
+  return result[0];
+}
+
+export async function updateWaterQualityLog(
+  id: number,
+  input: {
+    tdsIn?: number | null;
+    tdsOut?: number | null;
+    chlorineLevel?: string | null;
+    hardness?: string | null;
+    waterTemp?: string | null;
+    technician?: string;
+    status?: string;
+  }
+) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const updates: Record<string, unknown> = {};
+  if (input.tdsIn !== undefined) updates.tdsIn = input.tdsIn ?? null;
+  if (input.tdsOut !== undefined) updates.tdsOut = input.tdsOut ?? null;
+  if (input.chlorineLevel !== undefined) updates.chlorineLevel = input.chlorineLevel ? input.chlorineLevel.trim() || null : null;
+  if (input.hardness !== undefined) updates.hardness = input.hardness ? input.hardness.trim() || null : null;
+  if (input.waterTemp !== undefined) updates.waterTemp = input.waterTemp ? input.waterTemp.trim() || null : null;
+  if (input.technician !== undefined) updates.technician = input.technician.trim();
+  if (input.status !== undefined) updates.status = input.status.trim();
+
+  await db.update(waterQualityLogs).set(updates).where(eq(waterQualityLogs.id, id));
+}
+
+export async function deleteWaterQualityLog(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(waterQualityLogs).where(eq(waterQualityLogs.id, id));
+}
+
+/* ------------------------------------------------------------------ */
+/* Infection Surveillance                                             */
+/* ------------------------------------------------------------------ */
+
+export async function listInfectionSurveillance(input?: { patientId?: string }) {
+  const db = await getDb();
+  if (!db) return [];
+  if (input?.patientId !== undefined) {
+    return db
+      .select()
+      .from(infectionSurveillance)
+      .where(eq(infectionSurveillance.patientId, input.patientId))
+      .orderBy(desc(infectionSurveillance.updatedAt));
+  }
+  return db.select().from(infectionSurveillance).orderBy(desc(infectionSurveillance.updatedAt));
+}
+
+export async function getInfectionSurveillanceByPatientId(patientId: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const rows = await db
+    .select()
+    .from(infectionSurveillance)
+    .where(eq(infectionSurveillance.patientId, patientId))
+    .limit(1);
+  return rows[0];
+}
+
+export async function upsertInfectionSurveillance(input: {
+  patientId: string;
+  hbsagStatus?: string;
+  hcvStatus?: string;
+  hivStatus?: string;
+  mdrStatus?: string;
+  lastTestedDate?: string | null;
+  assignedIsolationRoom?: string | null;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const existing = await getInfectionSurveillanceByPatientId(input.patientId);
+  if (existing) {
+    await db
+      .update(infectionSurveillance)
+      .set({
+        hbsagStatus: input.hbsagStatus?.trim() || existing.hbsagStatus,
+        hcvStatus: input.hcvStatus?.trim() || existing.hcvStatus,
+        hivStatus: input.hivStatus?.trim() || existing.hivStatus,
+        mdrStatus: input.mdrStatus?.trim() || existing.mdrStatus,
+        lastTestedDate: input.lastTestedDate !== undefined ? input.lastTestedDate ? input.lastTestedDate.trim() || null : null : existing.lastTestedDate,
+        assignedIsolationRoom: input.assignedIsolationRoom !== undefined ? input.assignedIsolationRoom ? input.assignedIsolationRoom.trim() || null : null : existing.assignedIsolationRoom,
+        updatedAt: new Date(),
+      })
+      .where(eq(infectionSurveillance.id, existing.id));
+    return { id: existing.id };
+  }
+
+  const result = await db
+    .insert(infectionSurveillance)
+    .values({
+      patientId: input.patientId.trim(),
+      hbsagStatus: input.hbsagStatus?.trim() || "negative",
+      hcvStatus: input.hcvStatus?.trim() || "negative",
+      hivStatus: input.hivStatus?.trim() || "negative",
+      mdrStatus: input.mdrStatus?.trim() || "negative",
+      lastTestedDate: input.lastTestedDate ? input.lastTestedDate.trim() || null : null,
+      assignedIsolationRoom: input.assignedIsolationRoom ? input.assignedIsolationRoom.trim() || null : null,
+    })
+    .returning({ id: infectionSurveillance.id });
+
+  return result[0];
+}
+
+export async function deleteInfectionSurveillance(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(infectionSurveillance).where(eq(infectionSurveillance.id, id));
+}
+
+/* ------------------------------------------------------------------ */
+/* Inventory Supplies                                                 */
+/* ------------------------------------------------------------------ */
+
+export async function listInventorySupplies(input?: { category?: string; lowStockOnly?: boolean }) {
+  const db = await getDb();
+  if (!db) return [];
+  const conditions = [];
+  if (input?.category) conditions.push(eq(inventorySupplies.category, input.category));
+  if (input?.lowStockOnly) {
+    conditions.push(sql`${inventorySupplies.currentStock} <= ${inventorySupplies.reorderLevel}`);
+  }
+
+  if (conditions.length > 0) {
+    return db
+      .select()
+      .from(inventorySupplies)
+      .where(and(...conditions))
+      .orderBy(inventorySupplies.category, inventorySupplies.itemName);
+  }
+  return db.select().from(inventorySupplies).orderBy(inventorySupplies.category, inventorySupplies.itemName);
+}
+
+export async function getInventorySupplyByItemCode(itemCode: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const rows = await db
+    .select()
+    .from(inventorySupplies)
+    .where(eq(inventorySupplies.itemCode, itemCode))
+    .limit(1);
+  return rows[0];
+}
+
+export async function addInventorySupply(input: {
+  itemCode: string;
+  itemName: string;
+  unit: string;
+  currentStock?: number;
+  reorderLevel?: number;
+  category?: string;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const existing = await getInventorySupplyByItemCode(input.itemCode);
+  if (existing) {
+    throw new Error("ITEM_CODE_EXISTS");
+  }
+
+  const result = await db
+    .insert(inventorySupplies)
+    .values({
+      itemCode: input.itemCode.trim(),
+      itemName: input.itemName.trim(),
+      unit: input.unit.trim(),
+      currentStock: input.currentStock ?? 0,
+      reorderLevel: input.reorderLevel ?? 10,
+      category: input.category?.trim() || "general",
+    })
+    .returning({ id: inventorySupplies.id });
+
+  return result[0];
+}
+
+export async function updateInventorySupply(
+  id: number,
+  input: {
+    itemName?: string;
+    unit?: string;
+    currentStock?: number;
+    reorderLevel?: number;
+    category?: string;
+  }
+) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const updates: Record<string, unknown> = { updatedAt: new Date() };
+  if (input.itemName !== undefined) updates.itemName = input.itemName.trim();
+  if (input.unit !== undefined) updates.unit = input.unit.trim();
+  if (input.currentStock !== undefined) updates.currentStock = input.currentStock;
+  if (input.reorderLevel !== undefined) updates.reorderLevel = input.reorderLevel;
+  if (input.category !== undefined) updates.category = input.category.trim();
+
+  await db.update(inventorySupplies).set(updates).where(eq(inventorySupplies.id, id));
+}
+
+export async function adjustInventoryStock(id: number, delta: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db
+    .update(inventorySupplies)
+    .set({
+      currentStock: sql`GREATEST(0, ${inventorySupplies.currentStock} + ${delta})`,
+      updatedAt: new Date(),
+    })
+    .where(eq(inventorySupplies.id, id));
+}
+
+export async function deleteInventorySupply(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(inventorySupplies).where(eq(inventorySupplies.id, id));
+}
+

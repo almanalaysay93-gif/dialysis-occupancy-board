@@ -68,4 +68,13 @@ async function startServer() {
   void warmDb();
 }
 
+// A rejected promise or thrown error outside a request handler must not take
+// the process down silently — log it so the next crash leaves a trace.
+process.on("unhandledRejection", reason => {
+  console.error("[Process] Unhandled rejection:", reason);
+});
+process.on("uncaughtException", error => {
+  console.error("[Process] Uncaught exception:", error);
+});
+
 startServer().catch(console.error);

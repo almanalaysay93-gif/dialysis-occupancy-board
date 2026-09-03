@@ -10,6 +10,7 @@ import type { TrpcContext } from "./_core/context";
 // ---------------- mocks ----------------
 
 vi.mock("./machines", () => ({
+  invalidateBoardCache: vi.fn(),
   listFloors: vi.fn(async () => [
     { id: 1, code: "F1", name: "SKTI Main", sortOrder: 1 },
     { id: 2, code: "F2", name: "RDU Annex", sortOrder: 2 },

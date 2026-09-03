@@ -34,11 +34,11 @@ export default async function handler(req: Request, res: Response) {
     }
     const app = await appPromise;
     return app(req, res);
-  } catch (error: any) {
+  } catch (error) {
+    // Log the full error server-side; never put the message or stack in the
+    // response body, which would hand internals to any caller.
     console.error("[Vercel Serverless Error]:", error);
-    res.status(500).json({
-      error: error?.message || "Internal Server Error",
-      stack: error?.stack,
-    });
+    appPromise = null; // a failed bootstrap must not be cached
+    res.status(500).json({ error: "Internal Server Error" });
   }
 }

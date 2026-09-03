@@ -61,7 +61,7 @@ export default function Urgent() {
   const { canWrite, isGuest } = useCanWrite();
 
   const { data, isLoading, error } = trpc.waiting.urgentRegister.useQuery(undefined, {
-    refetchInterval: isGuest ? false : 5_000,
+    refetchInterval: isGuest ? false : 8_000,
     enabled: !isGuest,
   });
 

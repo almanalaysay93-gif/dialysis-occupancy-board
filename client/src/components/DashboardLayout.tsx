@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/sidebar";
 import { startLogin } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { Activity, BellRing, ClipboardList, LogOut, PanelLeft, LayoutGrid, Layers, Wrench } from "lucide-react";
+import { Activity, BellRing, ClipboardCheck, ClipboardList, Droplets, LogOut, PanelLeft, LayoutGrid, Layers, Tv, Wrench } from "lucide-react";
 import { CSSProperties, useRef } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
@@ -30,6 +30,9 @@ import { Button } from "./ui/button";
 
 const menuItems: { icon: typeof Activity; label: string; path: string }[] = [
   { icon: Activity, label: "Occupancy Board", path: "/" },
+  { icon: Tv, label: "Public TV Lounge", path: "/display" },
+  { icon: ClipboardCheck, label: "Shift Endorsement", path: "/endorsement" },
+  { icon: Droplets, label: "RO Water QC Log", path: "/water-qc" },
   { icon: BellRing, label: "Urgent Cases", path: "/urgent" },
   { icon: Wrench, label: "Backup & Repair", path: "/backup" },
   { icon: LayoutGrid, label: "Rooms", path: "/rooms" },
@@ -160,6 +163,9 @@ function DashboardLayoutContent({
     else if (path === "/backup") void import("@/pages/BackupRepair");
     else if (path === "/rooms") void import("@/pages/Rooms");
     else if (path === "/report") void import("@/pages/EndOfDayReport");
+    else if (path === "/display") void import("@/pages/PublicKioskDisplay");
+    else if (path === "/endorsement") void import("@/pages/ShiftEndorsementPage");
+    else if (path === "/water-qc") void import("@/pages/WaterQualityQCPage");
     else if (path.startsWith("/floor/")) void import("@/pages/FloorBoard");
   };
   const { state } = useSidebar();
@@ -324,7 +330,25 @@ function DashboardLayoutContent({
               {activeMenuItem?.label ?? "Dialysis Board"}
             </span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => window.open("/display", "_blank")}
+              className="hidden sm:inline-flex h-8 px-2.5 text-xs bg-cyan-50 border-cyan-300 text-cyan-900 hover:bg-cyan-100 font-semibold"
+            >
+              <Tv className="mr-1.5 h-3.5 w-3.5 text-cyan-600" />
+              Lounge TV Kiosk ↗
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setLocation("/water-qc")}
+              className="hidden md:inline-flex h-8 px-2.5 text-xs bg-emerald-50 border-emerald-300 text-emerald-900 hover:bg-emerald-100 font-semibold"
+            >
+              <Droplets className="mr-1.5 h-3.5 w-3.5 text-emerald-600" />
+              RO Water: PASSED
+            </Button>
             {staff && (
               <span className="smallcaps-detail rounded border border-[#D4DFE5] bg-[#F4F7F8] px-2 py-1 text-[#556680]">
                 {staff.role === "guest"
