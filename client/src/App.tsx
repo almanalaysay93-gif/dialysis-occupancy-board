@@ -2,12 +2,14 @@ import { lazy, Suspense } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
-import { Route, Switch } from "wouter";
+import { Redirect, Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
 import DashboardLayout from "./components/DashboardLayout";
 import { Skeleton } from "@/components/ui/skeleton";
+import { trpc } from "@/lib/trpc";
+import { useAuth } from "@/_core/hooks/useAuth";
 
 // Lazy-loaded secondary pages for fast initial bundle load
 const FloorBoard = lazy(() => import("./pages/FloorBoard"));
@@ -29,6 +31,21 @@ function PageLoader() {
   );
 }
 
+/**
+ * Clinical registries are staff-only. Hiding the buttons is not enough — a
+ * guest who types the URL is sent back to the board.
+ */
+function ClinicalRoute({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
+  const { data: staff, isLoading } = trpc.staff.me.useQuery(undefined, {
+    retry: false,
+    staleTime: 15_000,
+  });
+  if (isLoading) return <PageLoader />;
+  if (!user && staff?.role === "guest") return <Redirect to="/" />;
+  return <>{children}</>;
+}
+
 function Router() {
   return (
     <Suspense fallback={<PageLoader />}>
@@ -36,8 +53,16 @@ function Router() {
         <Route path={"/"} component={Home} />
         <Route path={"/display"} component={PublicKioskDisplay} />
         <Route path={"/kiosk"} component={PublicKioskDisplay} />
-        <Route path={"/endorsement"} component={ShiftEndorsementPage} />
-        <Route path={"/water-qc"} component={WaterQualityQCPage} />
+        <Route path={"/endorsement"}>
+          <ClinicalRoute>
+            <ShiftEndorsementPage />
+          </ClinicalRoute>
+        </Route>
+        <Route path={"/water-qc"}>
+          <ClinicalRoute>
+            <WaterQualityQCPage />
+          </ClinicalRoute>
+        </Route>
         <Route path={"/rooms"} component={Rooms} />
         <Route path={"/backup"} component={BackupRepair} />
         <Route path={"/urgent"} component={Urgent} />

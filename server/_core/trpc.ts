@@ -86,6 +86,34 @@ export const staffReadProcedure = t.procedure.use(
 );
 
 /**
+ * Clinical read access: like staffReadProcedure, but guests and anonymous
+ * visitors are rejected. The shift endorsement and RO water QC registries
+ * carry patient watch lists and unit compliance findings, which no
+ * lounge viewer may read.
+ */
+export const clinicalReadProcedure = t.procedure.use(
+  t.middleware(async opts => {
+    const { ctx, next } = opts;
+    const staff: StaffSession = await resolveStaffSession(ctx.req);
+    const oauthUser = ctx.user;
+    if (oauthUser) {
+      return next({
+        ctx: { ...ctx, user: oauthUser, staff, isStaff: true as const },
+      });
+    }
+    if (
+      staff.fromCookie &&
+      (staff.role === "nurse" || staff.role === "supervisor" || staff.role === "auditor")
+    ) {
+      return next({
+        ctx: { ...ctx, user: null, staff, isStaff: true as const },
+      });
+    }
+    throw new TRPCError({ code: "UNAUTHORIZED", message: UNAUTHED_ERR_MSG });
+  }),
+);
+
+/**
  * Staff-or-admin: accepts either a logged-in OAuth user (role admin/user) or
  * a board staff session cookie (nurse/supervisor). Guests (no credentials) are
  * rejected with UNAUTHORIZED. Exposes `staff` on the context for scoping.

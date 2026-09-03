@@ -3,7 +3,8 @@ import { z } from "zod";
 import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
-import { protectedProcedure, publicProcedure, router, staffOrAdminProcedure, staffReadProcedure, supervisorProcedure } from "./_core/trpc";
+import { protectedProcedure, publicProcedure, router, staffOrAdminProcedure, clinicalReadProcedure,
+  staffReadProcedure, supervisorProcedure } from "./_core/trpc";
 import * as machineDb from "./machines";
 import {
   hashWithSalt,
@@ -1089,7 +1090,7 @@ export const appRouter = router({
    * Shift Handover Endorsements between dialysis charge nurses.
    */
   shiftEndorsements: router({
-    list: staffReadProcedure
+    list: clinicalReadProcedure
       .input(
         z
           .object({
@@ -1105,7 +1106,7 @@ export const appRouter = router({
         return machineDb.listShiftEndorsements(input);
       }),
 
-    byId: staffReadProcedure
+    byId: clinicalReadProcedure
       .input(z.object({ id: z.number().int().positive() }))
       .query(async ({ ctx, input }) => {
         const item = await machineDb.getShiftEndorsementById(input.id);
@@ -1280,7 +1281,7 @@ export const appRouter = router({
    * Water Treatment & RO quality surveillance logs.
    */
   waterQualityLogs: router({
-    list: staffReadProcedure
+    list: clinicalReadProcedure
       .input(
         z
           .object({
@@ -1296,7 +1297,7 @@ export const appRouter = router({
         return machineDb.listWaterQualityLogs(input);
       }),
 
-    byId: staffReadProcedure
+    byId: clinicalReadProcedure
       .input(z.object({ id: z.number().int().positive() }))
       .query(async ({ ctx, input }) => {
         const item = await machineDb.getWaterQualityLogById(input.id);

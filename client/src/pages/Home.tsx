@@ -63,6 +63,7 @@ export function OccupancyBoardContent({ floorId }: { floorId?: number }) {
     refetchInterval: 8_000,
   });
   const { data: staff } = trpc.staff.me.useQuery(undefined, { refetchInterval: 15_000 });
+  const isGuest = staff?.role === "guest";
   const { data: floors } = trpc.machines.listFloors.useQuery(undefined, {
     refetchInterval: 30_000,
   });
@@ -300,6 +301,7 @@ export function OccupancyBoardContent({ floorId }: { floorId?: number }) {
               <Tv className="mr-1.5 h-3.5 w-3.5 text-cyan-600" />
               Lounge TV Kiosk View ↗
             </Button>
+            {!isGuest && (
             <Button
               size="sm"
               variant="outline"
@@ -309,6 +311,8 @@ export function OccupancyBoardContent({ floorId }: { floorId?: number }) {
               <ClipboardCheck className="mr-1.5 h-3.5 w-3.5 text-blue-600" />
               Shift Endorsement (SBAR)
             </Button>
+            )}
+            {!isGuest && (
             <Button
               size="sm"
               variant="outline"
@@ -318,6 +322,7 @@ export function OccupancyBoardContent({ floorId }: { floorId?: number }) {
               <Droplets className="mr-1.5 h-3.5 w-3.5 text-emerald-600" />
               RO Water QC Form
             </Button>
+            )}
           </div>
         </div>
 

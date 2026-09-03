@@ -39,6 +39,20 @@ const menuItems: { icon: typeof Activity; label: string; path: string }[] = [
   { icon: ClipboardList, label: "End of Day Report", path: "/report" },
 ];
 
+/**
+ * Routes a guest never reaches. Clinical registries hold patient watch lists
+ * and unit compliance findings, so a lounge viewer sees neither the entry nor
+ * the page.
+ */
+export const GUEST_HIDDEN_PATHS = new Set([
+  "/rooms",
+  "/report",
+  "/backup",
+  "/urgent",
+  "/endorsement",
+  "/water-qc",
+]);
+
 /** Per-floor board entries loaded from the floors table at runtime. */
 function useFloorBoardItems() {
   const { data: floors } = trpc.machines.listFloors.useQuery(undefined, {
@@ -154,6 +168,7 @@ function DashboardLayoutContent({
     retry: false,
   });
   const waterQcStatus = waterQcLogs?.[0]?.status ?? null;
+  const showWaterQcChip = staffRole !== "guest";
   const waterQcPassed = waterQcStatus?.toLowerCase().startsWith("pass") ?? false;
   // Sign out must clear the staff cookie server-side (it also bumps the
   // account's token version), not merely refetch the session.
@@ -193,10 +208,9 @@ function DashboardLayoutContent({
       : allFloorBoardItems;
   // Read-only viewers (guest, logged-out staff page) don't manage rooms,
   // read reports, or see urgent cases / backup & repair.
-  const visibleMenuItems =
-    staffRole === "guest"
-      ? menuItems.filter(item => item.path !== "/rooms" && item.path !== "/report" && item.path !== "/backup" && item.path !== "/urgent")
-      : menuItems;
+  const visibleMenuItems = staffRole === "guest"
+    ? menuItems.filter(item => !GUEST_HIDDEN_PATHS.has(item.path))
+    : menuItems;
   // Match the exact floor board by path first (e.g. /floor/30001);
   // a bare /floor/ location (a redirect artifact) highlights nothing.
   const activeMenuItem = menuItems.find(item => item.path === location) ??
@@ -349,6 +363,7 @@ function DashboardLayoutContent({
               <Tv className="mr-1.5 h-3.5 w-3.5 text-cyan-600" />
               Lounge TV Kiosk ↗
             </Button>
+            {showWaterQcChip && (
             <Button
               variant="outline"
               size="sm"
@@ -372,6 +387,7 @@ function DashboardLayoutContent({
               />
               RO Water: {waterQcStatus?.toUpperCase() ?? "NO LOG"}
             </Button>
+            )}
             {staff && (
               <span className="smallcaps-detail rounded border border-[#D4DFE5] bg-[#F4F7F8] px-2 py-1 text-[#556680]">
                 {staff.role === "guest"
