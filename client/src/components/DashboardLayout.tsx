@@ -146,6 +146,15 @@ function DashboardLayoutContent({
   const { user, logout } = useAuth();
   const utils = trpc.useUtils();
   const [location, setLocation] = useLocation();
+  // The chip reports the newest filed RO log. A green "PASSED" with no log
+  // behind it is a clinical claim the unit never made.
+  const { data: waterQcLogs } = trpc.waterQualityLogs.list.useQuery(undefined, {
+    enabled: Boolean(staff) && staffRole !== "guest",
+    refetchInterval: 60_000,
+    retry: false,
+  });
+  const waterQcStatus = waterQcLogs?.[0]?.status ?? null;
+  const waterQcPassed = waterQcStatus?.toLowerCase().startsWith("pass") ?? false;
   // Sign out must clear the staff cookie server-side (it also bumps the
   // account's token version), not merely refetch the session.
   const staffLogout = trpc.staff.logout.useMutation({
@@ -344,10 +353,24 @@ function DashboardLayoutContent({
               variant="outline"
               size="sm"
               onClick={() => setLocation("/water-qc")}
-              className="hidden md:inline-flex h-8 px-2.5 text-xs bg-emerald-50 border-emerald-300 text-emerald-900 hover:bg-emerald-100 font-semibold"
+              className={`hidden md:inline-flex h-8 px-2.5 text-xs font-semibold ${
+                waterQcStatus === null
+                  ? "bg-slate-50 border-slate-300 text-slate-700 hover:bg-slate-100"
+                  : waterQcPassed
+                    ? "bg-emerald-50 border-emerald-300 text-emerald-900 hover:bg-emerald-100"
+                    : "bg-red-50 border-red-300 text-red-900 hover:bg-red-100"
+              }`}
             >
-              <Droplets className="mr-1.5 h-3.5 w-3.5 text-emerald-600" />
-              RO Water: PASSED
+              <Droplets
+                className={`mr-1.5 h-3.5 w-3.5 ${
+                  waterQcStatus === null
+                    ? "text-slate-500"
+                    : waterQcPassed
+                      ? "text-emerald-600"
+                      : "text-red-600"
+                }`}
+              />
+              RO Water: {waterQcStatus?.toUpperCase() ?? "NO LOG"}
             </Button>
             {staff && (
               <span className="smallcaps-detail rounded border border-[#D4DFE5] bg-[#F4F7F8] px-2 py-1 text-[#556680]">
