@@ -2,6 +2,7 @@ import "dotenv/config";
 import { eq } from "drizzle-orm";
 import { randomBytes } from "crypto";
 import { getDb } from "./db";
+import { resolveDatabaseUrl } from "./_core/database-url";
 import { floors, machines, staffAccounts } from "../drizzle/schema";
 import { hashWithSalt } from "./staffAuth";
 
@@ -41,7 +42,10 @@ function passwordFor(username: string): { password: string; generated: boolean }
 async function main() {
   const db = await getDb();
   if (!db) {
-    console.error("DATABASE_URL is not set — nothing to seed.");
+    const resolved = resolveDatabaseUrl();
+    console.error(resolved.url !== null
+      ? `Database unreachable via ${resolved.source} — nothing to seed.`
+      : `Cannot seed: ${resolved.reason}`);
     process.exit(1);
   }
 

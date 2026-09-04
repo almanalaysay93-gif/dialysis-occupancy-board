@@ -1,82 +1,12 @@
 {
   "version": "7",
-  "dialect": "mysql",
+  "dialect": "postgresql",
   "entries": [
     {
       "idx": 0,
-      "version": "5",
-      "when": 1786521490363,
-      "tag": "0000_jittery_mandroid",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "5",
-      "when": 1786521619694,
-      "tag": "0001_sharp_dakota_north",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "5",
-      "when": 1786525101134,
-      "tag": "0002_brown_trish_tilby",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "5",
-      "when": 1786578224227,
-      "tag": "0003_ancient_molecule_man",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "5",
-      "when": 1786582495477,
-      "tag": "0004_right_goblin_queen",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "5",
-      "when": 1786593798885,
-      "tag": "0005_clumsy_boomerang",
-      "breakpoints": true
-    },
-    {
-      "idx": 6,
-      "version": "5",
-      "when": 1786598051854,
-      "tag": "0006_abnormal_gamora",
-      "breakpoints": true
-    },
-    {
-      "idx": 7,
-      "version": "5",
-      "when": 1786654487713,
-      "tag": "0007_wealthy_jubilee",
-      "breakpoints": true
-    },
-    {
-      "idx": 8,
-      "version": "5",
-      "when": 1786676782802,
-      "tag": "0008_careful_romulus",
-      "breakpoints": true
-    },
-    {
-      "idx": 9,
-      "version": "5",
-      "when": 1786678589207,
-      "tag": "0009_easy_morlun",
-      "breakpoints": true
-    },
-    {
-      "idx": 10,
-      "version": "5",
-      "when": 1786757411798,
-      "tag": "0010_tiny_mordo",
+      "version": "7",
+      "when": 1788508886147,
+      "tag": "0000_baseline",
       "breakpoints": true
     }
   ]

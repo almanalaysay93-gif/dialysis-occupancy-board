@@ -1,53 +1,1174 @@
 {
-  "version": "5",
-  "dialect": "mysql",
-  "id": "65e67aee-18fa-4a70-a153-f3622f5a0c7f",
+  "id": "99406d00-d69b-4732-b791-5a3e52e6a463",
   "prevId": "00000000-0000-0000-0000-000000000000",
+  "version": "7",
+  "dialect": "postgresql",
   "tables": {
-    "users": {
-      "name": "users",
+    "public.floors": {
+      "name": "floors",
+      "schema": "",
       "columns": {
         "id": {
           "name": "id",
-          "type": "int",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "code": {
+          "name": "code",
+          "type": "varchar(16)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sortOrder": {
+          "name": "sortOrder",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": true
+          "default": 0
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "floors_code_unique": {
+          "name": "floors_code_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "code"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.infection_surveillance": {
+      "name": "infection_surveillance",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "patientId": {
+          "name": "patientId",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "hbsagStatus": {
+          "name": "hbsagStatus",
+          "type": "varchar(32)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'negative'"
+        },
+        "hcvStatus": {
+          "name": "hcvStatus",
+          "type": "varchar(32)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'negative'"
+        },
+        "hivStatus": {
+          "name": "hivStatus",
+          "type": "varchar(32)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'negative'"
+        },
+        "mdrStatus": {
+          "name": "mdrStatus",
+          "type": "varchar(32)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'negative'"
+        },
+        "lastTestedDate": {
+          "name": "lastTestedDate",
+          "type": "varchar(16)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "assignedIsolationRoom": {
+          "name": "assignedIsolationRoom",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.inventory_supplies": {
+      "name": "inventory_supplies",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "itemCode": {
+          "name": "itemCode",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "itemName": {
+          "name": "itemName",
+          "type": "varchar(128)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "unit": {
+          "name": "unit",
+          "type": "varchar(32)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "currentStock": {
+          "name": "currentStock",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "reorderLevel": {
+          "name": "reorderLevel",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 10
+        },
+        "category": {
+          "name": "category",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'general'"
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "inventory_supplies_itemCode_unique": {
+          "name": "inventory_supplies_itemCode_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "itemCode"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.machines": {
+      "name": "machines",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "label": {
+          "name": "label",
+          "type": "varchar(32)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "location": {
+          "name": "location",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "floorId": {
+          "name": "floorId",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "machine_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'active'"
+        },
+        "statusNote": {
+          "name": "statusNote",
+          "type": "varchar(256)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sortOrder": {
+          "name": "sortOrder",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "machines_floor_status_idx": {
+          "name": "machines_floor_status_idx",
+          "columns": [
+            {
+              "expression": "floorId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.narrative_history": {
+      "name": "narrative_history",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "narrative_id": {
+          "name": "narrative_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "floor_id": {
+          "name": "floor_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "report_date": {
+          "name": "report_date",
+          "type": "varchar(10)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "period_key": {
+          "name": "period_key",
+          "type": "varchar(16)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "action": {
+          "name": "action",
+          "type": "varchar(10)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "actor": {
+          "name": "actor",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "actor_role": {
+          "name": "actor_role",
+          "type": "varchar(32)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "body_snapshot": {
+          "name": "body_snapshot",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "narrative_history_floor_date_idx": {
+          "name": "narrative_history_floor_date_idx",
+          "columns": [
+            {
+              "expression": "floor_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "report_date",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.narrative_reports": {
+      "name": "narrative_reports",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "floorId": {
+          "name": "floorId",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reportDate": {
+          "name": "reportDate",
+          "type": "varchar(10)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "periodKey": {
+          "name": "periodKey",
+          "type": "varchar(16)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "shiftKey": {
+          "name": "shiftKey",
+          "type": "varchar(16)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "author": {
+          "name": "author",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "body": {
+          "name": "body",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "narrative_reports_floor_date_idx": {
+          "name": "narrative_reports_floor_date_idx",
+          "columns": [
+            {
+              "expression": "floorId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "reportDate",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.session_complications": {
+      "name": "session_complications",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "sessionId": {
+          "name": "sessionId",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "complicationType": {
+          "name": "complicationType",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "onsetMinutes": {
+          "name": "onsetMinutes",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "intervention": {
+          "name": "intervention",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "resolved": {
+          "name": "resolved",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "machineId": {
+          "name": "machineId",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "machineLabel": {
+          "name": "machineLabel",
+          "type": "varchar(32)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "floorId": {
+          "name": "floorId",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "patientId": {
+          "name": "patientId",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "patientDisplayAlias": {
+          "name": "patientDisplayAlias",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "date": {
+          "name": "date",
+          "type": "varchar(16)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "timeOfDay": {
+          "name": "timeOfDay",
+          "type": "varchar(8)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "nurseName": {
+          "name": "nurseName",
+          "type": "varchar(96)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "severity": {
+          "name": "severity",
+          "type": "varchar(32)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "preEventBp": {
+          "name": "preEventBp",
+          "type": "varchar(16)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "eventBp": {
+          "name": "eventBp",
+          "type": "varchar(16)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "heartRate": {
+          "name": "heartRate",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "spo2": {
+          "name": "spo2",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "bfr": {
+          "name": "bfr",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ufr": {
+          "name": "ufr",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "interventionsJson": {
+          "name": "interventionsJson",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "salineBolusVolumeMl": {
+          "name": "salineBolusVolumeMl",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "physicianNotified": {
+          "name": "physicianNotified",
+          "type": "varchar(96)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "outcome": {
+          "name": "outcome",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "notes": {
+          "name": "notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "session_complications_session_idx": {
+          "name": "session_complications_session_idx",
+          "columns": [
+            {
+              "expression": "sessionId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.sessions": {
+      "name": "sessions",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "machineId": {
+          "name": "machineId",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "patientId": {
+          "name": "patientId",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "durationMinutes": {
+          "name": "durationMinutes",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "startedAt": {
+          "name": "startedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "endsAt": {
+          "name": "endsAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "isolationTag": {
+          "name": "isolationTag",
+          "type": "isolation_tag",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'clean'"
+        },
+        "urgent": {
+          "name": "urgent",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "displayLabel": {
+          "name": "displayLabel",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "assignedNurse": {
+          "name": "assignedNurse",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "needsRepairAfterSession": {
+          "name": "needsRepairAfterSession",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "pausedAt": {
+          "name": "pausedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "pausedSeconds": {
+          "name": "pausedSeconds",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "status": {
+          "name": "status",
+          "type": "session_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'active'"
+        },
+        "endedAt": {
+          "name": "endedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "endedBy": {
+          "name": "endedBy",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "startedBy": {
+          "name": "startedBy",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "sessions_active_machine_idx": {
+          "name": "sessions_active_machine_idx",
+          "columns": [
+            {
+              "expression": "machineId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "status = 'active'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "sessions_active_started_idx": {
+          "name": "sessions_active_started_idx",
+          "columns": [
+            {
+              "expression": "startedAt",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "status = 'active'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "sessions_ended_at_idx": {
+          "name": "sessions_ended_at_idx",
+          "columns": [
+            {
+              "expression": "endedAt",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "status = 'ended'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.shift_endorsements": {
+      "name": "shift_endorsements",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "shift": {
+          "name": "shift",
+          "type": "varchar(32)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "floorId": {
+          "name": "floorId",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "date": {
+          "name": "date",
+          "type": "varchar(16)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "incomingNurse": {
+          "name": "incomingNurse",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "outgoingNurse": {
+          "name": "outgoingNurse",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "patientNotes": {
+          "name": "patientNotes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "accessIssues": {
+          "name": "accessIssues",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "equipmentNotes": {
+          "name": "equipmentNotes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "floorName": {
+          "name": "floorName",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "situation": {
+          "name": "situation",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "background": {
+          "name": "background",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "assessment": {
+          "name": "assessment",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "recommendations": {
+          "name": "recommendations",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "censusJson": {
+          "name": "censusJson",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "checklistJson": {
+          "name": "checklistJson",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "specialWatchJson": {
+          "name": "specialWatchJson",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "varchar(32)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'DRAFT'"
+        },
+        "endorsedAt": {
+          "name": "endorsedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "shift_endorsements_floor_date_idx": {
+          "name": "shift_endorsements_floor_date_idx",
+          "columns": [
+            {
+              "expression": "floorId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "date",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.staff_accounts": {
+      "name": "staff_accounts",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "username": {
+          "name": "username",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "displayName": {
+          "name": "displayName",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "role": {
+          "name": "role",
+          "type": "staff_role",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "assignedFloorId": {
+          "name": "assignedFloorId",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "passwordHash": {
+          "name": "passwordHash",
+          "type": "varchar(128)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "passwordSalt": {
+          "name": "passwordSalt",
+          "type": "varchar(32)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "active": {
+          "name": "active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "lastSignedIn": {
+          "name": "lastSignedIn",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tokenVersion": {
+          "name": "tokenVersion",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "staff_accounts_username_unique": {
+          "name": "staff_accounts_username_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "username"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.users": {
+      "name": "users",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
         },
         "openId": {
           "name": "openId",
           "type": "varchar(64)",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "name": {
           "name": "name",
           "type": "text",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "email": {
           "name": "email",
           "type": "varchar(320)",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "loginMethod": {
           "name": "loginMethod",
           "type": "varchar(64)",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "role": {
           "name": "role",
-          "type": "enum('user','admin')",
+          "type": "varchar(16)",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": "'user'"
         },
         "createdAt": {
@@ -55,56 +1176,464 @@
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         },
         "updatedAt": {
           "name": "updatedAt",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "onUpdate": true,
-          "default": "(now())"
+          "default": "now()"
         },
         "lastSignedIn": {
           "name": "lastSignedIn",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         }
       },
       "indexes": {},
       "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "users_id": {
-          "name": "users_id",
-          "columns": [
-            "id"
-          ]
-        }
-      },
+      "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "users_openId_unique": {
           "name": "users_openId_unique",
+          "nullsNotDistinct": false,
           "columns": [
             "openId"
           ]
         }
       },
-      "checkConstraint": {}
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.waiting_list": {
+      "name": "waiting_list",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "patientId": {
+          "name": "patientId",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "floorId": {
+          "name": "floorId",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "priority": {
+          "name": "priority",
+          "type": "waiting_priority",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'normal'"
+        },
+        "durationMinutes": {
+          "name": "durationMinutes",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 240
+        },
+        "isolationTag": {
+          "name": "isolationTag",
+          "type": "waiting_isolation_tag",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'clean'"
+        },
+        "assignedNurse": {
+          "name": "assignedNurse",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "addedBy": {
+          "name": "addedBy",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "joinedAt": {
+          "name": "joinedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "admittedAt": {
+          "name": "admittedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "waiting_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'waiting'"
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "waiting_list_status_floor_idx": {
+          "name": "waiting_list_status_floor_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "floorId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.water_quality_logs": {
+      "name": "water_quality_logs",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "date": {
+          "name": "date",
+          "type": "varchar(16)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "floorId": {
+          "name": "floorId",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "tdsIn": {
+          "name": "tdsIn",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tdsOut": {
+          "name": "tdsOut",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "chlorineLevel": {
+          "name": "chlorineLevel",
+          "type": "varchar(32)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "hardness": {
+          "name": "hardness",
+          "type": "varchar(32)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "waterTemp": {
+          "name": "waterTemp",
+          "type": "varchar(32)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "technician": {
+          "name": "technician",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "varchar(32)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pass'"
+        },
+        "timeOfDay": {
+          "name": "timeOfDay",
+          "type": "varchar(8)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "shift": {
+          "name": "shift",
+          "type": "varchar(48)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "inspectorRole": {
+          "name": "inspectorRole",
+          "type": "varchar(32)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "feedTds": {
+          "name": "feedTds",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "productTds": {
+          "name": "productTds",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "rejectionRate": {
+          "name": "rejectionRate",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "productConductivity": {
+          "name": "productConductivity",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "waterHardnessPpm": {
+          "name": "waterHardnessPpm",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "loopFeedPressure": {
+          "name": "loopFeedPressure",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "loopReturnPressure": {
+          "name": "loopReturnPressure",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "waterTemperatureC": {
+          "name": "waterTemperatureC",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "totalChlorine": {
+          "name": "totalChlorine",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "chloramineBreakthrough": {
+          "name": "chloramineBreakthrough",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "heatDisinfectionCompleted": {
+          "name": "heatDisinfectionCompleted",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "heatPeakTemp": {
+          "name": "heatPeakTemp",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "heatHoldMinutes": {
+          "name": "heatHoldMinutes",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "chemicalAgentUsed": {
+          "name": "chemicalAgentUsed",
+          "type": "varchar(48)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "residualChemicalTestNegative": {
+          "name": "residualChemicalTestNegative",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "endotoxinLevel": {
+          "name": "endotoxinLevel",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "colonyCount": {
+          "name": "colonyCount",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "correctiveAction": {
+          "name": "correctiveAction",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "notes": {
+          "name": "notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "water_quality_logs_floor_date_idx": {
+          "name": "water_quality_logs_floor_date_idx",
+          "columns": [
+            {
+              "expression": "floorId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "date",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
     }
   },
+  "enums": {
+    "public.machine_status": {
+      "name": "machine_status",
+      "schema": "public",
+      "values": [
+        "active",
+        "backup",
+        "repair"
+      ]
+    },
+    "public.isolation_tag": {
+      "name": "isolation_tag",
+      "schema": "public",
+      "values": [
+        "clean",
+        "dirty"
+      ]
+    },
+    "public.session_status": {
+      "name": "session_status",
+      "schema": "public",
+      "values": [
+        "active",
+        "ended"
+      ]
+    },
+    "public.staff_role": {
+      "name": "staff_role",
+      "schema": "public",
+      "values": [
+        "nurse",
+        "supervisor",
+        "guest",
+        "auditor"
+      ]
+    },
+    "public.waiting_isolation_tag": {
+      "name": "waiting_isolation_tag",
+      "schema": "public",
+      "values": [
+        "clean",
+        "dirty"
+      ]
+    },
+    "public.waiting_priority": {
+      "name": "waiting_priority",
+      "schema": "public",
+      "values": [
+        "normal",
+        "urgent",
+        "veryUrgent"
+      ]
+    },
+    "public.waiting_status": {
+      "name": "waiting_status",
+      "schema": "public",
+      "values": [
+        "waiting",
+        "admitted"
+      ]
+    }
+  },
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
   "views": {},
   "_meta": {
+    "columns": {},
     "schemas": {},
-    "tables": {},
-    "columns": {}
-  },
-  "internal": {
-    "tables": {},
-    "indexes": {}
+    "tables": {}
   }
 }

@@ -2,22 +2,22 @@ import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { InsertUser, users } from "../drizzle/schema";
+import { resolveDatabaseUrl } from './_core/database-url';
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
+/** Warn once per process; getDb() runs on every request and would otherwise flood the log. */
+let _urlDiagnosticLogged = false;
+
 function resolveUrl(): string | null {
-  // Supabase Postgres URL is stored base64-encoded (SUPABASE_DATABASE_URL_B64)
-  // so that the platform's secret storage cannot mangle the "postgresql://" URI.
-  const raw = process.env.SUPABASE_DATABASE_URL_B64;
-  if (raw) {
-    try {
-      return Buffer.from(raw, "base64").toString("utf-8");
-    } catch {
-      // fall through to DATABASE_URL below
-    }
+  const resolved = resolveDatabaseUrl();
+  if (!_urlDiagnosticLogged) {
+    if (resolved.url === null) console.error(`[Database] No usable connection string: ${resolved.reason}`);
+    else if (resolved.warning) console.warn(`[Database] ${resolved.warning}`);
+    _urlDiagnosticLogged = resolved.url === null || resolved.warning !== null;
   }
-  return process.env.DATABASE_URL ?? null;
+  return resolved.url;
 }
 
 // Lazily create the drizzle instance so local tooling can run without a DB.

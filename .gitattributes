@@ -1,0 +1,5 @@
+# drizzle-kit hashes the raw bytes of a migration file into __drizzle_migrations.
+# With core.autocrlf the same migration would hash differently on Windows and
+# Linux, so an already-applied migration would look new. Pin the line endings.
+drizzle/**/*.sql text eol=lf
+drizzle/**/*.json text eol=lf
