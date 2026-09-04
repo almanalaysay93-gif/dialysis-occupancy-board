@@ -70,27 +70,36 @@ export default async function handler(req: any, res: any) {
           sock.on("error", (err: any) => done(`error: ${err.message}`));
         });
 
-        const client = new Client({
-          connectionString: url,
-          connectionTimeoutMillis: 8000,
-          ssl: { rejectUnauthorized: false },
-        });
+        const probe = async (connStr: string) => {
+          const c = new Client({
+            connectionString: connStr,
+            connectionTimeoutMillis: 5000,
+            ssl: { rejectUnauthorized: false },
+          });
+          try {
+            await c.connect();
+            const r = await c.query("SELECT current_database() as db, version() as v");
+            await c.end();
+            return { ok: true, db: r.rows[0].db };
+          } catch (e: any) {
+            return { ok: false, error: e.message, code: e.code };
+          }
+        };
 
-        try {
-          await client.connect();
-          const r = await client.query("SELECT current_database() as db, version() as v");
-          const tbls = await client.query(
-            "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'"
-          );
-          dbResult = {
-            connected: true,
-            currentDb: r.rows[0].db,
-            tables: tbls.rows.map((t: any) => t.table_name),
-          };
-          await client.end();
-        } catch (e: any) {
-          dbResult = { connected: false, error: e.message, code: e.code };
-        }
+        const sessionUrl = url.replace(":6543", ":5432");
+        const directUrl = `postgresql://postgres:${encodeURIComponent(u.password)}@db.oaxgmvsxzfkyqzmfwxtn.supabase.co:5432/postgres`;
+
+        const [poolerRes, sessionRes, directRes] = await Promise.all([
+          probe(url),
+          probe(sessionUrl),
+          probe(directUrl),
+        ]);
+
+        dbResult = {
+          txPooler6543: poolerRes,
+          sessionPooler5432: sessionRes,
+          directDb5432: directRes,
+        };
       } catch (e: any) {
         error = e.message;
       }
