@@ -34,11 +34,14 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 
 // drizzle/schema.ts
+import { sql } from "drizzle-orm";
 import {
   boolean,
+  index,
   integer,
   pgEnum,
   pgTable,
+  real,
   serial,
   text,
   timestamp,
@@ -72,7 +75,10 @@ var machines = pgTable("machines", {
   sortOrder: integer("sortOrder").notNull().default(0),
   createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
   updatedAt: timestamp("updatedAt", { mode: "date" }).defaultNow().notNull()
-});
+}, (table) => [
+  // Every floor board and report filters machines by floor and status.
+  index("machines_floor_status_idx").on(table.floorId, table.status)
+]);
 var floors = pgTable("floors", {
   id: serial("id").primaryKey(),
   /** Floor identifier, e.g. "F1". */
@@ -115,7 +121,14 @@ var sessions = pgTable("sessions", {
   startedBy: text("startedBy"),
   createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
   updatedAt: timestamp("updatedAt", { mode: "date" }).defaultNow().notNull()
-});
+}, (table) => [
+  // Partial indexes: only a few dozen rows are ever "active", while the table
+  // grows without bound, so these stay small no matter how much history piles up.
+  index("sessions_active_machine_idx").on(table.machineId).where(sql`status = 'active'`),
+  index("sessions_active_started_idx").on(table.startedAt).where(sql`status = 'active'`),
+  // End of Day and End of Month scan completed sessions by end time.
+  index("sessions_ended_at_idx").on(table.endedAt).where(sql`status = 'ended'`)
+]);
 var waitingPriorityEnum = pgEnum("waiting_priority", ["normal", "urgent", "veryUrgent"]);
 var waitingIsolationTagEnum = pgEnum("waiting_isolation_tag", ["clean", "dirty"]);
 var waitingStatusEnum = pgEnum("waiting_status", ["waiting", "admitted"]);
@@ -139,7 +152,10 @@ var waitingList = pgTable("waiting_list", {
   admittedAt: timestamp("admittedAt", { mode: "date" }),
   status: waitingStatusEnum("status").notNull().default("waiting"),
   createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull()
-});
+}, (table) => [
+  // The queue is always read as "still waiting, on this floor".
+  index("waiting_list_status_floor_idx").on(table.status, table.floorId)
+]);
 var staffRoleEnum = pgEnum("staff_role", ["nurse", "supervisor", "guest", "auditor"]);
 var staffAccounts = pgTable("staff_accounts", {
   id: serial("id").primaryKey(),
@@ -173,7 +189,9 @@ var narrativeReports = pgTable("narrative_reports", {
   body: text("body").notNull(),
   createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
   updatedAt: timestamp("updatedAt", { mode: "date" }).defaultNow().notNull()
-});
+}, (table) => [
+  index("narrative_reports_floor_date_idx").on(table.floorId, table.reportDate)
+]);
 var narrativeHistory = pgTable("narrative_history", {
   id: serial("id").primaryKey(),
   narrativeId: integer("narrative_id"),
@@ -187,13 +205,208 @@ var narrativeHistory = pgTable("narrative_history", {
   /** Snapshot of the narrative body (null for deletes). */
   bodySnapshot: text("body_snapshot"),
   createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull()
+}, (table) => [
+  index("narrative_history_floor_date_idx").on(table.floorId, table.reportDate)
+]);
+var shiftEndorsements = pgTable("shift_endorsements", {
+  id: serial("id").primaryKey(),
+  shift: varchar("shift", { length: 32 }).notNull(),
+  floorId: integer("floorId").notNull(),
+  date: varchar("date", { length: 16 }).notNull(),
+  incomingNurse: varchar("incomingNurse", { length: 64 }).notNull(),
+  outgoingNurse: varchar("outgoingNurse", { length: 64 }).notNull(),
+  patientNotes: text("patientNotes"),
+  accessIssues: text("accessIssues"),
+  equipmentNotes: text("equipmentNotes"),
+  floorName: varchar("floorName", { length: 64 }),
+  // SBAR handover narrative.
+  situation: text("situation"),
+  background: text("background"),
+  assessment: text("assessment"),
+  recommendations: text("recommendations"),
+  // JSON payloads: the census snapshot, the safety checklist, and the
+  // special-watch patient list. They are read and written whole, never queried
+  // field by field, so a column per key would buy nothing.
+  censusJson: text("censusJson"),
+  checklistJson: text("checklistJson"),
+  specialWatchJson: text("specialWatchJson"),
+  status: varchar("status", { length: 32 }).notNull().default("DRAFT"),
+  endorsedAt: timestamp("endorsedAt", { mode: "date" }),
+  createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt", { mode: "date" }).defaultNow().notNull()
+}, (table) => [
+  index("shift_endorsements_floor_date_idx").on(table.floorId, table.date)
+]);
+var sessionComplications = pgTable("session_complications", {
+  id: serial("id").primaryKey(),
+  sessionId: integer("sessionId").notNull(),
+  complicationType: varchar("complicationType", { length: 64 }).notNull(),
+  onsetMinutes: integer("onsetMinutes"),
+  intervention: text("intervention"),
+  resolved: boolean("resolved").notNull().default(false),
+  machineId: integer("machineId"),
+  machineLabel: varchar("machineLabel", { length: 32 }),
+  floorId: integer("floorId"),
+  patientId: varchar("patientId", { length: 64 }),
+  patientDisplayAlias: varchar("patientDisplayAlias", { length: 64 }),
+  date: varchar("date", { length: 16 }),
+  timeOfDay: varchar("timeOfDay", { length: 8 }),
+  nurseName: varchar("nurseName", { length: 96 }),
+  severity: varchar("severity", { length: 32 }),
+  // Vitals at the moment of the event.
+  preEventBp: varchar("preEventBp", { length: 16 }),
+  eventBp: varchar("eventBp", { length: 16 }),
+  heartRate: integer("heartRate"),
+  spo2: integer("spo2"),
+  bfr: integer("bfr"),
+  ufr: integer("ufr"),
+  /** Interventions performed, JSON string array. */
+  interventionsJson: text("interventionsJson"),
+  salineBolusVolumeMl: integer("salineBolusVolumeMl"),
+  physicianNotified: varchar("physicianNotified", { length: 96 }),
+  outcome: varchar("outcome", { length: 64 }),
+  notes: text("notes"),
+  createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull()
+}, (table) => [
+  index("session_complications_session_idx").on(table.sessionId)
+]);
+var waterQualityLogs = pgTable("water_quality_logs", {
+  id: serial("id").primaryKey(),
+  date: varchar("date", { length: 16 }).notNull(),
+  floorId: integer("floorId").notNull(),
+  tdsIn: integer("tdsIn"),
+  tdsOut: integer("tdsOut"),
+  chlorineLevel: varchar("chlorineLevel", { length: 32 }),
+  hardness: varchar("hardness", { length: 32 }),
+  waterTemp: varchar("waterTemp", { length: 32 }),
+  technician: varchar("technician", { length: 64 }).notNull(),
+  status: varchar("status", { length: 32 }).notNull().default("pass"),
+  timeOfDay: varchar("timeOfDay", { length: 8 }),
+  shift: varchar("shift", { length: 48 }),
+  inspectorRole: varchar("inspectorRole", { length: 32 }),
+  // RO performance. Fractional by nature (product TDS runs around 3.2 ppm),
+  // so these are real, not the integer tdsIn/tdsOut kept above for the
+  // pre-existing rows.
+  feedTds: real("feedTds"),
+  productTds: real("productTds"),
+  rejectionRate: real("rejectionRate"),
+  productConductivity: real("productConductivity"),
+  waterHardnessPpm: real("waterHardnessPpm"),
+  loopFeedPressure: real("loopFeedPressure"),
+  loopReturnPressure: real("loopReturnPressure"),
+  waterTemperatureC: real("waterTemperatureC"),
+  // Chlorine and chloramine: the hemolysis barrier.
+  totalChlorine: real("totalChlorine"),
+  chloramineBreakthrough: boolean("chloramineBreakthrough").notNull().default(false),
+  // Disinfection cycle.
+  heatDisinfectionCompleted: boolean("heatDisinfectionCompleted").notNull().default(false),
+  heatPeakTemp: real("heatPeakTemp"),
+  heatHoldMinutes: integer("heatHoldMinutes"),
+  chemicalAgentUsed: varchar("chemicalAgentUsed", { length: 48 }),
+  residualChemicalTestNegative: boolean("residualChemicalTestNegative").notNull().default(false),
+  // Microbial surveillance.
+  endotoxinLevel: real("endotoxinLevel"),
+  colonyCount: integer("colonyCount"),
+  correctiveAction: text("correctiveAction"),
+  notes: text("notes"),
+  createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull()
+}, (table) => [
+  index("water_quality_logs_floor_date_idx").on(table.floorId, table.date)
+]);
+var infectionSurveillance = pgTable("infection_surveillance", {
+  id: serial("id").primaryKey(),
+  patientId: varchar("patientId", { length: 64 }).notNull(),
+  hbsagStatus: varchar("hbsagStatus", { length: 32 }).notNull().default("negative"),
+  hcvStatus: varchar("hcvStatus", { length: 32 }).notNull().default("negative"),
+  hivStatus: varchar("hivStatus", { length: 32 }).notNull().default("negative"),
+  mdrStatus: varchar("mdrStatus", { length: 32 }).notNull().default("negative"),
+  lastTestedDate: varchar("lastTestedDate", { length: 16 }),
+  assignedIsolationRoom: varchar("assignedIsolationRoom", { length: 64 }),
+  createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt", { mode: "date" }).defaultNow().notNull()
 });
+var inventorySupplies = pgTable("inventory_supplies", {
+  id: serial("id").primaryKey(),
+  itemCode: varchar("itemCode", { length: 64 }).notNull().unique(),
+  itemName: varchar("itemName", { length: 128 }).notNull(),
+  unit: varchar("unit", { length: 32 }).notNull(),
+  currentStock: integer("currentStock").notNull().default(0),
+  reorderLevel: integer("reorderLevel").notNull().default(10),
+  category: varchar("category", { length: 64 }).notNull().default("general"),
+  createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt", { mode: "date" }).defaultNow().notNull()
+});
+
+// server/_core/database-url.ts
+function decodeStrictBase64(raw) {
+  const decoded = Buffer.from(raw, "base64").toString("utf-8");
+  const normalize = (s) => s.replace(/\s/g, "").replace(/=+$/, "");
+  if (normalize(Buffer.from(decoded, "utf-8").toString("base64")) !== normalize(raw)) {
+    return { error: "value is not valid base64 (decoding dropped characters \u2014 the secret is truncated or corrupted)" };
+  }
+  return { value: decoded };
+}
+function validatePostgresUri(candidate) {
+  const trimmed = candidate.trim();
+  if (!trimmed) return "value is empty";
+  if (!/^postgres(ql)?:\/\//.test(trimmed)) return "value is not a postgres:// URI";
+  let parsed;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    return "value does not parse as a URI (likely truncated)";
+  }
+  if (!parsed.hostname) return "URI has no host";
+  if (!parsed.username) return "URI has no username";
+  if (!parsed.password) return "URI has no password";
+  if (parsed.pathname.replace(/^\//, "") === "") return "URI has no database name (likely truncated)";
+  return null;
+}
+function resolveDatabaseUrl(env = process.env) {
+  const encoded = env.SUPABASE_DATABASE_URL_B64?.trim();
+  const plain = env.DATABASE_URL?.trim();
+  let encodedError = null;
+  if (encoded) {
+    const decoded = decodeStrictBase64(encoded);
+    if ("error" in decoded) {
+      encodedError = decoded.error;
+    } else {
+      const invalid = validatePostgresUri(decoded.value);
+      if (invalid) encodedError = invalid;
+      else return { url: decoded.value.trim(), source: "SUPABASE_DATABASE_URL_B64", warning: null };
+    }
+  }
+  if (plain) {
+    const invalid = validatePostgresUri(plain);
+    if (invalid) {
+      return {
+        url: null,
+        source: null,
+        reason: encodedError ? `SUPABASE_DATABASE_URL_B64 is unusable (${encodedError}) and DATABASE_URL is also invalid (${invalid})` : `DATABASE_URL is invalid: ${invalid}`
+      };
+    }
+    return {
+      url: plain,
+      source: "DATABASE_URL",
+      // Falling back is correct, but silence here is what made a mangled secret
+      // look like "no database configured" for the whole deploy.
+      warning: encodedError ? `SUPABASE_DATABASE_URL_B64 was ignored: ${encodedError}` : null
+    };
+  }
+  return {
+    url: null,
+    source: null,
+    reason: encodedError ? `SUPABASE_DATABASE_URL_B64 is unusable (${encodedError}) and DATABASE_URL is not set` : "neither SUPABASE_DATABASE_URL_B64 nor DATABASE_URL is set"
+  };
+}
 
 // server/_core/env.ts
 var ENV = {
   appId: process.env.VITE_APP_ID ?? "",
   cookieSecret: process.env.JWT_SECRET ?? "",
-  databaseUrl: process.env.DATABASE_URL ?? "",
+  // Must match what the pool actually connects with, or a Supabase-only deploy
+  // reads "" here while the app is connected fine.
+  databaseUrl: resolveDatabaseUrl().url ?? "",
   oAuthServerUrl: process.env.OAUTH_SERVER_URL ?? "",
   ownerOpenId: process.env.OWNER_OPEN_ID ?? "",
   isProduction: process.env.NODE_ENV === "production",
@@ -203,21 +416,22 @@ var ENV = {
 
 // server/db.ts
 var _db = null;
+var _urlDiagnosticLogged = false;
 function resolveUrl() {
-  const raw = process.env.SUPABASE_DATABASE_URL_B64;
-  if (raw) {
-    try {
-      return Buffer.from(raw, "base64").toString("utf-8");
-    } catch {
-    }
+  const resolved = resolveDatabaseUrl();
+  if (!_urlDiagnosticLogged) {
+    if (resolved.url === null) console.error(`[Database] No usable connection string: ${resolved.reason}`);
+    else if (resolved.warning) console.warn(`[Database] ${resolved.warning}`);
+    _urlDiagnosticLogged = resolved.url === null || resolved.warning !== null;
   }
-  return process.env.DATABASE_URL ?? null;
+  return resolved.url;
 }
 var _pool = null;
+var POOL_MAX = process.env.VERCEL ? 2 : 8;
 function buildPool(url) {
-  return new Pool({
+  const pool = new Pool({
     connectionString: url,
-    max: 8,
+    max: POOL_MAX,
     min: 0,
     idleTimeoutMillis: 3e4,
     connectionTimeoutMillis: 8e3,
@@ -229,6 +443,22 @@ function buildPool(url) {
     // must be accepted to avoid SELF_SIGNED_CERT_IN_CHAIN.
     ssl: url.startsWith("postgresql") || url.startsWith("postgres") ? { rejectUnauthorized: false } : void 0
   });
+  pool.on("error", (err) => {
+    console.error("[Database] Idle client error, resetting pool:", err);
+    void resetPool();
+  });
+  return pool;
+}
+async function resetPool() {
+  const dying = _pool;
+  _pool = null;
+  _db = null;
+  if (dying) {
+    try {
+      await dying.end();
+    } catch {
+    }
+  }
 }
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -249,11 +479,7 @@ async function getDb() {
       const message = error instanceof Error ? error.message : String(error);
       if (!message.includes("terminated") && !message.includes("timeout") && !message.includes("unexpectedly")) break;
       await sleep(500 * (attempt + 1));
-      try {
-        await _pool?.end();
-      } catch {
-      }
-      _pool = null;
+      await resetPool();
     }
   }
   console.warn("[Database] Failed to connect after retries:", lastError);
@@ -902,132 +1128,30 @@ function staffAccessedFloors(staff) {
   return [];
 }
 
-// server/_core/trpc.ts
-var t = initTRPC.context().create({
-  transformer: superjson
-});
-var router = t.router;
-var publicProcedure = t.procedure;
-var requireUser = t.middleware(async (opts) => {
-  const { ctx, next } = opts;
-  if (!ctx.user) {
-    throw new TRPCError2({ code: "UNAUTHORIZED", message: UNAUTHED_ERR_MSG });
-  }
-  return next({
-    ctx: {
-      ...ctx,
-      user: ctx.user
-    }
-  });
-});
-var protectedProcedure = t.procedure.use(requireUser);
-var adminProcedure = t.procedure.use(
-  t.middleware(async (opts) => {
-    const { ctx, next } = opts;
-    if (!ctx.user || ctx.user.role !== "admin") {
-      throw new TRPCError2({ code: "FORBIDDEN", message: NOT_ADMIN_ERR_MSG });
-    }
-    return next({
-      ctx: {
-        ...ctx,
-        user: ctx.user
-      }
-    });
-  })
-);
-var staffReadProcedure = t.procedure.use(
-  t.middleware(async (opts) => {
-    const { ctx, next } = opts;
-    const staff = await resolveStaffSession(ctx.req);
-    const oauthUser = ctx.user;
-    if (!staff.fromCookie && !oauthUser) {
-      return next({
-        ctx: { ...ctx, user: null, staff, isStaff: false }
-      });
-    }
-    if (staff.role === "guest" && staff.fromCookie) {
-      return next({
-        ctx: { ...ctx, user: null, staff, isStaff: false }
-      });
-    }
-    if (oauthUser) {
-      return next({
-        ctx: { ...ctx, user: oauthUser, staff, isStaff: true }
-      });
-    }
-    if (staff.role === "nurse" || staff.role === "supervisor" || staff.role === "auditor") {
-      return next({
-        ctx: { ...ctx, user: null, staff, isStaff: true }
-      });
-    }
-    throw new TRPCError2({ code: "UNAUTHORIZED", message: UNAUTHED_ERR_MSG });
-  })
-);
-var supervisorProcedure = t.procedure.use(
-  t.middleware(async (opts) => {
-    const { ctx, next } = opts;
-    const staff = await resolveStaffSession(ctx.req);
-    const oauthUser = ctx.user;
-    if (oauthUser && oauthUser.role === "admin") {
-      return next({
-        ctx: { ...ctx, user: oauthUser, staff, isStaff: true }
-      });
-    }
-    if (staff.role === "supervisor") {
-      return next({
-        ctx: { ...ctx, user: oauthUser ?? null, staff, isStaff: true }
-      });
-    }
-    throw new TRPCError2({ code: "FORBIDDEN", message: "This action is reserved for the supervisor." });
-  })
-);
-var staffOrAdminProcedure = t.procedure.use(
-  t.middleware(async (opts) => {
-    const { ctx, next } = opts;
-    const staff = await resolveStaffSession(ctx.req);
-    const oauthUser = ctx.user;
-    if (staff.role === "guest" && staff.fromCookie) {
-      throw new TRPCError2({ code: "UNAUTHORIZED", message: UNAUTHED_ERR_MSG });
-    }
-    if (oauthUser) {
-      return next({
-        ctx: { ...ctx, user: oauthUser, staff, isStaff: true }
-      });
-    }
-    if (staff.role === "nurse" || staff.role === "supervisor" || staff.role === "auditor") {
-      return next({
-        ctx: { ...ctx, user: null, staff, isStaff: true }
-      });
-    }
-    throw new TRPCError2({ code: "UNAUTHORIZED", message: UNAUTHED_ERR_MSG });
-  })
-);
+// server/machines.ts
+import { and, desc, eq as eq3, isNull, sql as sql2 } from "drizzle-orm";
 
-// server/_core/systemRouter.ts
-var systemRouter = router({
-  health: publicProcedure.input(
-    z.object({
-      timestamp: z.number().min(0, "timestamp cannot be negative")
-    })
-  ).query(() => ({
-    ok: true
-  })),
-  notifyOwner: adminProcedure.input(
-    z.object({
-      title: z.string().min(1, "title is required"),
-      content: z.string().min(1, "content is required")
-    })
-  ).mutation(async ({ input }) => {
-    const delivered = await notifyOwner(input);
-    return {
-      success: delivered
-    };
-  })
-});
+// server/patient-ticket.ts
+function patientTicket(patientId) {
+  if (!patientId) return "TK-0000";
+  let hash = 0;
+  for (let i = 0; i < patientId.length; i++) {
+    hash = (hash << 5) - hash + patientId.charCodeAt(i);
+    hash |= 0;
+  }
+  return `TK-${Math.abs(hash) % 9e3 + 1e3}`;
+}
 
 // server/machines.ts
-import { and, desc, eq as eq3, isNull, sql } from "drizzle-orm";
-async function listMachines() {
+var BOARD_CACHE_TTL_MS = 2e3;
+var boardCache = /* @__PURE__ */ new Map();
+function invalidateBoardCache() {
+  boardCache.clear();
+}
+async function listMachines(viewer = { canSeePhi: false }) {
+  const key = viewer.canSeePhi ? "phi" : "masked";
+  const hit = boardCache.get(key);
+  if (hit && hit.expiresAt > Date.now()) return hit.value;
   const db = await getDb();
   if (!db) return [];
   const [allMachines, rows] = await Promise.all([
@@ -1038,7 +1162,7 @@ async function listMachines() {
   ]);
   const byMachine = /* @__PURE__ */ new Map();
   for (const row of rows) byMachine.set(row.machineId, row);
-  return allMachines.map((m) => ({
+  const result = allMachines.map((m) => ({
     machine: { id: m.id, label: m.label, location: m.location, floorId: m.floorId, sortOrder: m.sortOrder, status: m.status, statusNote: m.statusNote },
     session: (() => {
       const s = byMachine.get(m.id);
@@ -1046,21 +1170,25 @@ async function listMachines() {
       return {
         id: s.id,
         machineId: s.machineId,
-        patientId: s.patientId,
+        // PHI gate: identifiers and staff names only reach staff sessions.
+        patientId: viewer.canSeePhi ? s.patientId : null,
+        ticket: patientTicket(s.patientId),
         durationMinutes: s.durationMinutes,
         startedAt: s.startedAt,
         endsAt: s.endsAt,
         isolationTag: s.isolationTag,
         urgent: s.urgent,
-        startedBy: s.startedBy,
-        displayLabel: s.displayLabel,
-        assignedNurse: s.assignedNurse,
+        startedBy: viewer.canSeePhi ? s.startedBy : null,
+        displayLabel: viewer.canSeePhi ? s.displayLabel : null,
+        assignedNurse: viewer.canSeePhi ? s.assignedNurse : null,
         needsRepairAfterSession: s.needsRepairAfterSession,
         pausedAt: s.pausedAt,
         pausedSeconds: s.pausedSeconds
       };
     })()
   })).filter((r) => r.machine.status === "active");
+  boardCache.set(key, { value: result, expiresAt: Date.now() + BOARD_CACHE_TTL_MS });
+  return result;
 }
 async function assignSession(input) {
   const db = await getDb();
@@ -1123,7 +1251,7 @@ async function endSession(input) {
 async function toggleUrgent(input) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  await db.update(sessions).set({ urgent: sql`NOT urgent` }).where(eq3(sessions.id, input.sessionId));
+  await db.update(sessions).set({ urgent: sql2`NOT urgent` }).where(eq3(sessions.id, input.sessionId));
 }
 async function togglePause(input) {
   const db = await getDb();
@@ -1205,7 +1333,7 @@ async function updateMachineLabel(input) {
   if (!db) throw new Error("Database not available");
   const newLabel = input.label.trim();
   if (!newLabel) throw new Error("LABEL_REQUIRED");
-  const existing = await db.select({ id: machines.id }).from(machines).where(and(eq3(machines.label, newLabel), sql`${machines.id} <> ${input.machineId}`)).limit(1);
+  const existing = await db.select({ id: machines.id }).from(machines).where(and(eq3(machines.label, newLabel), sql2`${machines.id} <> ${input.machineId}`)).limit(1);
   if (existing.length > 0) {
     throw new Error("MACHINE_LABEL_EXISTS");
   }
@@ -1222,7 +1350,7 @@ async function listOffboardedMachines() {
     statusNote: machines.statusNote,
     floorId: machines.floorId,
     createdAt: machines.createdAt
-  }).from(machines).where(sql`${machines.status} <> 'active'`).orderBy(machines.status, machines.sortOrder, machines.id);
+  }).from(machines).where(sql2`${machines.status} <> 'active'`).orderBy(machines.status, machines.sortOrder, machines.id);
   return rows;
 }
 async function setMachineStatus(input) {
@@ -1258,7 +1386,7 @@ async function swapMachines(input) {
   if (!a.floorId || !b.floorId) throw new Error("FLOOR_REQUIRED");
   if (a.status !== "active" || b.status !== "active") throw new Error("MACHINE_OFFBOARD");
   const active = await db.select({ id: sessions.id }).from(sessions).where(
-    and(sql`${sessions.machineId} IN (${input.machineAId}, ${input.machineBId})`, eq3(sessions.status, "active"))
+    and(sql2`${sessions.machineId} IN (${input.machineAId}, ${input.machineBId})`, eq3(sessions.status, "active"))
   ).limit(1);
   if (active.length > 0) throw new Error("MACHINE_IN_TREATMENT");
   if (a.floorId === b.floorId) {
@@ -1425,12 +1553,12 @@ async function machineDayMetrics(input) {
   const rows = await db.select().from(sessions).where(
     and(
       eq3(sessions.status, "ended"),
-      sql`${sessions.endedAt} >= ${dateStart}`,
-      sql`${sessions.endedAt} <= ${dateEnd}`
+      sql2`${sessions.endedAt} >= ${dateStart}`,
+      sql2`${sessions.endedAt} <= ${dateEnd}`
     )
   );
   const activeToday = await db.select().from(sessions).where(
-    and(eq3(sessions.status, "active"), sql`${sessions.startedAt} >= ${dateStart}`, sql`${sessions.startedAt} <= ${dateEnd}`)
+    and(eq3(sessions.status, "active"), sql2`${sessions.startedAt} >= ${dateStart}`, sql2`${sessions.startedAt} <= ${dateEnd}`)
   );
   const floorMachines = await db.select({ id: machines.id, machineId: machines.id }).from(machines).where(and(eq3(machines.floorId, input.floorId), eq3(machines.status, "active")));
   const onFloor = new Set(floorMachines.map((m) => m.id));
@@ -1505,7 +1633,7 @@ async function renameRoom(input) {
   const newName = input.name.trim();
   if (!newName) throw new Error("ROOM_NAME_REQUIRED");
   if (newName.length > 64) throw new Error("ROOM_NAME_TOO_LONG");
-  const existing = await db.select({ id: floors.id }).from(floors).where(and(eq3(floors.name, newName), sql`${floors.id} <> ${input.roomId}`)).limit(1);
+  const existing = await db.select({ id: floors.id }).from(floors).where(and(eq3(floors.name, newName), sql2`${floors.id} <> ${input.roomId}`)).limit(1);
   if (existing.length > 0) {
     throw new Error("ROOM_EXISTS");
   }
@@ -1524,30 +1652,31 @@ async function removeRoom(input) {
   }
   await db.delete(floors).where(eq3(floors.id, input.roomId));
 }
-function toWaitingView(r) {
+function toWaitingView(r, viewer = { canSeePhi: false }) {
   return {
     id: r.id,
-    patientId: r.patientId,
+    patientId: viewer.canSeePhi ? r.patientId : null,
+    ticket: patientTicket(r.patientId),
     floorId: r.floorId,
     priority: r.priority,
     durationMinutes: r.durationMinutes,
     isolationTag: r.isolationTag,
-    assignedNurse: r.assignedNurse,
-    addedBy: r.addedBy,
+    assignedNurse: viewer.canSeePhi ? r.assignedNurse : null,
+    addedBy: viewer.canSeePhi ? r.addedBy : null,
     joinedAt: r.joinedAt
   };
 }
-async function listWaitingAll() {
+async function listWaitingAll(viewer = { canSeePhi: false }) {
   const db = await getDb();
   if (!db) return [];
   const rows = await db.select().from(waitingList).where(eq3(waitingList.status, "waiting")).orderBy(desc(waitingList.priority), waitingList.joinedAt, waitingList.id);
-  return rows.map(toWaitingView);
+  return rows.map((r) => toWaitingView(r, viewer));
 }
-async function listWaiting(input) {
+async function listWaiting(input, viewer = { canSeePhi: false }) {
   const db = await getDb();
   if (!db) return [];
   const rows = await db.select().from(waitingList).where(and(eq3(waitingList.floorId, input.floorId), eq3(waitingList.status, "waiting"))).orderBy(desc(waitingList.priority), waitingList.joinedAt, waitingList.id);
-  return rows.map(toWaitingView);
+  return rows.map((r) => toWaitingView(r, viewer));
 }
 async function addWaiting(input) {
   const db = await getDb();
@@ -1648,7 +1777,7 @@ async function listNurseAssignments(input) {
   const machineLabels = await db.select({ id: machines.id, label: machines.label }).from(machines);
   const labelById = /* @__PURE__ */ new Map();
   for (const m of machineLabels) labelById.set(m.id, m.label);
-  const waiting = await listWaiting({ floorId: input.floorId });
+  const waiting = await listWaiting({ floorId: input.floorId }, { canSeePhi: true });
   const sessionRows = rows.map((r) => ({
     nurse: r.assignedNurse?.trim() || UNASSIGNED_NURSE,
     kind: "session",
@@ -1670,7 +1799,7 @@ async function listNurseAssignments(input) {
     id: w.id,
     machineId: null,
     machineLabel: null,
-    patientId: w.patientId,
+    patientId: w.patientId ?? patientTicket(""),
     displayLabel: null,
     endsAt: null,
     durationMinutes: w.durationMinutes,
@@ -1706,7 +1835,7 @@ async function endOfDayReport(opts) {
   const rows = await db.select().from(sessions).where(
     and(
       eq3(sessions.status, "ended"),
-      sql`${sessions.endedAt} >= ${range.from} AND ${sessions.endedAt} < ${range.to}`
+      sql2`${sessions.endedAt} >= ${range.from} AND ${sessions.endedAt} < ${range.to}`
     )
   );
   const filtered = floorMachineIds.size > 0 ? rows.filter((r) => floorMachineIds.has(r.machineId)) : rows;
@@ -1727,8 +1856,8 @@ async function endOfDayReport(opts) {
   const waitingRows = await db.select().from(waitingList).where(
     opts?.floorId ? and(
       eq3(waitingList.floorId, opts.floorId),
-      sql`${waitingList.joinedAt} >= ${range.from} AND ${waitingList.joinedAt} < ${range.to}`
-    ) : sql`${waitingList.joinedAt} >= ${range.from} AND ${waitingList.joinedAt} < ${range.to}`
+      sql2`${waitingList.joinedAt} >= ${range.from} AND ${waitingList.joinedAt} < ${range.to}`
+    ) : sql2`${waitingList.joinedAt} >= ${range.from} AND ${waitingList.joinedAt} < ${range.to}`
   );
   const waitingAdds = { normal: 0, urgent: 0, veryUrgent: 0, total: waitingRows.length };
   for (const w of waitingRows) {
@@ -1840,15 +1969,15 @@ async function monthReport(opts) {
   const [floorRows, allMachines, monthSessions, allWaiting, activeRows] = await Promise.all([
     db.select().from(floors).where(opts?.floorId ? eq3(floors.id, opts.floorId) : void 0),
     db.select().from(machines),
-    db.execute(sql`
+    db.execute(sql2`
       SELECT * FROM ${sessions}
       WHERE "status" = 'ended' AND "endedAt" >= ${rangeStart} AND "endedAt" < ${rangeEnd}
     `),
-    db.execute(sql`
+    db.execute(sql2`
       SELECT * FROM ${waitingList}
       WHERE "joinedAt" >= ${rangeStart} AND "joinedAt" < ${rangeEnd}
     `),
-    db.execute(sql`
+    db.execute(sql2`
       SELECT "machineId","startedAt","endedAt","pausedSeconds","status" FROM ${sessions}
       WHERE "status" = 'active' AND "startedAt" >= ${rangeStart} AND "startedAt" < ${rangeEnd}
     `)
@@ -2023,12 +2152,12 @@ async function endOfDayReportBulk(opts) {
   const t1 = Date.now();
   const [allMachines, waitingRows, daySessions] = await Promise.all([
     db.select().from(machines),
-    db.select().from(waitingList).where(sql`${waitingList.joinedAt} >= ${range.from} AND ${waitingList.joinedAt} < ${range.to}`),
+    db.select().from(waitingList).where(sql2`${waitingList.joinedAt} >= ${range.from} AND ${waitingList.joinedAt} < ${range.to}`),
     // Both ended and active-today sessions in ONE round trip: the remote
     // Supabase pooler runs in transaction mode with a single connection,
     // so "parallel" queries actually serialize (~1.3s each). One UNION
     // all halves the session round trips.
-    db.execute(sql`
+    db.execute(sql2`
       SELECT "machineId", "patientId", "startedAt", "endedAt", "pausedSeconds", "durationMinutes",
              "assignedNurse", "status", "urgent", "isolationTag"
       FROM ${sessions}
@@ -2140,6 +2269,7 @@ async function endOfDayReportBulk(opts) {
 }
 var reportCache = /* @__PURE__ */ new Map();
 var REPORT_CACHE_TTL_MS = 3e4;
+var REPORT_CACHE_MAX_ENTRIES = 200;
 function cacheKey(prefix, input) {
   return `${prefix}:${Object.keys(input).sort().map((k) => `${k}=${String(input[k] ?? "")}`).join("|")}`;
 }
@@ -2150,7 +2280,16 @@ function reportCacheGet(prefix, input) {
   return null;
 }
 function reportCacheSet(prefix, input, value) {
-  reportCache.set(cacheKey(prefix, input), { value, expiresAt: Date.now() + REPORT_CACHE_TTL_MS });
+  const now = Date.now();
+  for (const [key, entry] of Array.from(reportCache.entries())) {
+    if (entry.expiresAt <= now) reportCache.delete(key);
+  }
+  while (reportCache.size >= REPORT_CACHE_MAX_ENTRIES) {
+    const oldest = reportCache.keys().next();
+    if (oldest.done) break;
+    reportCache.delete(oldest.value);
+  }
+  reportCache.set(cacheKey(prefix, input), { value, expiresAt: now + REPORT_CACHE_TTL_MS });
 }
 function reportCacheInvalidate(reportDate, floorId) {
   for (const key of Array.from(reportCache.keys())) {
@@ -2209,6 +2348,472 @@ function machineDayMetricsInline(input) {
   }
   return out;
 }
+async function listShiftEndorsements(input) {
+  const db = await getDb();
+  if (!db) return [];
+  const conditions = [];
+  if (input?.floorId !== void 0) conditions.push(eq3(shiftEndorsements.floorId, input.floorId));
+  if (input?.date !== void 0) conditions.push(eq3(shiftEndorsements.date, input.date));
+  if (conditions.length > 0) {
+    return db.select().from(shiftEndorsements).where(and(...conditions)).orderBy(desc(shiftEndorsements.createdAt));
+  }
+  return db.select().from(shiftEndorsements).orderBy(desc(shiftEndorsements.createdAt));
+}
+async function getShiftEndorsementById(id) {
+  const db = await getDb();
+  if (!db) return void 0;
+  const rows = await db.select().from(shiftEndorsements).where(eq3(shiftEndorsements.id, id)).limit(1);
+  return rows[0];
+}
+var trimmedOrNull = (v) => v ? v.trim() || null : null;
+async function createShiftEndorsement(input) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const status = input.status?.trim() || "DRAFT";
+  const result = await db.insert(shiftEndorsements).values({
+    shift: input.shift.trim(),
+    floorId: input.floorId,
+    date: input.date.trim(),
+    incomingNurse: input.incomingNurse.trim(),
+    outgoingNurse: input.outgoingNurse.trim(),
+    patientNotes: trimmedOrNull(input.patientNotes),
+    accessIssues: trimmedOrNull(input.accessIssues),
+    equipmentNotes: trimmedOrNull(input.equipmentNotes),
+    floorName: trimmedOrNull(input.floorName),
+    situation: trimmedOrNull(input.situation),
+    background: trimmedOrNull(input.background),
+    assessment: trimmedOrNull(input.assessment),
+    recommendations: trimmedOrNull(input.recommendations),
+    censusJson: input.censusJson ?? null,
+    checklistJson: input.checklistJson ?? null,
+    specialWatchJson: input.specialWatchJson ?? null,
+    status,
+    // A locked endorsement records when the handover was signed off. A draft
+    // has not been handed over yet, so it carries no timestamp.
+    endorsedAt: status === "ENDORSED_AND_LOCKED" ? /* @__PURE__ */ new Date() : null
+  }).returning({ id: shiftEndorsements.id });
+  return result[0];
+}
+async function updateShiftEndorsement(id, input) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const updates = { updatedAt: /* @__PURE__ */ new Date() };
+  if (input.shift !== void 0) updates.shift = input.shift.trim();
+  if (input.incomingNurse !== void 0) updates.incomingNurse = input.incomingNurse.trim();
+  if (input.outgoingNurse !== void 0) updates.outgoingNurse = input.outgoingNurse.trim();
+  if (input.patientNotes !== void 0) updates.patientNotes = trimmedOrNull(input.patientNotes);
+  if (input.accessIssues !== void 0) updates.accessIssues = trimmedOrNull(input.accessIssues);
+  if (input.equipmentNotes !== void 0) updates.equipmentNotes = trimmedOrNull(input.equipmentNotes);
+  if (input.floorName !== void 0) updates.floorName = trimmedOrNull(input.floorName);
+  if (input.situation !== void 0) updates.situation = trimmedOrNull(input.situation);
+  if (input.background !== void 0) updates.background = trimmedOrNull(input.background);
+  if (input.assessment !== void 0) updates.assessment = trimmedOrNull(input.assessment);
+  if (input.recommendations !== void 0) updates.recommendations = trimmedOrNull(input.recommendations);
+  if (input.censusJson !== void 0) updates.censusJson = input.censusJson ?? null;
+  if (input.checklistJson !== void 0) updates.checklistJson = input.checklistJson ?? null;
+  if (input.specialWatchJson !== void 0) updates.specialWatchJson = input.specialWatchJson ?? null;
+  if (input.status !== void 0) {
+    updates.status = input.status.trim();
+    if (input.status.trim() === "ENDORSED_AND_LOCKED") updates.endorsedAt = /* @__PURE__ */ new Date();
+  }
+  await db.update(shiftEndorsements).set(updates).where(eq3(shiftEndorsements.id, id));
+}
+async function deleteShiftEndorsement(id) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(shiftEndorsements).where(eq3(shiftEndorsements.id, id));
+}
+function parseInterventions(raw) {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((v) => typeof v === "string") : [];
+  } catch {
+    return [];
+  }
+}
+async function listSessionComplications(input) {
+  const db = await getDb();
+  if (!db) return [];
+  const rows = input?.sessionId !== void 0 ? await db.select().from(sessionComplications).where(eq3(sessionComplications.sessionId, input.sessionId)).orderBy(desc(sessionComplications.createdAt)) : await db.select().from(sessionComplications).orderBy(desc(sessionComplications.createdAt));
+  return rows.map((r) => ({ ...r, interventions: parseInterventions(r.interventionsJson) }));
+}
+async function createSessionComplication(input) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(sessionComplications).values({
+    sessionId: input.sessionId,
+    complicationType: input.complicationType.trim(),
+    onsetMinutes: input.onsetMinutes ?? null,
+    intervention: trimmedOrNull(input.intervention),
+    resolved: input.resolved ?? false,
+    machineId: input.machineId ?? null,
+    machineLabel: trimmedOrNull(input.machineLabel),
+    floorId: input.floorId ?? null,
+    patientId: trimmedOrNull(input.patientId),
+    patientDisplayAlias: trimmedOrNull(input.patientDisplayAlias),
+    date: trimmedOrNull(input.date),
+    timeOfDay: trimmedOrNull(input.timeOfDay),
+    nurseName: trimmedOrNull(input.nurseName),
+    severity: trimmedOrNull(input.severity),
+    preEventBp: trimmedOrNull(input.preEventBp),
+    eventBp: trimmedOrNull(input.eventBp),
+    heartRate: input.heartRate ?? null,
+    spo2: input.spo2 ?? null,
+    bfr: input.bfr ?? null,
+    ufr: input.ufr ?? null,
+    interventionsJson: input.interventions ? JSON.stringify(input.interventions) : null,
+    salineBolusVolumeMl: input.salineBolusVolumeMl ?? null,
+    physicianNotified: trimmedOrNull(input.physicianNotified),
+    outcome: trimmedOrNull(input.outcome),
+    notes: trimmedOrNull(input.notes)
+  }).returning({ id: sessionComplications.id });
+  return result[0];
+}
+async function updateSessionComplication(id, input) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const updates = {};
+  if (input.complicationType !== void 0) updates.complicationType = input.complicationType.trim();
+  if (input.onsetMinutes !== void 0) updates.onsetMinutes = input.onsetMinutes ?? null;
+  if (input.intervention !== void 0) updates.intervention = input.intervention ? input.intervention.trim() || null : null;
+  if (input.resolved !== void 0) updates.resolved = input.resolved;
+  await db.update(sessionComplications).set(updates).where(eq3(sessionComplications.id, id));
+}
+async function deleteSessionComplication(id) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(sessionComplications).where(eq3(sessionComplications.id, id));
+}
+async function listWaterQualityLogs(input) {
+  const db = await getDb();
+  if (!db) return [];
+  const conditions = [];
+  if (input?.floorId !== void 0) conditions.push(eq3(waterQualityLogs.floorId, input.floorId));
+  if (input?.date !== void 0) conditions.push(eq3(waterQualityLogs.date, input.date));
+  if (conditions.length > 0) {
+    return db.select().from(waterQualityLogs).where(and(...conditions)).orderBy(desc(waterQualityLogs.createdAt));
+  }
+  return db.select().from(waterQualityLogs).orderBy(desc(waterQualityLogs.createdAt));
+}
+async function getWaterQualityLogById(id) {
+  const db = await getDb();
+  if (!db) return void 0;
+  const rows = await db.select().from(waterQualityLogs).where(eq3(waterQualityLogs.id, id)).limit(1);
+  return rows[0];
+}
+function computeRejectionRate(feedTds, productTds) {
+  if (!feedTds || feedTds <= 0 || productTds === null || productTds === void 0) return null;
+  return Number(((1 - productTds / feedTds) * 100).toFixed(1));
+}
+async function createWaterQualityLog(input) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(waterQualityLogs).values({
+    date: input.date.trim(),
+    floorId: input.floorId,
+    tdsIn: input.tdsIn ?? null,
+    tdsOut: input.tdsOut ?? null,
+    chlorineLevel: trimmedOrNull(input.chlorineLevel),
+    hardness: trimmedOrNull(input.hardness),
+    waterTemp: trimmedOrNull(input.waterTemp),
+    technician: input.technician.trim(),
+    status: input.status?.trim() || "pass",
+    timeOfDay: trimmedOrNull(input.timeOfDay),
+    shift: trimmedOrNull(input.shift),
+    inspectorRole: trimmedOrNull(input.inspectorRole),
+    feedTds: input.feedTds ?? null,
+    productTds: input.productTds ?? null,
+    rejectionRate: computeRejectionRate(input.feedTds, input.productTds),
+    productConductivity: input.productConductivity ?? null,
+    waterHardnessPpm: input.waterHardnessPpm ?? null,
+    loopFeedPressure: input.loopFeedPressure ?? null,
+    loopReturnPressure: input.loopReturnPressure ?? null,
+    waterTemperatureC: input.waterTemperatureC ?? null,
+    totalChlorine: input.totalChlorine ?? null,
+    chloramineBreakthrough: input.chloramineBreakthrough ?? false,
+    heatDisinfectionCompleted: input.heatDisinfectionCompleted ?? false,
+    heatPeakTemp: input.heatPeakTemp ?? null,
+    heatHoldMinutes: input.heatHoldMinutes ?? null,
+    chemicalAgentUsed: trimmedOrNull(input.chemicalAgentUsed),
+    residualChemicalTestNegative: input.residualChemicalTestNegative ?? false,
+    endotoxinLevel: input.endotoxinLevel ?? null,
+    colonyCount: input.colonyCount ?? null,
+    correctiveAction: trimmedOrNull(input.correctiveAction),
+    notes: trimmedOrNull(input.notes)
+  }).returning({ id: waterQualityLogs.id });
+  return result[0];
+}
+async function updateWaterQualityLog(id, input) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const updates = {};
+  if (input.tdsIn !== void 0) updates.tdsIn = input.tdsIn ?? null;
+  if (input.tdsOut !== void 0) updates.tdsOut = input.tdsOut ?? null;
+  if (input.chlorineLevel !== void 0) updates.chlorineLevel = input.chlorineLevel ? input.chlorineLevel.trim() || null : null;
+  if (input.hardness !== void 0) updates.hardness = input.hardness ? input.hardness.trim() || null : null;
+  if (input.waterTemp !== void 0) updates.waterTemp = input.waterTemp ? input.waterTemp.trim() || null : null;
+  if (input.technician !== void 0) updates.technician = input.technician.trim();
+  if (input.status !== void 0) updates.status = input.status.trim();
+  await db.update(waterQualityLogs).set(updates).where(eq3(waterQualityLogs.id, id));
+}
+async function deleteWaterQualityLog(id) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(waterQualityLogs).where(eq3(waterQualityLogs.id, id));
+}
+async function listInfectionSurveillance(input) {
+  const db = await getDb();
+  if (!db) return [];
+  if (input?.patientId !== void 0) {
+    return db.select().from(infectionSurveillance).where(eq3(infectionSurveillance.patientId, input.patientId)).orderBy(desc(infectionSurveillance.updatedAt));
+  }
+  return db.select().from(infectionSurveillance).orderBy(desc(infectionSurveillance.updatedAt));
+}
+async function getInfectionSurveillanceByPatientId(patientId) {
+  const db = await getDb();
+  if (!db) return void 0;
+  const rows = await db.select().from(infectionSurveillance).where(eq3(infectionSurveillance.patientId, patientId)).limit(1);
+  return rows[0];
+}
+async function upsertInfectionSurveillance(input) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const existing = await getInfectionSurveillanceByPatientId(input.patientId);
+  if (existing) {
+    await db.update(infectionSurveillance).set({
+      hbsagStatus: input.hbsagStatus?.trim() || existing.hbsagStatus,
+      hcvStatus: input.hcvStatus?.trim() || existing.hcvStatus,
+      hivStatus: input.hivStatus?.trim() || existing.hivStatus,
+      mdrStatus: input.mdrStatus?.trim() || existing.mdrStatus,
+      lastTestedDate: input.lastTestedDate !== void 0 ? input.lastTestedDate ? input.lastTestedDate.trim() || null : null : existing.lastTestedDate,
+      assignedIsolationRoom: input.assignedIsolationRoom !== void 0 ? input.assignedIsolationRoom ? input.assignedIsolationRoom.trim() || null : null : existing.assignedIsolationRoom,
+      updatedAt: /* @__PURE__ */ new Date()
+    }).where(eq3(infectionSurveillance.id, existing.id));
+    return { id: existing.id };
+  }
+  const result = await db.insert(infectionSurveillance).values({
+    patientId: input.patientId.trim(),
+    hbsagStatus: input.hbsagStatus?.trim() || "negative",
+    hcvStatus: input.hcvStatus?.trim() || "negative",
+    hivStatus: input.hivStatus?.trim() || "negative",
+    mdrStatus: input.mdrStatus?.trim() || "negative",
+    lastTestedDate: input.lastTestedDate ? input.lastTestedDate.trim() || null : null,
+    assignedIsolationRoom: input.assignedIsolationRoom ? input.assignedIsolationRoom.trim() || null : null
+  }).returning({ id: infectionSurveillance.id });
+  return result[0];
+}
+async function deleteInfectionSurveillance(id) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(infectionSurveillance).where(eq3(infectionSurveillance.id, id));
+}
+async function listInventorySupplies(input) {
+  const db = await getDb();
+  if (!db) return [];
+  const conditions = [];
+  if (input?.category) conditions.push(eq3(inventorySupplies.category, input.category));
+  if (input?.lowStockOnly) {
+    conditions.push(sql2`${inventorySupplies.currentStock} <= ${inventorySupplies.reorderLevel}`);
+  }
+  if (conditions.length > 0) {
+    return db.select().from(inventorySupplies).where(and(...conditions)).orderBy(inventorySupplies.category, inventorySupplies.itemName);
+  }
+  return db.select().from(inventorySupplies).orderBy(inventorySupplies.category, inventorySupplies.itemName);
+}
+async function getInventorySupplyByItemCode(itemCode) {
+  const db = await getDb();
+  if (!db) return void 0;
+  const rows = await db.select().from(inventorySupplies).where(eq3(inventorySupplies.itemCode, itemCode)).limit(1);
+  return rows[0];
+}
+async function addInventorySupply(input) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const existing = await getInventorySupplyByItemCode(input.itemCode);
+  if (existing) {
+    throw new Error("ITEM_CODE_EXISTS");
+  }
+  const result = await db.insert(inventorySupplies).values({
+    itemCode: input.itemCode.trim(),
+    itemName: input.itemName.trim(),
+    unit: input.unit.trim(),
+    currentStock: input.currentStock ?? 0,
+    reorderLevel: input.reorderLevel ?? 10,
+    category: input.category?.trim() || "general"
+  }).returning({ id: inventorySupplies.id });
+  return result[0];
+}
+async function updateInventorySupply(id, input) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const updates = { updatedAt: /* @__PURE__ */ new Date() };
+  if (input.itemName !== void 0) updates.itemName = input.itemName.trim();
+  if (input.unit !== void 0) updates.unit = input.unit.trim();
+  if (input.currentStock !== void 0) updates.currentStock = input.currentStock;
+  if (input.reorderLevel !== void 0) updates.reorderLevel = input.reorderLevel;
+  if (input.category !== void 0) updates.category = input.category.trim();
+  await db.update(inventorySupplies).set(updates).where(eq3(inventorySupplies.id, id));
+}
+async function adjustInventoryStock(id, delta) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(inventorySupplies).set({
+    currentStock: sql2`GREATEST(0, ${inventorySupplies.currentStock} + ${delta})`,
+    updatedAt: /* @__PURE__ */ new Date()
+  }).where(eq3(inventorySupplies.id, id));
+}
+async function deleteInventorySupply(id) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(inventorySupplies).where(eq3(inventorySupplies.id, id));
+}
+
+// server/_core/trpc.ts
+var t = initTRPC.context().create({
+  transformer: superjson
+});
+var router = t.router;
+var publicProcedure = t.procedure;
+var requireUser = t.middleware(async (opts) => {
+  const { ctx, next } = opts;
+  if (!ctx.user) {
+    throw new TRPCError2({ code: "UNAUTHORIZED", message: UNAUTHED_ERR_MSG });
+  }
+  return next({
+    ctx: {
+      ...ctx,
+      user: ctx.user
+    }
+  });
+});
+var protectedProcedure = t.procedure.use(requireUser);
+var adminProcedure = t.procedure.use(
+  t.middleware(async (opts) => {
+    const { ctx, next } = opts;
+    if (!ctx.user || ctx.user.role !== "admin") {
+      throw new TRPCError2({ code: "FORBIDDEN", message: NOT_ADMIN_ERR_MSG });
+    }
+    return next({
+      ctx: {
+        ...ctx,
+        user: ctx.user
+      }
+    });
+  })
+);
+var staffReadProcedure = t.procedure.use(
+  t.middleware(async (opts) => {
+    const { ctx, next } = opts;
+    const staff = await resolveStaffSession(ctx.req);
+    const oauthUser = ctx.user;
+    if (!staff.fromCookie && !oauthUser) {
+      return next({
+        ctx: { ...ctx, user: null, staff, isStaff: false }
+      });
+    }
+    if (staff.role === "guest" && staff.fromCookie) {
+      return next({
+        ctx: { ...ctx, user: null, staff, isStaff: false }
+      });
+    }
+    if (oauthUser) {
+      return next({
+        ctx: { ...ctx, user: oauthUser, staff, isStaff: true }
+      });
+    }
+    if (staff.role === "nurse" || staff.role === "supervisor" || staff.role === "auditor") {
+      return next({
+        ctx: { ...ctx, user: null, staff, isStaff: true }
+      });
+    }
+    throw new TRPCError2({ code: "UNAUTHORIZED", message: UNAUTHED_ERR_MSG });
+  })
+);
+var clinicalReadProcedure = t.procedure.use(
+  t.middleware(async (opts) => {
+    const { ctx, next } = opts;
+    const staff = await resolveStaffSession(ctx.req);
+    const oauthUser = ctx.user;
+    if (oauthUser) {
+      return next({
+        ctx: { ...ctx, user: oauthUser, staff, isStaff: true }
+      });
+    }
+    if (staff.fromCookie && (staff.role === "nurse" || staff.role === "supervisor" || staff.role === "auditor")) {
+      return next({
+        ctx: { ...ctx, user: null, staff, isStaff: true }
+      });
+    }
+    throw new TRPCError2({ code: "UNAUTHORIZED", message: UNAUTHED_ERR_MSG });
+  })
+);
+var supervisorProcedure = t.procedure.use(
+  t.middleware(async (opts) => {
+    const { ctx, next } = opts;
+    const staff = await resolveStaffSession(ctx.req);
+    const oauthUser = ctx.user;
+    if (oauthUser && oauthUser.role === "admin") {
+      return next({
+        ctx: { ...ctx, user: oauthUser, staff, isStaff: true }
+      });
+    }
+    if (staff.role === "supervisor") {
+      return next({
+        ctx: { ...ctx, user: oauthUser ?? null, staff, isStaff: true }
+      });
+    }
+    throw new TRPCError2({ code: "FORBIDDEN", message: "This action is reserved for the supervisor." });
+  })
+);
+var invalidateBoardAfterWrite = t.middleware(async (opts) => {
+  const result = await opts.next();
+  if (opts.type === "mutation") invalidateBoardCache();
+  return result;
+});
+var staffOrAdminProcedure = t.procedure.use(invalidateBoardAfterWrite).use(
+  t.middleware(async (opts) => {
+    const { ctx, next } = opts;
+    const staff = await resolveStaffSession(ctx.req);
+    const oauthUser = ctx.user;
+    if (staff.role === "guest" && staff.fromCookie) {
+      throw new TRPCError2({ code: "UNAUTHORIZED", message: UNAUTHED_ERR_MSG });
+    }
+    if (oauthUser) {
+      return next({
+        ctx: { ...ctx, user: oauthUser, staff, isStaff: true }
+      });
+    }
+    if (staff.role === "nurse" || staff.role === "supervisor" || staff.role === "auditor") {
+      return next({
+        ctx: { ...ctx, user: null, staff, isStaff: true }
+      });
+    }
+    throw new TRPCError2({ code: "UNAUTHORIZED", message: UNAUTHED_ERR_MSG });
+  })
+);
+
+// server/_core/systemRouter.ts
+var systemRouter = router({
+  health: publicProcedure.input(
+    z.object({
+      timestamp: z.number().min(0, "timestamp cannot be negative")
+    })
+  ).query(() => ({
+    ok: true
+  })),
+  notifyOwner: adminProcedure.input(
+    z.object({
+      title: z.string().min(1, "title is required"),
+      content: z.string().min(1, "content is required")
+    })
+  ).mutation(async ({ input }) => {
+    const delivered = await notifyOwner(input);
+    return {
+      success: delivered
+    };
+  })
+});
 
 // server/errors.ts
 import { TRPCError as TRPCError3 } from "@trpc/server";
@@ -2293,8 +2898,14 @@ var appRouter = router({
   }),
   machines: router({
     /** All machines with their active session (if any). Auto-polling on the
-     *  client provides cross-device real-time sync. */
-    list: publicProcedure.query(() => listMachines()),
+     *  client provides cross-device real-time sync.
+     *
+     *  Open to anonymous viewers (kiosk, guest board) but PHI is masked
+     *  server-side: only a staff session receives the real patientId and
+     *  staff names. Everyone else gets the public ticket code. */
+    list: staffReadProcedure.query(
+      ({ ctx }) => listMachines({ canSeePhi: ctx.isStaff })
+    ),
     /** Rename a machine (staff only). */
     updateLabel: staffOrAdminProcedure.input(
       z2.object({
@@ -2690,24 +3301,26 @@ var appRouter = router({
   waiting: router({
     /** Waiting patients per floor. Public so every staff device sees the same queue,
      *  but guest viewers never receive clinical queue data. */
-    list: publicProcedure.input(z2.object({ floorId: z2.number().int().positive() })).query(async ({ ctx, input }) => {
-      const staff = await resolveStaffSession(ctx.req);
-      if (staff.role === "guest" && staff.fromCookie) return [];
-      return listWaiting({ floorId: input.floorId });
-    }),
+    list: staffReadProcedure.input(z2.object({ floorId: z2.number().int().positive() })).query(
+      ({ ctx, input }) => (
+        // The kiosk shows this queue in a public waiting room, so the rows
+        // stay readable but carry only the ticket code unless the caller
+        // holds a staff session.
+        listWaiting({ floorId: input.floorId }, { canSeePhi: ctx.isStaff })
+      )
+    ),
     /**
      * Cross-board urgent register: urgent-flagged active sessions from every
      * floor plus very-urgent patients still waiting anywhere. Public so all
      * staff devices see the same consolidated register.
      */
-    urgentRegister: publicProcedure.query(async ({ ctx }) => {
-      const staff = await resolveStaffSession(ctx.req);
-      if (staff.role === "guest" && staff.fromCookie) {
+    urgentRegister: staffReadProcedure.query(async ({ ctx }) => {
+      if (!ctx.isStaff) {
         return { urgentSessions: [], veryUrgentWaiting: [] };
       }
       const [sessions2, waiting, floors2] = await Promise.all([
-        listMachines(),
-        listWaitingAll(),
+        listMachines({ canSeePhi: true }),
+        listWaitingAll({ canSeePhi: true }),
         listFloors()
       ]);
       const floorNames = new Map(
@@ -2723,7 +3336,7 @@ var appRouter = router({
           location: r.machine.location,
           floorId: r.machine.floorId,
           floorName: r.machine.floorId ? floorNames.get(r.machine.floorId) ?? null : null,
-          patientId: s.patientId,
+          patientId: s.patientId ?? s.ticket,
           durationMinutes: s.durationMinutes,
           endsAt: s.endsAt,
           isolationTag: s.isolationTag
@@ -2732,7 +3345,7 @@ var appRouter = router({
       const veryUrgentWaiting = waiting.filter((e) => e.priority === "veryUrgent").map((e) => ({
         kind: "waiting",
         waitingId: e.id,
-        patientId: e.patientId,
+        patientId: e.patientId ?? e.ticket,
         floorId: e.floorId,
         floorName: floorNames.get(e.floorId) ?? null,
         priority: e.priority,
@@ -2855,9 +3468,8 @@ var appRouter = router({
       }
     }),
     /** Active sessions on a floor grouped for the "Nurse Patient Assignments" list. */
-    nurseAssignments: publicProcedure.input(z2.object({ floorId: z2.number().int().positive() })).query(async ({ ctx, input }) => {
-      const staff = await resolveStaffSession(ctx.req);
-      if (staff.role === "guest" && staff.fromCookie) return [];
+    nurseAssignments: staffReadProcedure.input(z2.object({ floorId: z2.number().int().positive() })).query(async ({ ctx, input }) => {
+      if (!ctx.isStaff) return [];
       return listNurseAssignments({ floorId: input.floorId });
     })
   }),
@@ -3137,6 +3749,378 @@ var appRouter = router({
       await setStaffSessionCookieSync(ctx.req, ctx.res, null);
       return { success: true };
     })
+  }),
+  /**
+   * Shift Handover Endorsements between dialysis charge nurses.
+   */
+  shiftEndorsements: router({
+    list: clinicalReadProcedure.input(
+      z2.object({
+        floorId: z2.number().int().positive().optional(),
+        date: z2.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional()
+      }).optional()
+    ).query(async ({ ctx, input }) => {
+      if (input?.floorId) {
+        requireFloorAccess(ctx.staff, input.floorId, ctx.user);
+      }
+      return listShiftEndorsements(input);
+    }),
+    byId: clinicalReadProcedure.input(z2.object({ id: z2.number().int().positive() })).query(async ({ ctx, input }) => {
+      const item = await getShiftEndorsementById(input.id);
+      if (!item) throw new TRPCError4({ code: "NOT_FOUND", message: "Shift endorsement not found." });
+      if (item.floorId) requireFloorAccess(ctx.staff, item.floorId, ctx.user);
+      return item;
+    }),
+    create: staffOrAdminProcedure.input(
+      z2.object({
+        shift: z2.string().trim().min(1, "Shift identifier is required").max(32),
+        floorId: z2.number().int().positive(),
+        date: z2.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date format"),
+        incomingNurse: z2.string().trim().min(1, "Incoming nurse is required").max(64),
+        outgoingNurse: z2.string().trim().min(1, "Outgoing nurse is required").max(64),
+        patientNotes: z2.string().trim().max(4e3).nullable().default(null),
+        accessIssues: z2.string().trim().max(4e3).nullable().default(null),
+        equipmentNotes: z2.string().trim().max(4e3).nullable().default(null),
+        floorName: z2.string().trim().max(64).nullable().default(null),
+        situation: z2.string().trim().max(4e3).nullable().default(null),
+        background: z2.string().trim().max(4e3).nullable().default(null),
+        assessment: z2.string().trim().max(4e3).nullable().default(null),
+        recommendations: z2.string().trim().max(4e3).nullable().default(null),
+        censusJson: z2.string().max(4e3).nullable().default(null),
+        checklistJson: z2.string().max(4e3).nullable().default(null),
+        specialWatchJson: z2.string().max(8e3).nullable().default(null),
+        status: z2.enum(["DRAFT", "ENDORSED_AND_LOCKED"]).default("DRAFT")
+      })
+    ).mutation(async ({ ctx, input }) => {
+      requireFloorAccess(ctx.staff, input.floorId, ctx.user);
+      try {
+        const result = await createShiftEndorsement(input);
+        return { success: true, id: result.id };
+      } catch (error) {
+        mapBackendError(error);
+      }
+    }),
+    update: staffOrAdminProcedure.input(
+      z2.object({
+        id: z2.number().int().positive(),
+        shift: z2.string().trim().min(1).max(32).optional(),
+        incomingNurse: z2.string().trim().min(1).max(64).optional(),
+        outgoingNurse: z2.string().trim().min(1).max(64).optional(),
+        patientNotes: z2.string().trim().max(4e3).nullable().optional(),
+        accessIssues: z2.string().trim().max(4e3).nullable().optional(),
+        equipmentNotes: z2.string().trim().max(4e3).nullable().optional(),
+        floorName: z2.string().trim().max(64).nullable().optional(),
+        situation: z2.string().trim().max(4e3).nullable().optional(),
+        background: z2.string().trim().max(4e3).nullable().optional(),
+        assessment: z2.string().trim().max(4e3).nullable().optional(),
+        recommendations: z2.string().trim().max(4e3).nullable().optional(),
+        censusJson: z2.string().max(4e3).nullable().optional(),
+        checklistJson: z2.string().max(4e3).nullable().optional(),
+        specialWatchJson: z2.string().max(8e3).nullable().optional(),
+        status: z2.enum(["DRAFT", "ENDORSED_AND_LOCKED"]).optional()
+      })
+    ).mutation(async ({ ctx, input }) => {
+      const item = await getShiftEndorsementById(input.id);
+      if (!item) throw new TRPCError4({ code: "NOT_FOUND", message: "Shift endorsement not found." });
+      if (item.floorId) requireFloorAccess(ctx.staff, item.floorId, ctx.user);
+      try {
+        const { id, ...updates } = input;
+        await updateShiftEndorsement(id, updates);
+        return { success: true };
+      } catch (error) {
+        mapBackendError(error);
+      }
+    }),
+    remove: staffOrAdminProcedure.input(z2.object({ id: z2.number().int().positive() })).mutation(async ({ ctx, input }) => {
+      const item = await getShiftEndorsementById(input.id);
+      if (!item) throw new TRPCError4({ code: "NOT_FOUND", message: "Shift endorsement not found." });
+      if (item.floorId) requireFloorAccess(ctx.staff, item.floorId, ctx.user);
+      try {
+        await deleteShiftEndorsement(input.id);
+        return { success: true };
+      } catch (error) {
+        mapBackendError(error);
+      }
+    })
+  }),
+  /**
+   * Intra-dialytic session complications and adverse clinical events.
+   */
+  sessionComplications: router({
+    list: staffReadProcedure.input(z2.object({ sessionId: z2.number().int().positive().optional() }).optional()).query(async ({ input }) => listSessionComplications(input)),
+    create: staffOrAdminProcedure.input(
+      z2.object({
+        sessionId: z2.number().int().positive(),
+        complicationType: z2.string().trim().min(1, "Complication type is required").max(64),
+        onsetMinutes: z2.number().int().min(0).max(1440).nullable().default(null),
+        intervention: z2.string().trim().max(2e3).nullable().default(null),
+        resolved: z2.boolean().default(false),
+        machineId: z2.number().int().positive().nullable().default(null),
+        machineLabel: z2.string().trim().max(32).nullable().default(null),
+        floorId: z2.number().int().positive().nullable().default(null),
+        patientId: z2.string().trim().max(64).nullable().default(null),
+        patientDisplayAlias: z2.string().trim().max(64).nullable().default(null),
+        date: z2.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().default(null),
+        timeOfDay: z2.string().trim().max(8).nullable().default(null),
+        nurseName: z2.string().trim().max(96).nullable().default(null),
+        severity: z2.string().trim().max(32).nullable().default(null),
+        preEventBp: z2.string().trim().max(16).nullable().default(null),
+        eventBp: z2.string().trim().max(16).nullable().default(null),
+        heartRate: z2.number().int().min(0).max(300).nullable().default(null),
+        spo2: z2.number().int().min(0).max(100).nullable().default(null),
+        bfr: z2.number().int().min(0).max(1e3).nullable().default(null),
+        ufr: z2.number().int().min(0).max(1e4).nullable().default(null),
+        interventions: z2.array(z2.string().trim().max(200)).max(20).nullable().default(null),
+        salineBolusVolumeMl: z2.number().int().min(0).max(5e3).nullable().default(null),
+        physicianNotified: z2.string().trim().max(96).nullable().default(null),
+        outcome: z2.string().trim().max(64).nullable().default(null),
+        notes: z2.string().trim().max(4e3).nullable().default(null)
+      })
+    ).mutation(async ({ ctx, input }) => {
+      const floorId = await getSessionFloorId(input.sessionId);
+      if (floorId) requireFloorAccess(ctx.staff, floorId, ctx.user);
+      try {
+        const result = await createSessionComplication(input);
+        return { success: true, id: result.id };
+      } catch (error) {
+        mapBackendError(error);
+      }
+    }),
+    update: staffOrAdminProcedure.input(
+      z2.object({
+        id: z2.number().int().positive(),
+        complicationType: z2.string().trim().min(1).max(64).optional(),
+        onsetMinutes: z2.number().int().min(0).max(1440).nullable().optional(),
+        intervention: z2.string().trim().max(2e3).nullable().optional(),
+        resolved: z2.boolean().optional()
+      })
+    ).mutation(async ({ input }) => {
+      try {
+        const { id, ...updates } = input;
+        await updateSessionComplication(id, updates);
+        return { success: true };
+      } catch (error) {
+        mapBackendError(error);
+      }
+    }),
+    remove: staffOrAdminProcedure.input(z2.object({ id: z2.number().int().positive() })).mutation(async ({ input }) => {
+      try {
+        await deleteSessionComplication(input.id);
+        return { success: true };
+      } catch (error) {
+        mapBackendError(error);
+      }
+    })
+  }),
+  /**
+   * Water Treatment & RO quality surveillance logs.
+   */
+  waterQualityLogs: router({
+    list: clinicalReadProcedure.input(
+      z2.object({
+        floorId: z2.number().int().positive().optional(),
+        date: z2.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional()
+      }).optional()
+    ).query(async ({ ctx, input }) => {
+      if (input?.floorId) {
+        requireFloorAccess(ctx.staff, input.floorId, ctx.user);
+      }
+      return listWaterQualityLogs(input);
+    }),
+    byId: clinicalReadProcedure.input(z2.object({ id: z2.number().int().positive() })).query(async ({ ctx, input }) => {
+      const item = await getWaterQualityLogById(input.id);
+      if (!item) throw new TRPCError4({ code: "NOT_FOUND", message: "Water quality log not found." });
+      if (item.floorId) requireFloorAccess(ctx.staff, item.floorId, ctx.user);
+      return item;
+    }),
+    create: staffOrAdminProcedure.input(
+      z2.object({
+        date: z2.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date format"),
+        floorId: z2.number().int().positive(),
+        tdsIn: z2.number().int().nullable().default(null),
+        tdsOut: z2.number().int().nullable().default(null),
+        chlorineLevel: z2.string().trim().max(32).nullable().default(null),
+        hardness: z2.string().trim().max(32).nullable().default(null),
+        waterTemp: z2.string().trim().max(32).nullable().default(null),
+        technician: z2.string().trim().min(1, "Technician name is required").max(64),
+        status: z2.string().trim().max(32).default("pass"),
+        timeOfDay: z2.string().trim().max(8).nullable().default(null),
+        shift: z2.string().trim().max(48).nullable().default(null),
+        inspectorRole: z2.string().trim().max(32).nullable().default(null),
+        feedTds: z2.number().min(0).max(1e5).nullable().default(null),
+        productTds: z2.number().min(0).max(1e5).nullable().default(null),
+        productConductivity: z2.number().min(0).max(1e5).nullable().default(null),
+        waterHardnessPpm: z2.number().min(0).max(1e4).nullable().default(null),
+        loopFeedPressure: z2.number().min(0).max(500).nullable().default(null),
+        loopReturnPressure: z2.number().min(0).max(500).nullable().default(null),
+        waterTemperatureC: z2.number().min(0).max(120).nullable().default(null),
+        totalChlorine: z2.number().min(0).max(100).nullable().default(null),
+        chloramineBreakthrough: z2.boolean().default(false),
+        heatDisinfectionCompleted: z2.boolean().default(false),
+        heatPeakTemp: z2.number().min(0).max(150).nullable().default(null),
+        heatHoldMinutes: z2.number().int().min(0).max(600).nullable().default(null),
+        chemicalAgentUsed: z2.string().trim().max(48).nullable().default(null),
+        residualChemicalTestNegative: z2.boolean().default(false),
+        endotoxinLevel: z2.number().min(0).max(1e3).nullable().default(null),
+        colonyCount: z2.number().int().min(0).max(1e6).nullable().default(null),
+        correctiveAction: z2.string().trim().max(4e3).nullable().default(null),
+        notes: z2.string().trim().max(4e3).nullable().default(null)
+      })
+    ).mutation(async ({ ctx, input }) => {
+      requireFloorAccess(ctx.staff, input.floorId, ctx.user);
+      try {
+        const result = await createWaterQualityLog(input);
+        return { success: true, id: result.id };
+      } catch (error) {
+        mapBackendError(error);
+      }
+    }),
+    update: staffOrAdminProcedure.input(
+      z2.object({
+        id: z2.number().int().positive(),
+        tdsIn: z2.number().int().nullable().optional(),
+        tdsOut: z2.number().int().nullable().optional(),
+        chlorineLevel: z2.string().trim().max(32).nullable().optional(),
+        hardness: z2.string().trim().max(32).nullable().optional(),
+        waterTemp: z2.string().trim().max(32).nullable().optional(),
+        technician: z2.string().trim().min(1).max(64).optional(),
+        status: z2.string().trim().max(32).optional()
+      })
+    ).mutation(async ({ ctx, input }) => {
+      const item = await getWaterQualityLogById(input.id);
+      if (!item) throw new TRPCError4({ code: "NOT_FOUND", message: "Water quality log not found." });
+      if (item.floorId) requireFloorAccess(ctx.staff, item.floorId, ctx.user);
+      try {
+        const { id, ...updates } = input;
+        await updateWaterQualityLog(id, updates);
+        return { success: true };
+      } catch (error) {
+        mapBackendError(error);
+      }
+    }),
+    remove: staffOrAdminProcedure.input(z2.object({ id: z2.number().int().positive() })).mutation(async ({ ctx, input }) => {
+      const item = await getWaterQualityLogById(input.id);
+      if (!item) throw new TRPCError4({ code: "NOT_FOUND", message: "Water quality log not found." });
+      if (item.floorId) requireFloorAccess(ctx.staff, item.floorId, ctx.user);
+      try {
+        await deleteWaterQualityLog(input.id);
+        return { success: true };
+      } catch (error) {
+        mapBackendError(error);
+      }
+    })
+  }),
+  /**
+   * Infection surveillance and bloodborne viral hepatitis/HIV/MDR screening.
+   */
+  infectionSurveillance: router({
+    list: staffReadProcedure.input(z2.object({ patientId: z2.string().trim().optional() }).optional()).query(async ({ input }) => listInfectionSurveillance(input)),
+    byPatientId: staffReadProcedure.input(z2.object({ patientId: z2.string().trim().min(1) })).query(async ({ input }) => {
+      const row = await getInfectionSurveillanceByPatientId(input.patientId);
+      if (!row) throw new TRPCError4({ code: "NOT_FOUND", message: "Infection surveillance record not found." });
+      return row;
+    }),
+    upsert: staffOrAdminProcedure.input(
+      z2.object({
+        patientId: z2.string().trim().min(1, "Patient ID is required").max(64),
+        hbsagStatus: z2.string().trim().max(32).default("negative"),
+        hcvStatus: z2.string().trim().max(32).default("negative"),
+        hivStatus: z2.string().trim().max(32).default("negative"),
+        mdrStatus: z2.string().trim().max(32).default("negative"),
+        lastTestedDate: z2.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date format").nullable().optional(),
+        assignedIsolationRoom: z2.string().trim().max(64).nullable().optional()
+      })
+    ).mutation(async ({ input }) => {
+      try {
+        const result = await upsertInfectionSurveillance(input);
+        return { success: true, id: result.id };
+      } catch (error) {
+        mapBackendError(error);
+      }
+    }),
+    remove: staffOrAdminProcedure.input(z2.object({ id: z2.number().int().positive() })).mutation(async ({ input }) => {
+      try {
+        await deleteInfectionSurveillance(input.id);
+        return { success: true };
+      } catch (error) {
+        mapBackendError(error);
+      }
+    })
+  }),
+  /**
+   * Hemodialysis medical supplies and consumable inventory.
+   */
+  inventorySupplies: router({
+    list: staffReadProcedure.input(
+      z2.object({
+        category: z2.string().trim().optional(),
+        lowStockOnly: z2.boolean().optional()
+      }).optional()
+    ).query(async ({ input }) => listInventorySupplies(input)),
+    byItemCode: staffReadProcedure.input(z2.object({ itemCode: z2.string().trim().min(1) })).query(async ({ input }) => {
+      const item = await getInventorySupplyByItemCode(input.itemCode);
+      if (!item) throw new TRPCError4({ code: "NOT_FOUND", message: "Item not found in inventory." });
+      return item;
+    }),
+    add: staffOrAdminProcedure.input(
+      z2.object({
+        itemCode: z2.string().trim().min(1, "Item code is required").max(64),
+        itemName: z2.string().trim().min(1, "Item name is required").max(128),
+        unit: z2.string().trim().min(1, "Unit is required").max(32),
+        currentStock: z2.number().int().min(0).default(0),
+        reorderLevel: z2.number().int().min(0).default(10),
+        category: z2.string().trim().max(64).default("general")
+      })
+    ).mutation(async ({ input }) => {
+      try {
+        const result = await addInventorySupply(input);
+        return { success: true, id: result.id };
+      } catch (error) {
+        if (error?.message === "ITEM_CODE_EXISTS") {
+          throw new TRPCError4({ code: "CONFLICT", message: "An item with this item code already exists." });
+        }
+        mapBackendError(error);
+      }
+    }),
+    update: staffOrAdminProcedure.input(
+      z2.object({
+        id: z2.number().int().positive(),
+        itemName: z2.string().trim().min(1).max(128).optional(),
+        unit: z2.string().trim().min(1).max(32).optional(),
+        currentStock: z2.number().int().min(0).optional(),
+        reorderLevel: z2.number().int().min(0).optional(),
+        category: z2.string().trim().max(64).optional()
+      })
+    ).mutation(async ({ input }) => {
+      try {
+        const { id, ...updates } = input;
+        await updateInventorySupply(id, updates);
+        return { success: true };
+      } catch (error) {
+        mapBackendError(error);
+      }
+    }),
+    adjustStock: staffOrAdminProcedure.input(
+      z2.object({
+        id: z2.number().int().positive(),
+        delta: z2.number().int()
+      })
+    ).mutation(async ({ input }) => {
+      try {
+        await adjustInventoryStock(input.id, input.delta);
+        return { success: true };
+      } catch (error) {
+        mapBackendError(error);
+      }
+    }),
+    remove: staffOrAdminProcedure.input(z2.object({ id: z2.number().int().positive() })).mutation(async ({ input }) => {
+      try {
+        await deleteInventorySupply(input.id);
+        return { success: true };
+      } catch (error) {
+        mapBackendError(error);
+      }
+    })
   })
 });
 
@@ -3181,10 +4165,8 @@ async function handler(req, res) {
     return app(req, res);
   } catch (error) {
     console.error("[Vercel Serverless Error]:", error);
-    res.status(500).json({
-      error: error?.message || "Internal Server Error",
-      stack: error?.stack
-    });
+    appPromise = null;
+    res.status(500).json({ error: "Internal Server Error" });
   }
 }
 export {
