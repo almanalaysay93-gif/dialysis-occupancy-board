@@ -1,3 +1,5 @@
+// drizzle-kit is a standalone CLI: nothing else loads .env for it.
+import "dotenv/config";
 import { defineConfig } from "drizzle-kit";
 import { requireDatabaseUrl } from "./server/_core/database-url";
 
