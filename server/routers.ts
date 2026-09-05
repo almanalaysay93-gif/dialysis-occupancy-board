@@ -824,6 +824,12 @@ export const appRouter = router({
             calledBy: ctx.user?.name ?? ctx.user?.email ?? ctx.staff?.displayName ?? "staff",
           });
         } catch (error) {
+          if ((error as Error)?.message === "WAITING_CALL_UNAVAILABLE") {
+            throw new TRPCError({
+              code: "PRECONDITION_FAILED",
+              message: "Calling patients in is not enabled on this database yet.",
+            });
+          }
           mapBackendError(error);
         }
         return { success: true } as const;

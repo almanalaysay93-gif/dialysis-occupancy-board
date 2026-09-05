@@ -2115,20 +2115,55 @@ function toWaitingView(r, viewer = { canSeePhi: false }) {
     assignedNurse: viewer.canSeePhi ? r.assignedNurse : null,
     addedBy: viewer.canSeePhi ? r.addedBy : null,
     joinedAt: r.joinedAt,
-    calledAt: r.calledAt,
-    calledBy: viewer.canSeePhi ? r.calledBy : null
+    calledAt: r.calledAt ?? null,
+    calledBy: viewer.canSeePhi ? r.calledBy ?? null : null
   };
 }
+var waitingCallSupport = null;
+async function waitingCallColumnsReady() {
+  const db = await getDb();
+  if (!db) return false;
+  waitingCallSupport ??= (async () => {
+    const probe = sql3`select 1 from information_schema.columns
+      where table_name = 'waiting_list' and column_name = 'calledAt' limit 1`;
+    if ((await db.execute(probe)).rows.length > 0) return true;
+    try {
+      await db.execute(sql3`alter table "waiting_list" add column if not exists "calledAt" timestamp`);
+      await db.execute(sql3`alter table "waiting_list" add column if not exists "calledBy" varchar(64)`);
+      return true;
+    } catch {
+      return false;
+    }
+  })();
+  return waitingCallSupport;
+}
+var waitingBaseColumns = {
+  id: waitingList.id,
+  patientId: waitingList.patientId,
+  floorId: waitingList.floorId,
+  priority: waitingList.priority,
+  durationMinutes: waitingList.durationMinutes,
+  isolationTag: waitingList.isolationTag,
+  assignedNurse: waitingList.assignedNurse,
+  addedBy: waitingList.addedBy,
+  joinedAt: waitingList.joinedAt,
+  admittedAt: waitingList.admittedAt,
+  status: waitingList.status,
+  createdAt: waitingList.createdAt
+};
+var waitingCallColumns = { calledAt: waitingList.calledAt, calledBy: waitingList.calledBy };
 async function listWaitingAll(viewer = { canSeePhi: false }) {
   const db = await getDb();
   if (!db) return [];
-  const rows = await db.select().from(waitingList).where(eq4(waitingList.status, "waiting")).orderBy(desc2(waitingList.priority), waitingList.joinedAt, waitingList.id);
+  const columns = await waitingCallColumnsReady() ? { ...waitingBaseColumns, ...waitingCallColumns } : waitingBaseColumns;
+  const rows = await db.select(columns).from(waitingList).where(eq4(waitingList.status, "waiting")).orderBy(desc2(waitingList.priority), waitingList.joinedAt, waitingList.id);
   return rows.map((r) => toWaitingView(r, viewer));
 }
 async function listWaiting(input, viewer = { canSeePhi: false }) {
   const db = await getDb();
   if (!db) return [];
-  const rows = await db.select().from(waitingList).where(and2(eq4(waitingList.floorId, input.floorId), eq4(waitingList.status, "waiting"))).orderBy(desc2(waitingList.priority), waitingList.joinedAt, waitingList.id);
+  const columns = await waitingCallColumnsReady() ? { ...waitingBaseColumns, ...waitingCallColumns } : waitingBaseColumns;
+  const rows = await db.select(columns).from(waitingList).where(and2(eq4(waitingList.floorId, input.floorId), eq4(waitingList.status, "waiting"))).orderBy(desc2(waitingList.priority), waitingList.joinedAt, waitingList.id);
   return rows.map((r) => toWaitingView(r, viewer));
 }
 async function addWaiting(input) {
@@ -2166,6 +2201,7 @@ async function markWaitingUrgent(input) {
 async function setWaitingCall(input) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
+  if (!await waitingCallColumnsReady()) throw new Error("WAITING_CALL_UNAVAILABLE");
   await db.update(waitingList).set(
     input.called ? { calledAt: /* @__PURE__ */ new Date(), calledBy: input.calledBy.slice(0, 64) } : { calledAt: null, calledBy: null }
   ).where(
@@ -3994,6 +4030,12 @@ var appRouter = router({
           calledBy: ctx.user?.name ?? ctx.user?.email ?? ctx.staff?.displayName ?? "staff"
         });
       } catch (error) {
+        if (error?.message === "WAITING_CALL_UNAVAILABLE") {
+          throw new TRPCError4({
+            code: "PRECONDITION_FAILED",
+            message: "Calling patients in is not enabled on this database yet."
+          });
+        }
         mapBackendError(error);
       }
       return { success: true };

@@ -1098,8 +1098,11 @@ export type WaitingEntryView = {
  * PHI gate: the kiosk shows the queue to a public waiting room, so a viewer
  * without staff access gets the ticket code and nothing that names a person.
  */
+type WaitingRow = Omit<typeof waitingList.$inferSelect, "calledAt" | "calledBy"> &
+  Partial<Pick<typeof waitingList.$inferSelect, "calledAt" | "calledBy">>;
+
 function toWaitingView(
-  r: typeof waitingList.$inferSelect,
+  r: WaitingRow,
   viewer: BoardViewer = { canSeePhi: false },
 ): WaitingEntryView {
   return {
@@ -1113,10 +1116,59 @@ function toWaitingView(
     assignedNurse: viewer.canSeePhi ? r.assignedNurse : null,
     addedBy: viewer.canSeePhi ? r.addedBy : null,
     joinedAt: r.joinedAt,
-    calledAt: r.calledAt,
-    calledBy: viewer.canSeePhi ? r.calledBy : null,
+    calledAt: r.calledAt ?? null,
+    calledBy: viewer.canSeePhi ? (r.calledBy ?? null) : null,
   };
 }
+
+/**
+ * The call columns arrive with drizzle/manual/0005_waiting_called.sql, which is
+ * applied by hand. A deploy can reach the database before that runs, and a
+ * queue read must never fail because of it. Probe once per process, add the
+ * columns when the database role is allowed to, and otherwise serve the queue
+ * without call state.
+ */
+let waitingCallSupport: Promise<boolean> | null = null;
+
+async function waitingCallColumnsReady(): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  waitingCallSupport ??= (async () => {
+    const probe = sql`select 1 from information_schema.columns
+      where table_name = 'waiting_list' and column_name = 'calledAt' limit 1`;
+    if ((await db.execute(probe)).rows.length > 0) return true;
+    try {
+      await db.execute(sql`alter table "waiting_list" add column if not exists "calledAt" timestamp`);
+      await db.execute(sql`alter table "waiting_list" add column if not exists "calledBy" varchar(64)`);
+      return true;
+    } catch {
+      return false;
+    }
+  })();
+  return waitingCallSupport;
+}
+
+/** Only for tests, which reuse one module instance across cases. */
+export function resetWaitingCallSupport(): void {
+  waitingCallSupport = null;
+}
+
+const waitingBaseColumns = {
+  id: waitingList.id,
+  patientId: waitingList.patientId,
+  floorId: waitingList.floorId,
+  priority: waitingList.priority,
+  durationMinutes: waitingList.durationMinutes,
+  isolationTag: waitingList.isolationTag,
+  assignedNurse: waitingList.assignedNurse,
+  addedBy: waitingList.addedBy,
+  joinedAt: waitingList.joinedAt,
+  admittedAt: waitingList.admittedAt,
+  status: waitingList.status,
+  createdAt: waitingList.createdAt,
+};
+
+const waitingCallColumns = { calledAt: waitingList.calledAt, calledBy: waitingList.calledBy };
 
 /** Every still-waiting patient across all floors (for the cross-board urgent register). */
 export async function listWaitingAll(
@@ -1125,8 +1177,12 @@ export async function listWaitingAll(
   const db = await getDb();
   if (!db) return [];
 
+  const columns = (await waitingCallColumnsReady())
+    ? { ...waitingBaseColumns, ...waitingCallColumns }
+    : waitingBaseColumns;
+
   const rows = await db
-    .select()
+    .select(columns)
     .from(waitingList)
     .where(eq(waitingList.status, "waiting"))
     .orderBy(desc(waitingList.priority), waitingList.joinedAt, waitingList.id);
@@ -1141,8 +1197,12 @@ export async function listWaiting(
   const db = await getDb();
   if (!db) return [];
 
+  const columns = (await waitingCallColumnsReady())
+    ? { ...waitingBaseColumns, ...waitingCallColumns }
+    : waitingBaseColumns;
+
   const rows = await db
-    .select()
+    .select(columns)
     .from(waitingList)
     .where(and(eq(waitingList.floorId, input.floorId), eq(waitingList.status, "waiting")))
     .orderBy(desc(waitingList.priority), waitingList.joinedAt, waitingList.id);
@@ -1222,6 +1282,7 @@ export async function setWaitingCall(input: {
 }) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
+  if (!(await waitingCallColumnsReady())) throw new Error("WAITING_CALL_UNAVAILABLE");
 
   await db
     .update(waitingList)
