@@ -22,7 +22,8 @@ export function useCanWrite() {
 
   const role = staff?.role ?? null;
   const isBoardStaff = role === "nurse" || role === "supervisor" || role === "auditor";
-  const isGuestMode = role === "guest";
+  const isPatientMode = role === "patient";
+  const isGuestMode = role === "guest" || isPatientMode;
   // Auth state has resolved — until the staff.me query settles, identity is
   // unknown and clinical panels must stay hidden to avoid a flash of exposure
   // for guest viewers (especially on slow/mobile connections).
@@ -31,6 +32,7 @@ export function useCanWrite() {
   return {
     canWrite: isBoardStaff || (isAuthenticated && !isGuestMode),
     isGuest: isGuestMode,
+    isPatient: isPatientMode,
     /** Clinical panels (Waiting List, Nurse Assignments, Narrative Report)
      *  are staff-only. They must stay hidden in every one of these states:
      *  - the identity query has not settled yet (flash protection), or

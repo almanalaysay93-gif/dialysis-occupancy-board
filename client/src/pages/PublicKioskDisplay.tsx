@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useRef, useCallback } from "react";
+import { Link, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 import {
@@ -9,10 +10,13 @@ import {
   Clock,
   Droplets,
   Layers,
+  LogOut,
   Maximize,
   Minimize,
   Moon,
   Sun,
+  Ticket,
+  User,
   Volume2,
   VolumeX,
   Sparkles,
@@ -222,6 +226,49 @@ export default function PublicKioskDisplay() {
     { floorId: activeFloorIdNum },
     { refetchInterval: 10000 }
   );
+
+  const [, navigate] = useLocation();
+  const utils = trpc.useUtils();
+  const staffMe = trpc.staff.me.useQuery(undefined, {
+    retry: false,
+    staleTime: 15_000,
+  });
+  const staff = staffMe.data;
+  const isPatient = staff?.role === "patient";
+  const userTicket = isPatient && staff.username !== "patient.guest" ? staff.username.toUpperCase() : null;
+
+  const logoutMut = trpc.staff.logout.useMutation({
+    onSuccess: () => {
+      utils.staff.me.setData(undefined, {
+        accountId: 0,
+        username: "guest",
+        displayName: "Guest",
+        role: "guest",
+        assignedFloorId: null,
+        fromCookie: true,
+      });
+      navigate("/patient-login");
+    },
+  });
+
+  const myActiveSession = useMemo(() => {
+    if (!userTicket || !machines) return null;
+    const found = machines.find(m => m.session && m.session.ticket.toUpperCase() === userTicket);
+    if (!found || !found.session) return null;
+    const floorObj = floors?.find(f => f.id === found.machine.floorId);
+    return {
+      bay: found.machine.label,
+      floorName: floorObj?.name ?? "Dialysis Bay",
+      durationMinutes: found.session.durationMinutes,
+      startedAt: found.session.startedAt,
+    };
+  }, [userTicket, machines, floors]);
+
+  const myWaitingQueuePosition = useMemo(() => {
+    if (!userTicket || !waitingList) return null;
+    const idx = waitingList.findIndex(w => w.ticket?.toUpperCase() === userTicket);
+    return idx >= 0 ? idx + 1 : null;
+  }, [userTicket, waitingList]);
 
   // Handle Fullscreen toggle
   const toggleFullscreen = () => {
@@ -457,9 +504,70 @@ export default function PublicKioskDisplay() {
             >
               {isFullscreen ? <Minimize className="h-5 w-5" /> : <Maximize className="h-5 w-5" />}
             </button>
+
+            {/* Patient Session Indicator / Sign In */}
+            {isPatient ? (
+              <div className="flex items-center gap-1.5 pl-2 border-l border-white/20">
+                <div className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-xs font-mono">
+                  <Ticket className="h-3.5 w-3.5" />
+                  <span>{staff?.username || "Patient"}</span>
+                </div>
+                <button
+                  onClick={() => logoutMut.mutate(undefined, { onSuccess: () => navigate("/patient-login") })}
+                  title="Sign Out of Patient Kiosk"
+                  className="px-2 py-1 text-xs rounded-md bg-red-500/20 text-red-300 border border-red-500/30 hover:bg-red-500/30 flex items-center gap-1 transition-colors"
+                >
+                  <LogOut className="h-3 w-3" />
+                  <span className="hidden sm:inline">Exit</span>
+                </button>
+              </div>
+            ) : (
+              <Link href="/patient-login">
+                <button
+                  title="Patient / Family Sign In"
+                  className="px-2.5 py-1.5 text-xs font-medium rounded-md bg-white/10 hover:bg-white/20 text-white transition-colors flex items-center gap-1.5 border border-white/20 ml-1"
+                >
+                  <User className="h-3.5 w-3.5 text-cyan-300" />
+                  <span className="hidden sm:inline">Patient Sign In</span>
+                </button>
+              </Link>
+            )}
           </div>
         </div>
       </header>
+
+      {/* Personalized Patient Banner when logged in */}
+      {isPatient && myActiveSession && (
+        <div className="w-full bg-gradient-to-r from-emerald-950 via-teal-900 to-cyan-950 border-b border-teal-500/40 px-6 py-3 flex flex-wrap items-center justify-between gap-3 text-emerald-100 text-sm shadow-md">
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-3 w-3 rounded-full bg-emerald-400 animate-ping" />
+            <span className="font-bold text-white uppercase tracking-wider text-xs bg-emerald-700/80 px-2 py-0.5 rounded">
+              Your Session
+            </span>
+            <span>Assigned to Machine <strong className="text-white text-base">{myActiveSession.bay}</strong> ({myActiveSession.floorName})</span>
+          </div>
+          <div className="flex items-center gap-2 text-xs font-mono bg-black/40 px-3 py-1 rounded-full border border-teal-400/30">
+            <Ticket className="h-3.5 w-3.5 text-teal-300" />
+            <span>Ticket {staff?.username}</span>
+          </div>
+        </div>
+      )}
+
+      {isPatient && myWaitingQueuePosition !== null && !myActiveSession && (
+        <div className="w-full bg-gradient-to-r from-amber-950 via-amber-900 to-orange-950 border-b border-amber-500/40 px-6 py-3 flex flex-wrap items-center justify-between gap-3 text-amber-100 text-sm shadow-md">
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-3 w-3 rounded-full bg-amber-400 animate-ping" />
+            <span className="font-bold text-white uppercase tracking-wider text-xs bg-amber-700/80 px-2 py-0.5 rounded">
+              Your Queue Status
+            </span>
+            <span>You are <strong className="text-white text-base">#{myWaitingQueuePosition}</strong> in the waiting list. Please wait in the lounge until called.</span>
+          </div>
+          <div className="flex items-center gap-2 text-xs font-mono bg-black/40 px-3 py-1 rounded-full border border-amber-400/30">
+            <Ticket className="h-3.5 w-3.5 text-amber-300" />
+            <span>Ticket {staff?.username}</span>
+          </div>
+        </div>
+      )}
 
       {/* Prominent Real-Time Callout Banner (Appears when ticket is called!) */}
       {activeCallout && (

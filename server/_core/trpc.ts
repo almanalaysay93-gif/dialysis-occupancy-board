@@ -64,7 +64,7 @@ export const staffReadProcedure = t.procedure.use(
         ctx: { ...ctx, user: null, staff, isStaff: false as const },
       });
     }
-    if (staff.role === "guest" && staff.fromCookie) {
+    if ((staff.role === "guest" || staff.role === "patient") && staff.fromCookie) {
       return next({
         ctx: { ...ctx, user: null, staff, isStaff: false as const },
       });
@@ -163,7 +163,7 @@ export const staffOrAdminProcedure = t.procedure.use(invalidateBoardAfterWrite).
     // cookie) locks out all writing even when an OAuth user is also signed in
     // — the UI enforces the same rule. A request with no staff cookie at all
     // is not "guest mode" and OAuth users keep access.
-    if (staff.role === "guest" && staff.fromCookie) {
+    if ((staff.role === "guest" || staff.role === "patient") && staff.fromCookie) {
       throw new TRPCError({ code: "UNAUTHORIZED", message: UNAUTHED_ERR_MSG });
     }
     // OAuth admin/user users (e.g. the owner's Google login) keep full access.

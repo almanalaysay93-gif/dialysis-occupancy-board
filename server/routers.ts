@@ -24,7 +24,8 @@ import {
   STAFF_COOKIE_NAME,
   type StaffSession,
 } from "./staffAuth";
-import { staffAccounts } from "../drizzle/schema";
+import { staffAccounts, sessions, machines, waitingList } from "../drizzle/schema";
+import { patientTicket } from "./patient-ticket";
 import { getDb } from "./db";
 import { mapBackendError } from "./errors";
 import { eq } from "drizzle-orm";
@@ -1140,6 +1141,122 @@ export const appRouter = router({
         1
       );
       return { success: true } as const;
+    }),
+    /**
+     * Patient login by ticket number or patient ID.
+     * Issues a role="patient" session restricted exclusively to the kiosk display.
+     */
+    patientLogin: publicProcedure
+      .input(
+        z.object({
+          ticketOrId: z.string().trim().min(1).max(64),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const raw = input.ticketOrId.trim();
+        let ticket = raw.toUpperCase();
+        let patientId = raw;
+        let activeBay: string | null = null;
+        let activeStatus: "in_treatment" | "waiting" | "unregistered" = "unregistered";
+
+        const db = await getDb();
+        if (db) {
+          const activeSessions = await db
+            .select({
+              machineId: sessions.machineId,
+              patientId: sessions.patientId,
+            })
+            .from(sessions)
+            .where(eq(sessions.status, "active"));
+
+          const match = activeSessions.find(
+            s =>
+              s.patientId.toLowerCase() === raw.toLowerCase() ||
+              patientTicket(s.patientId).toLowerCase() === raw.toLowerCase()
+          );
+
+          if (match) {
+            activeStatus = "in_treatment";
+            ticket = patientTicket(match.patientId);
+            patientId = match.patientId;
+            const m = await db
+              .select({ label: machines.label })
+              .from(machines)
+              .where(eq(machines.id, match.machineId))
+              .limit(1);
+            if (m[0]) activeBay = m[0].label;
+          } else {
+            const waiting = await db
+              .select({ id: waitingList.id, patientId: waitingList.patientId })
+              .from(waitingList)
+              .where(eq(waitingList.status, "waiting"));
+
+            const waitMatch = waiting.find(
+              w =>
+                w.patientId.toLowerCase() === raw.toLowerCase() ||
+                patientTicket(w.patientId).toLowerCase() === raw.toLowerCase()
+            );
+
+            if (waitMatch) {
+              activeStatus = "waiting";
+              ticket = patientTicket(waitMatch.patientId);
+              patientId = waitMatch.patientId;
+            } else {
+              if (/^tk-\d+$/i.test(raw)) {
+                ticket = raw.toUpperCase();
+              } else {
+                ticket = patientTicket(raw);
+              }
+            }
+          }
+        } else {
+          if (/^tk-\d+$/i.test(raw)) {
+            ticket = raw.toUpperCase();
+          } else {
+            ticket = patientTicket(raw);
+          }
+        }
+
+        const displayName = `Patient ${ticket}`;
+        await setStaffSessionCookieSync(
+          ctx.req,
+          ctx.res,
+          {
+            accountId: 0,
+            username: ticket,
+            displayName,
+            role: "patient",
+            assignedFloorId: null,
+          },
+          1
+        );
+
+        return {
+          success: true,
+          displayName,
+          role: "patient" as const,
+          ticket,
+          activeBay,
+          activeStatus,
+        };
+      }),
+    /**
+     * Patient guest mode: allows entering the kiosk without entering a specific ticket slip.
+     */
+    patientGuest: publicProcedure.mutation(async ({ ctx }) => {
+      await setStaffSessionCookieSync(
+        ctx.req,
+        ctx.res,
+        {
+          accountId: 0,
+          username: "patient.guest",
+          displayName: "Lounge Patient",
+          role: "patient",
+          assignedFloorId: null,
+        },
+        1
+      );
+      return { success: true, role: "patient" as const };
     }),
     login: publicProcedure
       .input(

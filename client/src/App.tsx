@@ -21,6 +21,7 @@ const EndOfDayReport = lazy(() => import("./pages/EndOfDayReport"));
 const PublicKioskDisplay = lazy(() => import("./pages/PublicKioskDisplay"));
 const ShiftEndorsementPage = lazy(() => import("./pages/ShiftEndorsementPage"));
 const WaterQualityQCPage = lazy(() => import("./pages/WaterQualityQCPage"));
+const PatientLogin = lazy(() => import("./pages/PatientLogin"));
 
 function PageLoader() {
   return (
@@ -33,7 +34,7 @@ function PageLoader() {
 
 /**
  * Clinical registries are staff-only. Hiding the buttons is not enough — a
- * guest who types the URL is sent back to the board.
+ * guest or patient who types the URL is redirected to their permitted view.
  */
 function ClinicalRoute({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
@@ -42,6 +43,7 @@ function ClinicalRoute({ children }: { children: React.ReactNode }) {
     staleTime: 15_000,
   });
   if (isLoading) return <PageLoader />;
+  if (staff?.role === "patient") return <Redirect to="/kiosk" />;
   if (!user && staff?.role === "guest") return <Redirect to="/" />;
   return <>{children}</>;
 }
@@ -67,6 +69,10 @@ function Router() {
         <Route path={"/backup"} component={BackupRepair} />
         <Route path={"/urgent"} component={Urgent} />
         <Route path={"/staff-login"} component={StaffLogin} />
+        <Route path={"/patient-login"} component={PatientLogin} />
+        <Route path={"/patient"}>
+          <Redirect to="/patient-login" />
+        </Route>
         <Route path={"/report"} component={EndOfDayReport} />
         <Route path={"/floor/:id"}>
           <DashboardLayout>

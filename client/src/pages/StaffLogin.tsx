@@ -8,7 +8,7 @@ import { ScrollReveal } from "@/components/ScrollReveal";
 import { startLogin } from "@/const";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
-import { Activity, Eye, EyeOff, ShieldCheck } from "lucide-react";
+import { Activity, Eye, EyeOff, ShieldCheck, Tv } from "lucide-react";
 
 type Mode = "guest" | "staff";
 
@@ -174,6 +174,17 @@ export default function StaffLogin() {
                 >
                   <span>Nurse / Supervisor Sign In</span>
                   <ShieldCheck className="w-4 h-4 opacity-70" />
+                </Button>
+                <Button
+                  onClick={() => navigate("/patient-login")}
+                  variant="outline"
+                  className="w-full justify-between border-[#2E9A9B]/40 bg-[#2E9A9B]/10 text-[#1B6E6F] hover:bg-[#2E9A9B]/20 h-11"
+                >
+                  <span className="flex items-center gap-1.5 font-medium">
+                    <Tv className="w-4 h-4" />
+                    Patient / Family Sign In
+                  </span>
+                  <span className="text-xs opacity-80">Lounge Kiosk only</span>
                 </Button>
               </CardContent>
               <CardFooter className="flex-col gap-3 border-t border-[#1F2A52]/10 pt-4">

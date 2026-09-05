@@ -1071,7 +1071,7 @@ async function verifyStaffSession(cookieValue) {
     const rec = payload;
     const staff = rec.staff;
     const tokenVersion = rec.tokenVersion;
-    if (!staff || typeof staff.accountId !== "number" || typeof staff.username !== "string" || typeof staff.displayName !== "string" || !["nurse", "supervisor", "guest", "auditor"].includes(String(staff.role))) {
+    if (!staff || typeof staff.accountId !== "number" || typeof staff.username !== "string" || typeof staff.displayName !== "string" || !["nurse", "supervisor", "guest", "auditor", "patient"].includes(String(staff.role))) {
       return null;
     }
     const isGuestJwt = String(staff.role) === "guest";
@@ -1081,6 +1081,16 @@ async function verifyStaffSession(cookieValue) {
         username: "guest",
         displayName: "Guest",
         role: "guest",
+        assignedFloorId: null
+      };
+    }
+    const isPatientJwt = String(staff.role) === "patient";
+    if (isPatientJwt) {
+      return {
+        accountId: 0,
+        username: String(staff.username || "patient"),
+        displayName: String(staff.displayName || "Patient"),
+        role: "patient",
         assignedFloorId: null
       };
     }
@@ -1123,7 +1133,7 @@ async function setStaffSessionCookieSync(req, res, staff, tokenVersion) {
     res.cookie(STAFF_COOKIE_NAME, "", { ...cookieOptions, maxAge: -1 });
     return;
   }
-  if (staff.role !== "nurse" && staff.role !== "supervisor" && staff.role !== "guest" && staff.role !== "auditor") return;
+  if (staff.role !== "nurse" && staff.role !== "supervisor" && staff.role !== "guest" && staff.role !== "auditor" && staff.role !== "patient") return;
   const token = await createStaffSessionToken(
     {
       accountId: staff.accountId,
@@ -3149,7 +3159,7 @@ var staffReadProcedure = t.procedure.use(
         ctx: { ...ctx, user: null, staff, isStaff: false }
       });
     }
-    if (staff.role === "guest" && staff.fromCookie) {
+    if ((staff.role === "guest" || staff.role === "patient") && staff.fromCookie) {
       return next({
         ctx: { ...ctx, user: null, staff, isStaff: false }
       });
@@ -3213,7 +3223,7 @@ var staffOrAdminProcedure = t.procedure.use(invalidateBoardAfterWrite).use(
     const { ctx, next } = opts;
     const staff = await resolveStaffSession(ctx.req);
     const oauthUser = ctx.user;
-    if (staff.role === "guest" && staff.fromCookie) {
+    if ((staff.role === "guest" || staff.role === "patient") && staff.fromCookie) {
       throw new TRPCError2({ code: "UNAUTHORIZED", message: UNAUTHED_ERR_MSG });
     }
     if (oauthUser) {
@@ -4218,6 +4228,99 @@ var appRouter = router({
         1
       );
       return { success: true };
+    }),
+    /**
+     * Patient login by ticket number or patient ID.
+     * Issues a role="patient" session restricted exclusively to the kiosk display.
+     */
+    patientLogin: publicProcedure.input(
+      z2.object({
+        ticketOrId: z2.string().trim().min(1).max(64)
+      })
+    ).mutation(async ({ ctx, input }) => {
+      const raw = input.ticketOrId.trim();
+      let ticket = raw.toUpperCase();
+      let patientId = raw;
+      let activeBay = null;
+      let activeStatus = "unregistered";
+      const db = await getDb();
+      if (db) {
+        const activeSessions = await db.select({
+          machineId: sessions.machineId,
+          patientId: sessions.patientId
+        }).from(sessions).where(eq5(sessions.status, "active"));
+        const match = activeSessions.find(
+          (s) => s.patientId.toLowerCase() === raw.toLowerCase() || patientTicket(s.patientId).toLowerCase() === raw.toLowerCase()
+        );
+        if (match) {
+          activeStatus = "in_treatment";
+          ticket = patientTicket(match.patientId);
+          patientId = match.patientId;
+          const m = await db.select({ label: machines.label }).from(machines).where(eq5(machines.id, match.machineId)).limit(1);
+          if (m[0]) activeBay = m[0].label;
+        } else {
+          const waiting = await db.select({ id: waitingList.id, patientId: waitingList.patientId }).from(waitingList).where(eq5(waitingList.status, "waiting"));
+          const waitMatch = waiting.find(
+            (w) => w.patientId.toLowerCase() === raw.toLowerCase() || patientTicket(w.patientId).toLowerCase() === raw.toLowerCase()
+          );
+          if (waitMatch) {
+            activeStatus = "waiting";
+            ticket = patientTicket(waitMatch.patientId);
+            patientId = waitMatch.patientId;
+          } else {
+            if (/^tk-\d+$/i.test(raw)) {
+              ticket = raw.toUpperCase();
+            } else {
+              ticket = patientTicket(raw);
+            }
+          }
+        }
+      } else {
+        if (/^tk-\d+$/i.test(raw)) {
+          ticket = raw.toUpperCase();
+        } else {
+          ticket = patientTicket(raw);
+        }
+      }
+      const displayName = `Patient ${ticket}`;
+      await setStaffSessionCookieSync(
+        ctx.req,
+        ctx.res,
+        {
+          accountId: 0,
+          username: ticket,
+          displayName,
+          role: "patient",
+          assignedFloorId: null
+        },
+        1
+      );
+      return {
+        success: true,
+        displayName,
+        role: "patient",
+        ticket,
+        activeBay,
+        activeStatus
+      };
+    }),
+    /**
+     * Patient guest mode: allows entering the kiosk without entering a specific ticket slip.
+     */
+    patientGuest: publicProcedure.mutation(async ({ ctx }) => {
+      await setStaffSessionCookieSync(
+        ctx.req,
+        ctx.res,
+        {
+          accountId: 0,
+          username: "patient.guest",
+          displayName: "Lounge Patient",
+          role: "patient",
+          assignedFloorId: null
+        },
+        1
+      );
+      return { success: true, role: "patient" };
     }),
     login: publicProcedure.input(
       z2.object({

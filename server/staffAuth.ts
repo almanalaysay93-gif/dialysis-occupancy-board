@@ -11,7 +11,7 @@ import { getSessionCookieOptions } from "./_core/cookies";
 /** Local staff session cookie name (separate from the OAuth user session). */
 export const STAFF_COOKIE_NAME = "staff_session_id";
 
-export type StaffRole = "nurse" | "supervisor" | "guest" | "auditor";
+export type StaffRole = "nurse" | "supervisor" | "guest" | "auditor" | "patient";
 
 export interface StaffSession {
   accountId: number;
@@ -128,7 +128,7 @@ export async function verifyStaffSession(
       typeof staff.accountId !== "number" ||
       typeof staff.username !== "string" ||
       typeof staff.displayName !== "string" ||
-      !["nurse", "supervisor", "guest", "auditor"].includes(String(staff.role))
+      !["nurse", "supervisor", "guest", "auditor", "patient"].includes(String(staff.role))
     ) {
       return null;
     }
@@ -141,6 +141,17 @@ export async function verifyStaffSession(
         username: "guest",
         displayName: "Guest",
         role: "guest",
+        assignedFloorId: null,
+      };
+    }
+    const isPatientJwt = String(staff.role) === "patient";
+    if (isPatientJwt) {
+      // Patient JWTs carry accountId 0 and their ticket number as username.
+      return {
+        accountId: 0,
+        username: String(staff.username || "patient"),
+        displayName: String(staff.displayName || "Patient"),
+        role: "patient",
         assignedFloorId: null,
       };
     }
@@ -197,7 +208,7 @@ export function setStaffSessionCookie(
     if (!headersSent) res.cookie(STAFF_COOKIE_NAME, "", { ...cookieOptions, maxAge: -1 });
     return;
   }
-  if (staff.role !== "nurse" && staff.role !== "supervisor" && staff.role !== "guest" && staff.role !== "auditor") return;
+  if (staff.role !== "nurse" && staff.role !== "supervisor" && staff.role !== "guest" && staff.role !== "auditor" && staff.role !== "patient") return;
   if ("headersSent" in res && res.headersSent) return;
   void createStaffSessionToken({
     accountId: staff.accountId,
@@ -253,7 +264,7 @@ export async function setStaffSessionCookieSync(
     res.cookie(STAFF_COOKIE_NAME, "", { ...cookieOptions, maxAge: -1 });
     return;
   }
-  if (staff.role !== "nurse" && staff.role !== "supervisor" && staff.role !== "guest" && staff.role !== "auditor") return;
+  if (staff.role !== "nurse" && staff.role !== "supervisor" && staff.role !== "guest" && staff.role !== "auditor" && staff.role !== "patient") return;
   const token = await createStaffSessionToken(
     {
       accountId: staff.accountId,

@@ -23,7 +23,7 @@ import { startLogin } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
 import { Activity, BellRing, ClipboardCheck, ClipboardList, Droplets, LogOut, PanelLeft, LayoutGrid, Layers, Tv, Wrench } from "lucide-react";
 import { CSSProperties, useRef } from "react";
-import { useLocation } from "wouter";
+import { Redirect, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 import { Button } from "./ui/button";
@@ -88,6 +88,12 @@ export default function DashboardLayout({
 
   if (loading || staffMe.isLoading) {
     return <DashboardLayoutSkeleton />;
+  }
+
+  // Patients only have access to the public lounge kiosk display.
+  // Any attempt to view clinical board pages redirects immediately to /kiosk.
+  if (staffRole === "patient") {
+    return <Redirect to="/kiosk" />;
   }
 
   // A staff session (nurse / supervisor / guest) is a fully valid identity on
