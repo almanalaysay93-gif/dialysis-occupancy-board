@@ -503,6 +503,10 @@ export function FloorRow({
   onAssign: (machineId: number) => void;
 }) {
   const [bulkExportOpen, setBulkExportOpen] = useState(false);
+  // The export carries nurse names and session history, so it follows the same
+  // gate as the other clinical panels: hidden from guests and until identity
+  // resolves.
+  const { isClinicalHidden } = useCanWrite();
   const resolvedFloorId = floorId ?? machines[0]?.machine.floorId ?? undefined;
 
   return (
@@ -540,16 +544,18 @@ export function FloorRow({
               dirty
             </span>
           )}
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => setBulkExportOpen(true)}
-            className="h-7 text-xs gap-1.5 border-[#D4DFE5] text-[#1F2A52] hover:bg-[#E8EFF1] ml-1"
-          >
-            <FileDown className="h-3.5 w-3.5" />
-            Export Floor (.xlsx)
-          </Button>
+          {!isClinicalHidden && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setBulkExportOpen(true)}
+              className="h-7 text-xs gap-1.5 border-[#D4DFE5] text-[#1F2A52] hover:bg-[#E8EFF1] ml-1"
+            >
+              <FileDown className="h-3.5 w-3.5" />
+              Export Floor (.xlsx)
+            </Button>
+          )}
         </div>
       </div>
 
@@ -564,7 +570,7 @@ export function FloorRow({
         ))}
       </div>
       <MachineMetricsExportDialog
-        open={bulkExportOpen}
+        open={bulkExportOpen && !isClinicalHidden}
         onClose={() => setBulkExportOpen(false)}
         floorId={resolvedFloorId}
         floorName={floorName}

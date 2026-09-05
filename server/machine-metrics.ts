@@ -1,9 +1,28 @@
 import ExcelJS from "exceljs";
-import { and, desc, eq, gte, lte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, isNull, lt, lte, or, sql } from "drizzle-orm";
 import { getDb } from "./db";
 import { floors, machineRepairs, machines, sessions } from "../drizzle/schema";
 import { patientTicket } from "./patient-ticket";
 import type { BoardViewer } from "./machines";
+
+/** Placeholder shown instead of staff names when the viewer cannot see PHI. */
+const MASKED_NAME = "Restricted";
+
+/** ISO date (YYYY-MM-DD) of an instant in Asia/Manila time. */
+export function manilaDate(at: Date): string {
+  return at.toLocaleDateString("en-CA", { timeZone: "Asia/Manila" });
+}
+
+/**
+ * UTC window covering the Manila days from `startDate` to `endDate` inclusive.
+ * Anchored to +08:00, matching `dayRangeUtc` in machines.ts — a plain `Z`
+ * boundary would shift every window eight hours and drop morning sessions.
+ */
+export function manilaRangeUtc(startDate: string, endDate: string): { from: Date; to: Date } {
+  const from = new Date(`${startDate}T00:00:00.000+08:00`);
+  const to = new Date(new Date(`${endDate}T00:00:00.000+08:00`).getTime() + 24 * 60 * 60 * 1000);
+  return { from, to };
+}
 
 export type MachineSessionMetric = {
   id: number;
@@ -50,6 +69,9 @@ export type SingleMachineReport = {
   totalTreatmentMinutes: number;
   totalPausedMinutes: number;
   totalIdleMinutes: number;
+  /** Elapsed minutes of the requested window, capped at "now" for a live day. */
+  availableMinutes: number;
+  /** Treatment minutes as a share of `availableMinutes`. */
   utilizationRate: number;
   sessions: MachineSessionMetric[];
   repairs: MachineRepairMetric[];
@@ -70,7 +92,28 @@ export type MachineMetricsReport = {
  * Reduces database read load on repeated report views or exports.
  */
 const METRICS_CACHE_TTL_MS = 60_000;
+/**
+ * Cache keys carry caller-supplied date ranges, so the key space is unbounded
+ * and each entry holds every session row in its window. Prune on write and cap
+ * the map so a caller sweeping date ranges cannot grow it without limit.
+ */
+const METRICS_CACHE_MAX_ENTRIES = 128;
 const machineMetricsCache = new Map<string, { value: MachineMetricsReport; expiresAt: number }>();
+
+function cacheReport(key: string, value: MachineMetricsReport): void {
+  const now = Date.now();
+  for (const k of Array.from(machineMetricsCache.keys())) {
+    const entry = machineMetricsCache.get(k);
+    if (entry && entry.expiresAt <= now) machineMetricsCache.delete(k);
+  }
+  machineMetricsCache.set(key, { value, expiresAt: now + METRICS_CACHE_TTL_MS });
+  // Map preserves insertion order, so the first key is the oldest survivor.
+  while (machineMetricsCache.size > METRICS_CACHE_MAX_ENTRIES) {
+    const oldest = Array.from(machineMetricsCache.keys())[0];
+    if (oldest === undefined) break;
+    machineMetricsCache.delete(oldest);
+  }
+}
 
 export function invalidateMachineMetricsCache(machineId?: number): void {
   if (machineId === undefined) {
@@ -82,6 +125,14 @@ export function invalidateMachineMetricsCache(machineId?: number): void {
       machineMetricsCache.delete(key);
     }
   }
+}
+
+/** Postgres 42P01 — the machine_repairs table has not been migrated yet. */
+function isUndefinedTableError(error: unknown): boolean {
+  const code = (error as { code?: unknown } | null)?.code;
+  if (code === "42P01") return true;
+  const cause = (error as { cause?: { code?: unknown } } | null)?.cause;
+  return cause?.code === "42P01";
 }
 
 /**
@@ -106,8 +157,11 @@ export async function getMachineMetricsReport(
   }
 
   const db = await getDb();
-  const startTs = new Date(`${opts.startDate}T00:00:00Z`);
-  const endTs = new Date(`${opts.endDate}T23:59:59.999Z`);
+  const { from: startTs, to: endTs } = manilaRangeUtc(opts.startDate, opts.endDate);
+  // A window that runs into the future has not elapsed yet; capping it keeps
+  // today's utilization measured against the hours that actually passed.
+  const windowEndTs = new Date(Math.min(endTs.getTime(), Date.now()));
+  const availableMinutes = Math.max(0, Math.round((windowEndTs.getTime() - startTs.getTime()) / 60000));
 
   if (!db) {
     return {
@@ -147,18 +201,17 @@ export async function getMachineMetricsReport(
   }
 
   const machineIds = targetMachines.map(m => m.id);
-  const machineLabelMap = new Map<number, string>();
-  for (const m of targetMachines) machineLabelMap.set(m.id, m.label);
 
-  // 3. Query sessions overlapping the date range for these machines
+  // 3. Sessions that OVERLAP the window, not merely those that started inside
+  // it: a session running across midnight belongs to both days it touches.
   const sessionRows = await db
     .select()
     .from(sessions)
     .where(
       and(
         sql`${sessions.machineId} IN (${sql.join(machineIds.map(id => sql`${id}`), sql`, `)})`,
-        gte(sessions.startedAt, startTs),
-        lte(sessions.startedAt, endTs),
+        lt(sessions.startedAt, endTs),
+        or(isNull(sessions.endedAt), gte(sessions.endedAt, startTs)),
       ),
     )
     .orderBy(sessions.machineId, sessions.startedAt);
@@ -185,8 +238,12 @@ export async function getMachineMetricsReport(
         ),
       )
       .orderBy(desc(machineRepairs.reportedAt));
-  } catch {
-    // Gracefully handle if table does not yet exist on current connection
+  } catch (error) {
+    // Tolerate only "relation does not exist" (Postgres 42P01), for connections
+    // that have not run 0004_machine_repairs yet. Every other failure — lost
+    // connection, permission denied — must surface instead of silently
+    // reporting a machine as repair-free.
+    if (!isUndefinedTableError(error)) throw error;
     repairsRows = [];
   }
 
@@ -213,26 +270,38 @@ export async function getMachineMetricsReport(
     for (const s of mSessions) {
       const sStart = new Date(s.startedAt);
       const sEnd = s.endedAt ? new Date(s.endedAt) : (s.status === "active" ? new Date(now) : new Date(s.endsAt));
-      const pausedSec = Math.max(0, s.pausedSeconds ?? 0);
-      const pausedMs = pausedSec * 1000;
-      const elapsedMs = Math.max(0, sEnd.getTime() - sStart.getTime());
-      const actualTreatmentMs = Math.max(0, elapsedMs - pausedMs);
+
+      // A session may run past either edge of the window. Aggregate only the
+      // slice inside it, while the row still reports the true timestamps.
+      const clampedStartMs = Math.max(sStart.getTime(), startTs.getTime());
+      const clampedEndMs = Math.min(sEnd.getTime(), windowEndTs.getTime());
+      const elapsedMs = Math.max(0, clampedEndMs - clampedStartMs);
+
+      // pausedSeconds is only finalized on resume/end, so a session paused
+      // right now carries its running pause in pausedAt.
+      const livePauseMs = s.pausedAt ? Math.max(0, now - new Date(s.pausedAt).getTime()) : 0;
+      const recordedPausedMs = Math.max(0, s.pausedSeconds ?? 0) * 1000 + livePauseMs;
+      const pausedMs = Math.min(recordedPausedMs, elapsedMs);
+      const actualTreatmentMs = elapsedMs - pausedMs;
 
       totalTreatmentMs += actualTreatmentMs;
       totalPausedMs += pausedMs;
 
-      // Idle calculation: gap from previous session end or start of day
+      // Idle is the gap since the previous session ON THE SAME Manila day.
+      // Counting overnight gaps would charge every machine ~16 idle hours per
+      // night and collapse utilization on any multi-day range.
+      const clampedStart = new Date(clampedStartMs);
+      const dateStr = manilaDate(clampedStart);
       let idleBeforeMs = 0;
-      if (previousSessionEnd) {
-        const gap = sStart.getTime() - previousSessionEnd.getTime();
+      if (previousSessionEnd && manilaDate(previousSessionEnd) === dateStr) {
+        const gap = clampedStartMs - previousSessionEnd.getTime();
         if (gap > 0) {
           idleBeforeMs = gap;
           totalIdleMs += gap;
         }
       }
-      previousSessionEnd = sEnd;
+      previousSessionEnd = new Date(clampedEndMs);
 
-      const dateStr = sStart.toISOString().slice(0, 10);
       const safePatient = viewer.canSeePhi ? s.patientId : patientTicket(s.patientId);
 
       formattedSessions.push({
@@ -248,8 +317,11 @@ export async function getMachineMetricsReport(
         actualTreatmentMinutes: Math.round(actualTreatmentMs / 60000),
         idleBeforeMinutes: Math.round(idleBeforeMs / 60000),
         patientId: safePatient,
-        assignedNurse: s.assignedNurse?.trim() || "Unassigned",
-        operator: s.startedBy?.trim() || "—",
+        // Nurse and operator are staff PHI on the same footing as the patient
+        // id — listMachines nulls both for non-PHI viewers, and this report is
+        // reachable by anonymous visitors through staffReadProcedure.
+        assignedNurse: viewer.canSeePhi ? (s.assignedNurse?.trim() || "Unassigned") : MASKED_NAME,
+        operator: viewer.canSeePhi ? (s.startedBy?.trim() || "—") : MASKED_NAME,
         isolationTag: s.isolationTag,
         urgent: s.urgent,
         status: s.status,
@@ -262,8 +334,8 @@ export async function getMachineMetricsReport(
       machineLabel: m.label,
       reportedAt: new Date(r.reportedAt),
       resolvedAt: r.resolvedAt ? new Date(r.resolvedAt) : null,
-      reportedBy: r.reportedBy,
-      technician: r.technician,
+      reportedBy: viewer.canSeePhi ? r.reportedBy : MASKED_NAME,
+      technician: viewer.canSeePhi ? r.technician : MASKED_NAME,
       issue: r.issue,
       actionTaken: r.actionTaken,
       partsReplaced: r.partsReplaced,
@@ -273,8 +345,11 @@ export async function getMachineMetricsReport(
     const totalTreatmentMinutes = Math.round(totalTreatmentMs / 60000);
     const totalPausedMinutes = Math.round(totalPausedMs / 60000);
     const totalIdleMinutes = Math.round(totalIdleMs / 60000);
-    const totalActiveSpan = totalTreatmentMinutes + totalIdleMinutes;
-    const utilizationRate = totalActiveSpan > 0 ? Math.min(100, Math.round((totalTreatmentMinutes / totalActiveSpan) * 100)) : 0;
+    // Measured against the elapsed window, not against the machine's own busy
+    // span: dividing treatment by (treatment + inter-session idle) returns 100%
+    // for any machine that ran a single session, whatever its length.
+    const utilizationRate =
+      availableMinutes > 0 ? Math.min(100, Math.round((totalTreatmentMinutes / availableMinutes) * 100)) : 0;
 
     return {
       machineId: m.id,
@@ -287,6 +362,7 @@ export async function getMachineMetricsReport(
       totalTreatmentMinutes,
       totalPausedMinutes,
       totalIdleMinutes,
+      availableMinutes,
       utilizationRate,
       sessions: formattedSessions,
       repairs: formattedRepairs,
@@ -303,7 +379,7 @@ export async function getMachineMetricsReport(
     machines: machineReports,
   };
 
-  machineMetricsCache.set(cacheKey, { value: result, expiresAt: Date.now() + METRICS_CACHE_TTL_MS });
+  cacheReport(cacheKey, result);
   return result;
 }
 
@@ -343,14 +419,21 @@ export async function logMachineRepair(input: {
 /**
  * List repair history for a specific machine.
  */
-export async function listMachineRepairs(machineId: number) {
+export async function listMachineRepairs(
+  machineId: number,
+  viewer: BoardViewer = { canSeePhi: false },
+) {
   const db = await getDb();
   if (!db) return [];
-  return db
+  const rows = await db
     .select()
     .from(machineRepairs)
     .where(eq(machineRepairs.machineId, machineId))
     .orderBy(desc(machineRepairs.reportedAt));
+  if (viewer.canSeePhi) return rows;
+  // Reporter and technician are staff names; this endpoint is reachable by
+  // anonymous viewers through staffReadProcedure.
+  return rows.map(r => ({ ...r, reportedBy: MASKED_NAME, technician: r.technician ? MASKED_NAME : null }));
 }
 
 /**
@@ -361,11 +444,6 @@ export async function generateMachineMetricsExcel(report: MachineMetricsReport):
   workbook.creator = "Dialysis Occupancy Board";
   workbook.created = new Date();
 
-  const titleHeaderFill: ExcelJS.Fill = {
-    type: "pattern",
-    pattern: "solid",
-    fgColor: { argb: "FF0F172A" }, // Slate 900
-  };
   const tableHeaderFill: ExcelJS.Fill = {
     type: "pattern",
     pattern: "solid",
@@ -404,7 +482,8 @@ export async function generateMachineMetricsExcel(report: MachineMetricsReport):
     { header: "Treatment Time (Hrs)", key: "treatmentHours", width: 22 },
     { header: "Paused Time (Hrs)", key: "pausedHours", width: 20 },
     { header: "Idle Time (Hrs)", key: "idleHours", width: 18 },
-    { header: "Utilization (%)", key: "utilization", width: 18 },
+    { header: "Period Elapsed (Hrs)", key: "periodHours", width: 22 },
+    { header: "Utilization (% of Period)", key: "utilization", width: 24 },
     { header: "Total Repairs", key: "repairs", width: 14 },
   ];
 
@@ -426,6 +505,7 @@ export async function generateMachineMetricsExcel(report: MachineMetricsReport):
       treatmentHours: Number((m.totalTreatmentMinutes / 60).toFixed(1)),
       pausedHours: Number((m.totalPausedMinutes / 60).toFixed(1)),
       idleHours: Number((m.totalIdleMinutes / 60).toFixed(1)),
+      periodHours: Number((m.availableMinutes / 60).toFixed(1)),
       utilization: `${m.utilizationRate}%`,
       repairs: m.repairs.length,
     });

@@ -51,6 +51,64 @@ function requireFloorAccess(
   }
 }
 
+/** Widest metrics window a single request may ask for; the report and the
+ *  Excel workbook are both built whole in memory. */
+const METRICS_MAX_RANGE_DAYS = 92;
+
+const machineMetricsRangeSchema = z
+  .object({
+    machineId: z.number().int().positive().optional(),
+    floorId: z.number().int().positive().optional(),
+    startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Format must be YYYY-MM-DD"),
+    endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Format must be YYYY-MM-DD"),
+  })
+  .refine(v => v.startDate <= v.endDate, {
+    message: "Start date must be on or before the end date",
+    path: ["startDate"],
+  })
+  .refine(
+    v =>
+      (Date.parse(`${v.endDate}T00:00:00Z`) - Date.parse(`${v.startDate}T00:00:00Z`)) / 86_400_000 <
+      METRICS_MAX_RANGE_DAYS,
+    { message: `Date range cannot exceed ${METRICS_MAX_RANGE_DAYS} days`, path: ["endDate"] },
+  );
+
+/** Floor scoping for a machine-addressed procedure: resolves the machine's floor first. */
+async function requireMachineFloorAccess(
+  ctx: { staff: StaffSession; user?: { role: string } | null },
+  machineId: number,
+): Promise<void> {
+  const machine = await machineDb.getMachineById(machineId);
+  if (machine?.floorId) requireFloorAccess(ctx.staff, machine.floorId, ctx.user);
+}
+
+/**
+ * Floor scoping for the metrics endpoints. A nurse may read their own board
+ * only, so an unscoped request (no machineId, no floorId) is narrowed to the
+ * floors they hold rather than silently returning the whole clinic.
+ */
+async function requireMetricsScope(
+  ctx: { staff: StaffSession; user?: { role: string } | null },
+  input: { machineId?: number; floorId?: number },
+): Promise<void> {
+  if (input.machineId !== undefined) {
+    await requireMachineFloorAccess(ctx, input.machineId);
+    return;
+  }
+  if (input.floorId !== undefined) {
+    requireFloorAccess(ctx.staff, input.floorId, ctx.user);
+    return;
+  }
+  if (ctx.user || ctx.staff.role === "guest") return;
+  const allowed = staffAccessedFloors(ctx.staff);
+  if (allowed !== null) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Select one of your assigned boards to export metrics",
+    });
+  }
+}
+
 /** Preset durations (minutes) for quick selection; "custom" passes user-supplied minutes. */
 const durationMinutesSchema = z
   .union([z.enum(["180", "240", "360", "480", "custom"]), z.number().int().min(15).max(1440)])
@@ -276,29 +334,17 @@ export const appRouter = router({
 
     /** Aggregated metrics for a machine or floor over a date range. */
     metrics: staffReadProcedure
-      .input(
-        z.object({
-          machineId: z.number().int().positive().optional(),
-          floorId: z.number().int().positive().optional(),
-          startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Format must be YYYY-MM-DD"),
-          endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Format must be YYYY-MM-DD"),
-        })
-      )
+      .input(machineMetricsRangeSchema)
       .query(async ({ ctx, input }) => {
+        await requireMetricsScope(ctx, input);
         return getMachineMetricsReport(input, { canSeePhi: ctx.isStaff });
       }),
 
     /** Download an Excel (.xlsx) file containing machine overview, sessions, and repairs. */
     exportExcel: staffReadProcedure
-      .input(
-        z.object({
-          machineId: z.number().int().positive().optional(),
-          floorId: z.number().int().positive().optional(),
-          startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Format must be YYYY-MM-DD"),
-          endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Format must be YYYY-MM-DD"),
-        })
-      )
+      .input(machineMetricsRangeSchema)
       .mutation(async ({ ctx, input }) => {
+        await requireMetricsScope(ctx, input);
         const report = await getMachineMetricsReport(input, { canSeePhi: ctx.isStaff });
         const buffer = await generateMachineMetricsExcel(report);
         const prefix = input.machineId ? `machine-${input.machineId}` : (input.floorId ? `floor-${input.floorId}` : "all-machines");
@@ -313,8 +359,9 @@ export const appRouter = router({
     repairs: router({
       list: staffReadProcedure
         .input(z.object({ machineId: z.number().int().positive() }))
-        .query(async ({ input }) => {
-          return listMachineRepairs(input.machineId);
+        .query(async ({ ctx, input }) => {
+          await requireMachineFloorAccess(ctx, input.machineId);
+          return listMachineRepairs(input.machineId, { canSeePhi: ctx.isStaff });
         }),
 
       log: staffOrAdminProcedure
@@ -329,6 +376,7 @@ export const appRouter = router({
           })
         )
         .mutation(async ({ ctx, input }) => {
+          await requireMachineFloorAccess(ctx, input.machineId);
           const reporter = ctx.user?.name || ctx.staff?.displayName || ctx.staff?.username || "Staff";
           return logMachineRepair({
             ...input,

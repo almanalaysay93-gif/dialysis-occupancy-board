@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
-import { Activity, Calendar, Clock, Download, FileDown, FileSpreadsheet, Loader2, Printer, ShieldAlert, Wrench } from "lucide-react";
+import { Activity, FileDown, FileSpreadsheet, Loader2, ShieldAlert } from "lucide-react";
 
 interface MachineMetricsExportDialogProps {
   open: boolean;
@@ -17,14 +17,20 @@ interface MachineMetricsExportDialogProps {
   floorName?: string;
 }
 
-function getInitialDates() {
+/** ISO date (YYYY-MM-DD) of an instant in Asia/Manila time — the board's clock.
+ *  toISOString() would resolve to yesterday for every Manila morning. */
+function manilaDate(at: Date) {
+  return at.toLocaleDateString("en-CA", { timeZone: "Asia/Manila" });
+}
+
+/** Widest window the server accepts; keep the presets inside it. */
+const MAX_RANGE_DAYS = 92;
+
+function datesForRange(days: number) {
   const end = new Date();
   const start = new Date();
-  start.setDate(end.getDate() - 30);
-  return {
-    start: start.toISOString().slice(0, 10),
-    end: end.toISOString().slice(0, 10),
-  };
+  if (days > 0) start.setDate(end.getDate() - days);
+  return { start: manilaDate(start), end: manilaDate(end) };
 }
 
 export function MachineMetricsExportDialog({
@@ -35,9 +41,22 @@ export function MachineMetricsExportDialog({
   floorId,
   floorName,
 }: MachineMetricsExportDialogProps) {
-  const initial = getInitialDates();
-  const [startDate, setStartDate] = useState(initial.start);
-  const [endDate, setEndDate] = useState(initial.end);
+  const [startDate, setStartDate] = useState(() => datesForRange(30).start);
+  const [endDate, setEndDate] = useState(() => datesForRange(30).end);
+
+  // Reopening the dialog days later must not offer the range it was closed on.
+  useEffect(() => {
+    if (!open) return;
+    const fresh = datesForRange(30);
+    setStartDate(fresh.start);
+    setEndDate(fresh.end);
+  }, [open]);
+
+  const rangeSpanDays =
+    startDate && endDate
+      ? (Date.parse(`${endDate}T00:00:00Z`) - Date.parse(`${startDate}T00:00:00Z`)) / 86_400_000
+      : Number.NaN;
+  const rangeIsValid = startDate <= endDate && rangeSpanDays >= 0 && rangeSpanDays < MAX_RANGE_DAYS;
 
   const isBulk = machineId === undefined;
   const title = isBulk
@@ -53,7 +72,8 @@ export function MachineMetricsExportDialog({
       endDate,
     },
     {
-      enabled: open && Boolean(startDate) && Boolean(endDate),
+      // Date inputs fire per keystroke; skip ranges the server would reject.
+      enabled: open && Boolean(startDate) && Boolean(endDate) && rangeIsValid,
     }
   );
 
@@ -81,7 +101,7 @@ export function MachineMetricsExportDialog({
 
         toast.success(`Downloaded ${data.filename}`);
         onClose();
-      } catch (err) {
+      } catch {
         toast.error("Failed to parse downloaded Excel file.");
       }
     },
@@ -95,8 +115,12 @@ export function MachineMetricsExportDialog({
       toast.error("Please specify both start and end dates.");
       return;
     }
-    if (new Date(startDate) > new Date(endDate)) {
+    if (startDate > endDate) {
       toast.error("Start date must be before or equal to end date.");
+      return;
+    }
+    if (rangeSpanDays >= MAX_RANGE_DAYS) {
+      toast.error(`Date range cannot exceed ${MAX_RANGE_DAYS} days.`);
       return;
     }
     exportMutation.mutate({
@@ -108,13 +132,9 @@ export function MachineMetricsExportDialog({
   };
 
   const setRangePreset = (days: number) => {
-    const end = new Date();
-    const start = new Date();
-    if (days > 0) {
-      start.setDate(end.getDate() - days);
-    }
-    setStartDate(start.toISOString().slice(0, 10));
-    setEndDate(end.toISOString().slice(0, 10));
+    const range = datesForRange(days);
+    setStartDate(range.start);
+    setEndDate(range.end);
   };
 
   // Aggregated preview stats
