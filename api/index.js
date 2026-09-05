@@ -1146,11 +1146,11 @@ function staffAccessedFloors(staff) {
 }
 
 // server/machines.ts
-import { and as and2, desc as desc2, eq as eq4, isNull, sql as sql3 } from "drizzle-orm";
+import { and as and2, desc as desc2, eq as eq4, isNull as isNull2, sql as sql3 } from "drizzle-orm";
 
 // server/machine-metrics.ts
 import ExcelJS from "exceljs";
-import { and, desc, eq as eq3, gte, lte, sql as sql2 } from "drizzle-orm";
+import { and, desc, eq as eq3, gte, isNull, lt, lte, or, sql as sql2 } from "drizzle-orm";
 
 // server/patient-ticket.ts
 function patientTicket(patientId) {
@@ -1164,8 +1164,31 @@ function patientTicket(patientId) {
 }
 
 // server/machine-metrics.ts
+var MASKED_NAME = "Restricted";
+function manilaDate(at) {
+  return at.toLocaleDateString("en-CA", { timeZone: "Asia/Manila" });
+}
+function manilaRangeUtc(startDate, endDate) {
+  const from = /* @__PURE__ */ new Date(`${startDate}T00:00:00.000+08:00`);
+  const to = new Date((/* @__PURE__ */ new Date(`${endDate}T00:00:00.000+08:00`)).getTime() + 24 * 60 * 60 * 1e3);
+  return { from, to };
+}
 var METRICS_CACHE_TTL_MS = 6e4;
+var METRICS_CACHE_MAX_ENTRIES = 128;
 var machineMetricsCache = /* @__PURE__ */ new Map();
+function cacheReport(key, value) {
+  const now = Date.now();
+  for (const k of Array.from(machineMetricsCache.keys())) {
+    const entry = machineMetricsCache.get(k);
+    if (entry && entry.expiresAt <= now) machineMetricsCache.delete(k);
+  }
+  machineMetricsCache.set(key, { value, expiresAt: now + METRICS_CACHE_TTL_MS });
+  while (machineMetricsCache.size > METRICS_CACHE_MAX_ENTRIES) {
+    const oldest = Array.from(machineMetricsCache.keys())[0];
+    if (oldest === void 0) break;
+    machineMetricsCache.delete(oldest);
+  }
+}
 function invalidateMachineMetricsCache(machineId) {
   if (machineId === void 0) {
     machineMetricsCache.clear();
@@ -1177,6 +1200,12 @@ function invalidateMachineMetricsCache(machineId) {
     }
   }
 }
+function isUndefinedTableError(error) {
+  const code = error?.code;
+  if (code === "42P01") return true;
+  const cause = error?.cause;
+  return cause?.code === "42P01";
+}
 async function getMachineMetricsReport(opts, viewer = { canSeePhi: false }) {
   const cacheKey2 = opts.machineId ? `m:${opts.machineId}:${opts.startDate}:${opts.endDate}:${viewer.canSeePhi ? "phi" : "masked"}` : `floor:${opts.floorId ?? "all"}:${opts.startDate}:${opts.endDate}:${viewer.canSeePhi ? "phi" : "masked"}`;
   const cached = machineMetricsCache.get(cacheKey2);
@@ -1184,8 +1213,9 @@ async function getMachineMetricsReport(opts, viewer = { canSeePhi: false }) {
     return cached.value;
   }
   const db = await getDb();
-  const startTs = /* @__PURE__ */ new Date(`${opts.startDate}T00:00:00Z`);
-  const endTs = /* @__PURE__ */ new Date(`${opts.endDate}T23:59:59.999Z`);
+  const { from: startTs, to: endTs } = manilaRangeUtc(opts.startDate, opts.endDate);
+  const windowEndTs = new Date(Math.min(endTs.getTime(), Date.now()));
+  const availableMinutes = Math.max(0, Math.round((windowEndTs.getTime() - startTs.getTime()) / 6e4));
   if (!db) {
     return {
       startDate: opts.startDate,
@@ -1218,13 +1248,11 @@ async function getMachineMetricsReport(opts, viewer = { canSeePhi: false }) {
     };
   }
   const machineIds = targetMachines.map((m) => m.id);
-  const machineLabelMap = /* @__PURE__ */ new Map();
-  for (const m of targetMachines) machineLabelMap.set(m.id, m.label);
   const sessionRows = await db.select().from(sessions).where(
     and(
       sql2`${sessions.machineId} IN (${sql2.join(machineIds.map((id) => sql2`${id}`), sql2`, `)})`,
-      gte(sessions.startedAt, startTs),
-      lte(sessions.startedAt, endTs)
+      lt(sessions.startedAt, endTs),
+      or(isNull(sessions.endedAt), gte(sessions.endedAt, startTs))
     )
   ).orderBy(sessions.machineId, sessions.startedAt);
   const sessionsByMachine = /* @__PURE__ */ new Map();
@@ -1242,7 +1270,8 @@ async function getMachineMetricsReport(opts, viewer = { canSeePhi: false }) {
         lte(machineRepairs.reportedAt, endTs)
       )
     ).orderBy(desc(machineRepairs.reportedAt));
-  } catch {
+  } catch (error) {
+    if (!isUndefinedTableError(error)) throw error;
     repairsRows = [];
   }
   const repairsByMachine = /* @__PURE__ */ new Map();
@@ -1263,22 +1292,26 @@ async function getMachineMetricsReport(opts, viewer = { canSeePhi: false }) {
     for (const s of mSessions) {
       const sStart = new Date(s.startedAt);
       const sEnd = s.endedAt ? new Date(s.endedAt) : s.status === "active" ? new Date(now) : new Date(s.endsAt);
-      const pausedSec = Math.max(0, s.pausedSeconds ?? 0);
-      const pausedMs = pausedSec * 1e3;
-      const elapsedMs = Math.max(0, sEnd.getTime() - sStart.getTime());
-      const actualTreatmentMs = Math.max(0, elapsedMs - pausedMs);
+      const clampedStartMs = Math.max(sStart.getTime(), startTs.getTime());
+      const clampedEndMs = Math.min(sEnd.getTime(), windowEndTs.getTime());
+      const elapsedMs = Math.max(0, clampedEndMs - clampedStartMs);
+      const livePauseMs = s.pausedAt ? Math.max(0, now - new Date(s.pausedAt).getTime()) : 0;
+      const recordedPausedMs = Math.max(0, s.pausedSeconds ?? 0) * 1e3 + livePauseMs;
+      const pausedMs = Math.min(recordedPausedMs, elapsedMs);
+      const actualTreatmentMs = elapsedMs - pausedMs;
       totalTreatmentMs += actualTreatmentMs;
       totalPausedMs += pausedMs;
+      const clampedStart = new Date(clampedStartMs);
+      const dateStr = manilaDate(clampedStart);
       let idleBeforeMs = 0;
-      if (previousSessionEnd) {
-        const gap = sStart.getTime() - previousSessionEnd.getTime();
+      if (previousSessionEnd && manilaDate(previousSessionEnd) === dateStr) {
+        const gap = clampedStartMs - previousSessionEnd.getTime();
         if (gap > 0) {
           idleBeforeMs = gap;
           totalIdleMs += gap;
         }
       }
-      previousSessionEnd = sEnd;
-      const dateStr = sStart.toISOString().slice(0, 10);
+      previousSessionEnd = new Date(clampedEndMs);
       const safePatient = viewer.canSeePhi ? s.patientId : patientTicket(s.patientId);
       formattedSessions.push({
         id: s.id,
@@ -1293,8 +1326,11 @@ async function getMachineMetricsReport(opts, viewer = { canSeePhi: false }) {
         actualTreatmentMinutes: Math.round(actualTreatmentMs / 6e4),
         idleBeforeMinutes: Math.round(idleBeforeMs / 6e4),
         patientId: safePatient,
-        assignedNurse: s.assignedNurse?.trim() || "Unassigned",
-        operator: s.startedBy?.trim() || "\u2014",
+        // Nurse and operator are staff PHI on the same footing as the patient
+        // id — listMachines nulls both for non-PHI viewers, and this report is
+        // reachable by anonymous visitors through staffReadProcedure.
+        assignedNurse: viewer.canSeePhi ? s.assignedNurse?.trim() || "Unassigned" : MASKED_NAME,
+        operator: viewer.canSeePhi ? s.startedBy?.trim() || "\u2014" : MASKED_NAME,
         isolationTag: s.isolationTag,
         urgent: s.urgent,
         status: s.status
@@ -1306,8 +1342,8 @@ async function getMachineMetricsReport(opts, viewer = { canSeePhi: false }) {
       machineLabel: m.label,
       reportedAt: new Date(r.reportedAt),
       resolvedAt: r.resolvedAt ? new Date(r.resolvedAt) : null,
-      reportedBy: r.reportedBy,
-      technician: r.technician,
+      reportedBy: viewer.canSeePhi ? r.reportedBy : MASKED_NAME,
+      technician: viewer.canSeePhi ? r.technician : MASKED_NAME,
       issue: r.issue,
       actionTaken: r.actionTaken,
       partsReplaced: r.partsReplaced,
@@ -1316,8 +1352,7 @@ async function getMachineMetricsReport(opts, viewer = { canSeePhi: false }) {
     const totalTreatmentMinutes = Math.round(totalTreatmentMs / 6e4);
     const totalPausedMinutes = Math.round(totalPausedMs / 6e4);
     const totalIdleMinutes = Math.round(totalIdleMs / 6e4);
-    const totalActiveSpan = totalTreatmentMinutes + totalIdleMinutes;
-    const utilizationRate = totalActiveSpan > 0 ? Math.min(100, Math.round(totalTreatmentMinutes / totalActiveSpan * 100)) : 0;
+    const utilizationRate = availableMinutes > 0 ? Math.min(100, Math.round(totalTreatmentMinutes / availableMinutes * 100)) : 0;
     return {
       machineId: m.id,
       label: m.label,
@@ -1329,6 +1364,7 @@ async function getMachineMetricsReport(opts, viewer = { canSeePhi: false }) {
       totalTreatmentMinutes,
       totalPausedMinutes,
       totalIdleMinutes,
+      availableMinutes,
       utilizationRate,
       sessions: formattedSessions,
       repairs: formattedRepairs
@@ -1343,7 +1379,7 @@ async function getMachineMetricsReport(opts, viewer = { canSeePhi: false }) {
     floorName: opts.floorId ? floorMap.get(opts.floorId) : void 0,
     machines: machineReports
   };
-  machineMetricsCache.set(cacheKey2, { value: result, expiresAt: Date.now() + METRICS_CACHE_TTL_MS });
+  cacheReport(cacheKey2, result);
   return result;
 }
 async function logMachineRepair(input) {
@@ -1362,21 +1398,17 @@ async function logMachineRepair(input) {
   invalidateMachineMetricsCache(input.machineId);
   return inserted[0];
 }
-async function listMachineRepairs(machineId) {
+async function listMachineRepairs(machineId, viewer = { canSeePhi: false }) {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(machineRepairs).where(eq3(machineRepairs.machineId, machineId)).orderBy(desc(machineRepairs.reportedAt));
+  const rows = await db.select().from(machineRepairs).where(eq3(machineRepairs.machineId, machineId)).orderBy(desc(machineRepairs.reportedAt));
+  if (viewer.canSeePhi) return rows;
+  return rows.map((r) => ({ ...r, reportedBy: MASKED_NAME, technician: r.technician ? MASKED_NAME : null }));
 }
 async function generateMachineMetricsExcel(report) {
   const workbook = new ExcelJS.Workbook();
   workbook.creator = "Dialysis Occupancy Board";
   workbook.created = /* @__PURE__ */ new Date();
-  const titleHeaderFill = {
-    type: "pattern",
-    pattern: "solid",
-    fgColor: { argb: "FF0F172A" }
-    // Slate 900
-  };
   const tableHeaderFill = {
     type: "pattern",
     pattern: "solid",
@@ -1411,7 +1443,8 @@ async function generateMachineMetricsExcel(report) {
     { header: "Treatment Time (Hrs)", key: "treatmentHours", width: 22 },
     { header: "Paused Time (Hrs)", key: "pausedHours", width: 20 },
     { header: "Idle Time (Hrs)", key: "idleHours", width: 18 },
-    { header: "Utilization (%)", key: "utilization", width: 18 },
+    { header: "Period Elapsed (Hrs)", key: "periodHours", width: 22 },
+    { header: "Utilization (% of Period)", key: "utilization", width: 24 },
     { header: "Total Repairs", key: "repairs", width: 14 }
   ];
   const summaryHeader = summarySheet.getRow(1);
@@ -1431,6 +1464,7 @@ async function generateMachineMetricsExcel(report) {
       treatmentHours: Number((m.totalTreatmentMinutes / 60).toFixed(1)),
       pausedHours: Number((m.totalPausedMinutes / 60).toFixed(1)),
       idleHours: Number((m.totalIdleMinutes / 60).toFixed(1)),
+      periodHours: Number((m.availableMinutes / 60).toFixed(1)),
       utilization: `${m.utilizationRate}%`,
       repairs: m.repairs.length
     });
@@ -1720,7 +1754,7 @@ async function addMachine(input) {
   if (existing.length > 0) {
     throw new Error("MACHINE_LABEL_EXISTS");
   }
-  const maxOrder = await db.select({ sortOrder: machines.sortOrder }).from(machines).where(input.floorId ? eq4(machines.floorId, input.floorId) : isNull(machines.floorId)).orderBy(desc2(machines.sortOrder)).limit(1);
+  const maxOrder = await db.select({ sortOrder: machines.sortOrder }).from(machines).where(input.floorId ? eq4(machines.floorId, input.floorId) : isNull2(machines.floorId)).orderBy(desc2(machines.sortOrder)).limit(1);
   const nextOrder = (maxOrder[0]?.sortOrder ?? 0) + 1;
   const result = await db.insert(machines).values({
     label: input.label.trim(),
@@ -3283,6 +3317,41 @@ function requireFloorAccess(staff, floorId, oauthUser) {
     throw new TRPCError4({ code: "FORBIDDEN", message: "You do not have access to this board" });
   }
 }
+var METRICS_MAX_RANGE_DAYS = 92;
+var machineMetricsRangeSchema = z2.object({
+  machineId: z2.number().int().positive().optional(),
+  floorId: z2.number().int().positive().optional(),
+  startDate: z2.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Format must be YYYY-MM-DD"),
+  endDate: z2.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Format must be YYYY-MM-DD")
+}).refine((v) => v.startDate <= v.endDate, {
+  message: "Start date must be on or before the end date",
+  path: ["startDate"]
+}).refine(
+  (v) => (Date.parse(`${v.endDate}T00:00:00Z`) - Date.parse(`${v.startDate}T00:00:00Z`)) / 864e5 < METRICS_MAX_RANGE_DAYS,
+  { message: `Date range cannot exceed ${METRICS_MAX_RANGE_DAYS} days`, path: ["endDate"] }
+);
+async function requireMachineFloorAccess(ctx, machineId) {
+  const machine = await getMachineById(machineId);
+  if (machine?.floorId) requireFloorAccess(ctx.staff, machine.floorId, ctx.user);
+}
+async function requireMetricsScope(ctx, input) {
+  if (input.machineId !== void 0) {
+    await requireMachineFloorAccess(ctx, input.machineId);
+    return;
+  }
+  if (input.floorId !== void 0) {
+    requireFloorAccess(ctx.staff, input.floorId, ctx.user);
+    return;
+  }
+  if (ctx.user || ctx.staff.role === "guest") return;
+  const allowed = staffAccessedFloors(ctx.staff);
+  if (allowed !== null) {
+    throw new TRPCError4({
+      code: "FORBIDDEN",
+      message: "Select one of your assigned boards to export metrics"
+    });
+  }
+}
 var durationMinutesSchema = z2.union([z2.enum(["180", "240", "360", "480", "custom"]), z2.number().int().min(15).max(1440)]).transform((v) => typeof v === "string" ? v === "custom" ? null : Number(v) : v);
 var isolationTagSchema = z2.enum(["clean", "dirty"]);
 var waitingPrioritySchema = z2.enum(["normal", "urgent", "veryUrgent"]);
@@ -3478,25 +3547,13 @@ var appRouter = router({
       list: publicProcedure.query(() => listOffboardedMachines())
     }),
     /** Aggregated metrics for a machine or floor over a date range. */
-    metrics: staffReadProcedure.input(
-      z2.object({
-        machineId: z2.number().int().positive().optional(),
-        floorId: z2.number().int().positive().optional(),
-        startDate: z2.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Format must be YYYY-MM-DD"),
-        endDate: z2.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Format must be YYYY-MM-DD")
-      })
-    ).query(async ({ ctx, input }) => {
+    metrics: staffReadProcedure.input(machineMetricsRangeSchema).query(async ({ ctx, input }) => {
+      await requireMetricsScope(ctx, input);
       return getMachineMetricsReport(input, { canSeePhi: ctx.isStaff });
     }),
     /** Download an Excel (.xlsx) file containing machine overview, sessions, and repairs. */
-    exportExcel: staffReadProcedure.input(
-      z2.object({
-        machineId: z2.number().int().positive().optional(),
-        floorId: z2.number().int().positive().optional(),
-        startDate: z2.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Format must be YYYY-MM-DD"),
-        endDate: z2.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Format must be YYYY-MM-DD")
-      })
-    ).mutation(async ({ ctx, input }) => {
+    exportExcel: staffReadProcedure.input(machineMetricsRangeSchema).mutation(async ({ ctx, input }) => {
+      await requireMetricsScope(ctx, input);
       const report = await getMachineMetricsReport(input, { canSeePhi: ctx.isStaff });
       const buffer = await generateMachineMetricsExcel(report);
       const prefix = input.machineId ? `machine-${input.machineId}` : input.floorId ? `floor-${input.floorId}` : "all-machines";
@@ -3508,8 +3565,9 @@ var appRouter = router({
     }),
     /** Machine maintenance & repair log. */
     repairs: router({
-      list: staffReadProcedure.input(z2.object({ machineId: z2.number().int().positive() })).query(async ({ input }) => {
-        return listMachineRepairs(input.machineId);
+      list: staffReadProcedure.input(z2.object({ machineId: z2.number().int().positive() })).query(async ({ ctx, input }) => {
+        await requireMachineFloorAccess(ctx, input.machineId);
+        return listMachineRepairs(input.machineId, { canSeePhi: ctx.isStaff });
       }),
       log: staffOrAdminProcedure.input(
         z2.object({
@@ -3521,6 +3579,7 @@ var appRouter = router({
           status: z2.enum(["pending", "in_progress", "resolved"]).default("pending")
         })
       ).mutation(async ({ ctx, input }) => {
+        await requireMachineFloorAccess(ctx, input.machineId);
         const reporter = ctx.user?.name || ctx.staff?.displayName || ctx.staff?.username || "Staff";
         return logMachineRepair({
           ...input,

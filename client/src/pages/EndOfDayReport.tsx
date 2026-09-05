@@ -525,6 +525,8 @@ export default function EndOfDayReport() {
       <MachineMetricsExportDialog
         open={exportDialogOpen}
         onClose={() => setExportDialogOpen(false)}
+        floorId={staff?.assignedFloorId ?? undefined}
+        floorName={staff?.assignedFloorId ? undefined : "All Floors"}
       />
     </DashboardLayout>
   );
