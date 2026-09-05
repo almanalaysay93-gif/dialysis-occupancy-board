@@ -4,6 +4,7 @@ import { BarChart3, ClipboardList, Dumbbell, FileDown, Filter, PenLine, Printer,
 import { toast } from "sonner";
 import DashboardLayout from "@/components/DashboardLayout";
 import MonthlySummaryView from "@/components/MonthlySummaryView";
+import { MachineMetricsExportDialog } from "@/components/MachineMetricsExportDialog";
 import { ScrollReveal } from "@/components/ScrollReveal";
 import { Button } from "@/components/ui/button";
 import {
@@ -139,6 +140,7 @@ export default function EndOfDayReport() {
   const [month, setMonth] = useState(() => manilaMonthStr(0));
   // Shift filter for narrative tables (server-side period-overlap filter).
   const [shiftKey, setShiftKey] = useState<string>("all");
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
 
   // Staff session scoping: the summary query already restricts nurses to
   // their own board. Supervisors see every board — one call
@@ -263,34 +265,47 @@ export default function EndOfDayReport() {
               )}
             </div>
 
-            {activeReportTab === "daily" ? (
+            <div className="flex items-center gap-2">
               <Button
+                type="button"
                 size="sm"
                 variant="outline"
-                className="h-9 border-[#D4DFE5] text-[#1F2A52] hover:bg-[#E8EFF1]"
-                onClick={() => {
-                  setPrintMonthOnly(false);
-                  window.print();
-                }}
-                aria-label="Print Daily Report as PDF"
+                className="h-9 border-[#D4DFE5] text-[#1F2A52] hover:bg-[#E8EFF1] gap-1.5"
+                onClick={() => setExportDialogOpen(true)}
+                aria-label="Export Machine Metrics as Excel"
               >
-                <Printer className="mr-1.5 h-4 w-4 text-[#2E9A9B]" />
-                Print Daily Report as PDF
+                <FileDown className="h-4 w-4 text-[#2E9A9B]" />
+                Export Metrics (.xlsx)
               </Button>
-            ) : (
-              <Button
-                size="sm"
-                className="h-9 bg-[#9E1F2B] text-white hover:bg-[#7a1822]"
-                onClick={() => {
-                  setPrintMonthOnly(true);
-                  setTimeout(() => window.print(), 50);
-                }}
-                aria-label="Print Monthly Report as PDF"
-              >
-                <Printer className="mr-1.5 h-4 w-4" />
-                Print Monthly Report as PDF
-              </Button>
-            )}
+              {activeReportTab === "daily" ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-9 border-[#D4DFE5] text-[#1F2A52] hover:bg-[#E8EFF1]"
+                  onClick={() => {
+                    setPrintMonthOnly(false);
+                    window.print();
+                  }}
+                  aria-label="Print Daily Report as PDF"
+                >
+                  <Printer className="mr-1.5 h-4 w-4 text-[#2E9A9B]" />
+                  Print Daily Report as PDF
+                </Button>
+              ) : (
+                <Button
+                  size="sm"
+                  className="h-9 bg-[#9E1F2B] text-white hover:bg-[#7a1822]"
+                  onClick={() => {
+                    setPrintMonthOnly(true);
+                    setTimeout(() => window.print(), 50);
+                  }}
+                  aria-label="Print Monthly Report as PDF"
+                >
+                  <Printer className="mr-1.5 h-4 w-4" />
+                  Print Monthly Report as PDF
+                </Button>
+              )}
+            </div>
           </div>
 
           {/* Monthly Summary View (Screen & Print) */}
@@ -507,6 +522,10 @@ export default function EndOfDayReport() {
         </div>
         </>
       )}
+      <MachineMetricsExportDialog
+        open={exportDialogOpen}
+        onClose={() => setExportDialogOpen(false)}
+      />
     </DashboardLayout>
   );
 }

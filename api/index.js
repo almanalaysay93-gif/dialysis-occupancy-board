@@ -79,6 +79,23 @@ var machines = pgTable("machines", {
   // Every floor board and report filters machines by floor and status.
   index("machines_floor_status_idx").on(table.floorId, table.status)
 ]);
+var machineRepairs = pgTable("machine_repairs", {
+  id: serial("id").primaryKey(),
+  machineId: integer("machineId").notNull(),
+  reportedAt: timestamp("reportedAt", { mode: "date" }).defaultNow().notNull(),
+  resolvedAt: timestamp("resolvedAt", { mode: "date" }),
+  reportedBy: varchar("reportedBy", { length: 64 }).notNull(),
+  technician: varchar("technician", { length: 64 }),
+  issue: text("issue").notNull(),
+  actionTaken: text("actionTaken"),
+  partsReplaced: text("partsReplaced"),
+  status: varchar("status", { length: 32 }).notNull().default("pending"),
+  createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt", { mode: "date" }).defaultNow().notNull()
+}, (table) => [
+  index("machine_repairs_machine_status_idx").on(table.machineId, table.status),
+  index("machine_repairs_reported_at_idx").on(table.reportedAt)
+]);
 var floors = pgTable("floors", {
   id: serial("id").primaryKey(),
   /** Floor identifier, e.g. "F1". */
@@ -1129,7 +1146,11 @@ function staffAccessedFloors(staff) {
 }
 
 // server/machines.ts
-import { and, desc, eq as eq3, isNull, sql as sql2 } from "drizzle-orm";
+import { and as and2, desc as desc2, eq as eq4, isNull, sql as sql3 } from "drizzle-orm";
+
+// server/machine-metrics.ts
+import ExcelJS from "exceljs";
+import { and, desc, eq as eq3, gte, lte, sql as sql2 } from "drizzle-orm";
 
 // server/patient-ticket.ts
 function patientTicket(patientId) {
@@ -1142,11 +1163,392 @@ function patientTicket(patientId) {
   return `TK-${Math.abs(hash) % 9e3 + 1e3}`;
 }
 
+// server/machine-metrics.ts
+var METRICS_CACHE_TTL_MS = 6e4;
+var machineMetricsCache = /* @__PURE__ */ new Map();
+function invalidateMachineMetricsCache(machineId) {
+  if (machineId === void 0) {
+    machineMetricsCache.clear();
+    return;
+  }
+  for (const key of Array.from(machineMetricsCache.keys())) {
+    if (key.includes(`m:${machineId}:`) || key.startsWith("floor:")) {
+      machineMetricsCache.delete(key);
+    }
+  }
+}
+async function getMachineMetricsReport(opts, viewer = { canSeePhi: false }) {
+  const cacheKey2 = opts.machineId ? `m:${opts.machineId}:${opts.startDate}:${opts.endDate}:${viewer.canSeePhi ? "phi" : "masked"}` : `floor:${opts.floorId ?? "all"}:${opts.startDate}:${opts.endDate}:${viewer.canSeePhi ? "phi" : "masked"}`;
+  const cached = machineMetricsCache.get(cacheKey2);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.value;
+  }
+  const db = await getDb();
+  const startTs = /* @__PURE__ */ new Date(`${opts.startDate}T00:00:00Z`);
+  const endTs = /* @__PURE__ */ new Date(`${opts.endDate}T23:59:59.999Z`);
+  if (!db) {
+    return {
+      startDate: opts.startDate,
+      endDate: opts.endDate,
+      generatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+      canSeePhi: viewer.canSeePhi,
+      floorId: opts.floorId,
+      machines: []
+    };
+  }
+  let machineQuery = db.select().from(machines);
+  if (opts.machineId) {
+    machineQuery = machineQuery.where(eq3(machines.id, opts.machineId));
+  } else if (opts.floorId) {
+    machineQuery = machineQuery.where(eq3(machines.floorId, opts.floorId));
+  }
+  const targetMachines = await machineQuery.orderBy(machines.floorId, machines.sortOrder, machines.id);
+  const allFloors = await db.select().from(floors);
+  const floorMap = /* @__PURE__ */ new Map();
+  for (const f of allFloors) floorMap.set(f.id, f.name);
+  if (targetMachines.length === 0) {
+    return {
+      startDate: opts.startDate,
+      endDate: opts.endDate,
+      generatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+      canSeePhi: viewer.canSeePhi,
+      floorId: opts.floorId,
+      floorName: opts.floorId ? floorMap.get(opts.floorId) : void 0,
+      machines: []
+    };
+  }
+  const machineIds = targetMachines.map((m) => m.id);
+  const machineLabelMap = /* @__PURE__ */ new Map();
+  for (const m of targetMachines) machineLabelMap.set(m.id, m.label);
+  const sessionRows = await db.select().from(sessions).where(
+    and(
+      sql2`${sessions.machineId} IN (${sql2.join(machineIds.map((id) => sql2`${id}`), sql2`, `)})`,
+      gte(sessions.startedAt, startTs),
+      lte(sessions.startedAt, endTs)
+    )
+  ).orderBy(sessions.machineId, sessions.startedAt);
+  const sessionsByMachine = /* @__PURE__ */ new Map();
+  for (const s of sessionRows) {
+    const arr = sessionsByMachine.get(s.machineId) ?? [];
+    arr.push(s);
+    sessionsByMachine.set(s.machineId, arr);
+  }
+  let repairsRows = [];
+  try {
+    repairsRows = await db.select().from(machineRepairs).where(
+      and(
+        sql2`${machineRepairs.machineId} IN (${sql2.join(machineIds.map((id) => sql2`${id}`), sql2`, `)})`,
+        gte(machineRepairs.reportedAt, startTs),
+        lte(machineRepairs.reportedAt, endTs)
+      )
+    ).orderBy(desc(machineRepairs.reportedAt));
+  } catch {
+    repairsRows = [];
+  }
+  const repairsByMachine = /* @__PURE__ */ new Map();
+  for (const r of repairsRows) {
+    const arr = repairsByMachine.get(r.machineId) ?? [];
+    arr.push(r);
+    repairsByMachine.set(r.machineId, arr);
+  }
+  const now = Date.now();
+  const machineReports = targetMachines.map((m) => {
+    const mSessions = sessionsByMachine.get(m.id) ?? [];
+    const mRepairs = repairsByMachine.get(m.id) ?? [];
+    let totalTreatmentMs = 0;
+    let totalPausedMs = 0;
+    let totalIdleMs = 0;
+    const formattedSessions = [];
+    let previousSessionEnd = null;
+    for (const s of mSessions) {
+      const sStart = new Date(s.startedAt);
+      const sEnd = s.endedAt ? new Date(s.endedAt) : s.status === "active" ? new Date(now) : new Date(s.endsAt);
+      const pausedSec = Math.max(0, s.pausedSeconds ?? 0);
+      const pausedMs = pausedSec * 1e3;
+      const elapsedMs = Math.max(0, sEnd.getTime() - sStart.getTime());
+      const actualTreatmentMs = Math.max(0, elapsedMs - pausedMs);
+      totalTreatmentMs += actualTreatmentMs;
+      totalPausedMs += pausedMs;
+      let idleBeforeMs = 0;
+      if (previousSessionEnd) {
+        const gap = sStart.getTime() - previousSessionEnd.getTime();
+        if (gap > 0) {
+          idleBeforeMs = gap;
+          totalIdleMs += gap;
+        }
+      }
+      previousSessionEnd = sEnd;
+      const dateStr = sStart.toISOString().slice(0, 10);
+      const safePatient = viewer.canSeePhi ? s.patientId : patientTicket(s.patientId);
+      formattedSessions.push({
+        id: s.id,
+        machineId: s.machineId,
+        machineLabel: m.label,
+        date: dateStr,
+        startedAt: sStart,
+        endedAt: s.endedAt ? new Date(s.endedAt) : null,
+        endsAt: new Date(s.endsAt),
+        durationMinutes: s.durationMinutes,
+        pausedMinutes: Math.round(pausedMs / 6e4),
+        actualTreatmentMinutes: Math.round(actualTreatmentMs / 6e4),
+        idleBeforeMinutes: Math.round(idleBeforeMs / 6e4),
+        patientId: safePatient,
+        assignedNurse: s.assignedNurse?.trim() || "Unassigned",
+        operator: s.startedBy?.trim() || "\u2014",
+        isolationTag: s.isolationTag,
+        urgent: s.urgent,
+        status: s.status
+      });
+    }
+    const formattedRepairs = mRepairs.map((r) => ({
+      id: r.id,
+      machineId: r.machineId,
+      machineLabel: m.label,
+      reportedAt: new Date(r.reportedAt),
+      resolvedAt: r.resolvedAt ? new Date(r.resolvedAt) : null,
+      reportedBy: r.reportedBy,
+      technician: r.technician,
+      issue: r.issue,
+      actionTaken: r.actionTaken,
+      partsReplaced: r.partsReplaced,
+      status: r.status
+    }));
+    const totalTreatmentMinutes = Math.round(totalTreatmentMs / 6e4);
+    const totalPausedMinutes = Math.round(totalPausedMs / 6e4);
+    const totalIdleMinutes = Math.round(totalIdleMs / 6e4);
+    const totalActiveSpan = totalTreatmentMinutes + totalIdleMinutes;
+    const utilizationRate = totalActiveSpan > 0 ? Math.min(100, Math.round(totalTreatmentMinutes / totalActiveSpan * 100)) : 0;
+    return {
+      machineId: m.id,
+      label: m.label,
+      location: m.location,
+      floorId: m.floorId,
+      floorName: m.floorId ? floorMap.get(m.floorId) ?? `Floor ${m.floorId}` : "Unassigned",
+      status: m.status,
+      totalSessions: mSessions.length,
+      totalTreatmentMinutes,
+      totalPausedMinutes,
+      totalIdleMinutes,
+      utilizationRate,
+      sessions: formattedSessions,
+      repairs: formattedRepairs
+    };
+  });
+  const result = {
+    startDate: opts.startDate,
+    endDate: opts.endDate,
+    generatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+    canSeePhi: viewer.canSeePhi,
+    floorId: opts.floorId,
+    floorName: opts.floorId ? floorMap.get(opts.floorId) : void 0,
+    machines: machineReports
+  };
+  machineMetricsCache.set(cacheKey2, { value: result, expiresAt: Date.now() + METRICS_CACHE_TTL_MS });
+  return result;
+}
+async function logMachineRepair(input) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const inserted = await db.insert(machineRepairs).values({
+    machineId: input.machineId,
+    reportedBy: input.reportedBy,
+    issue: input.issue.trim(),
+    technician: input.technician?.trim() || null,
+    actionTaken: input.actionTaken?.trim() || null,
+    partsReplaced: input.partsReplaced?.trim() || null,
+    status: input.status ?? "pending",
+    resolvedAt: input.status === "resolved" ? /* @__PURE__ */ new Date() : null
+  }).returning();
+  invalidateMachineMetricsCache(input.machineId);
+  return inserted[0];
+}
+async function listMachineRepairs(machineId) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(machineRepairs).where(eq3(machineRepairs.machineId, machineId)).orderBy(desc(machineRepairs.reportedAt));
+}
+async function generateMachineMetricsExcel(report) {
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = "Dialysis Occupancy Board";
+  workbook.created = /* @__PURE__ */ new Date();
+  const titleHeaderFill = {
+    type: "pattern",
+    pattern: "solid",
+    fgColor: { argb: "FF0F172A" }
+    // Slate 900
+  };
+  const tableHeaderFill = {
+    type: "pattern",
+    pattern: "solid",
+    fgColor: { argb: "FF1E293B" }
+    // Slate 800
+  };
+  const whiteBoldText = {
+    color: { argb: "FFFFFFFF" },
+    bold: true,
+    name: "Segoe UI",
+    size: 10
+  };
+  const regularText = {
+    name: "Segoe UI",
+    size: 9
+  };
+  const thinBorder = {
+    top: { style: "thin", color: { argb: "FFE2E8F0" } },
+    bottom: { style: "thin", color: { argb: "FFE2E8F0" } },
+    left: { style: "thin", color: { argb: "FFE2E8F0" } },
+    right: { style: "thin", color: { argb: "FFE2E8F0" } }
+  };
+  const summarySheet = workbook.addWorksheet("Machine Overview", {
+    views: [{ showGridLines: true }]
+  });
+  summarySheet.columns = [
+    { header: "Machine Label", key: "label", width: 16 },
+    { header: "Floor", key: "floor", width: 18 },
+    { header: "Location", key: "location", width: 16 },
+    { header: "Status", key: "status", width: 14 },
+    { header: "Total Sessions", key: "sessions", width: 16 },
+    { header: "Treatment Time (Hrs)", key: "treatmentHours", width: 22 },
+    { header: "Paused Time (Hrs)", key: "pausedHours", width: 20 },
+    { header: "Idle Time (Hrs)", key: "idleHours", width: 18 },
+    { header: "Utilization (%)", key: "utilization", width: 18 },
+    { header: "Total Repairs", key: "repairs", width: 14 }
+  ];
+  const summaryHeader = summarySheet.getRow(1);
+  summaryHeader.height = 26;
+  summaryHeader.eachCell((cell) => {
+    cell.fill = tableHeaderFill;
+    cell.font = whiteBoldText;
+    cell.alignment = { vertical: "middle", horizontal: "center" };
+  });
+  for (const m of report.machines) {
+    const row = summarySheet.addRow({
+      label: m.label,
+      floor: m.floorName,
+      location: m.location,
+      status: m.status.toUpperCase(),
+      sessions: m.totalSessions,
+      treatmentHours: Number((m.totalTreatmentMinutes / 60).toFixed(1)),
+      pausedHours: Number((m.totalPausedMinutes / 60).toFixed(1)),
+      idleHours: Number((m.totalIdleMinutes / 60).toFixed(1)),
+      utilization: `${m.utilizationRate}%`,
+      repairs: m.repairs.length
+    });
+    row.height = 20;
+    row.eachCell((cell) => {
+      cell.font = regularText;
+      cell.border = thinBorder;
+      cell.alignment = { vertical: "middle", horizontal: "center" };
+    });
+  }
+  const sessionsSheet = workbook.addWorksheet("Treatment Sessions", {
+    views: [{ showGridLines: true }]
+  });
+  sessionsSheet.columns = [
+    { header: "Session ID", key: "id", width: 14 },
+    { header: "Machine", key: "machineLabel", width: 16 },
+    { header: "Date", key: "date", width: 14 },
+    { header: "Started At", key: "startedAt", width: 20 },
+    { header: "Ended At", key: "endedAt", width: 20 },
+    { header: "Planned Duration (Min)", key: "duration", width: 22 },
+    { header: "Actual Treatment (Min)", key: "actual", width: 22 },
+    { header: "Paused (Min)", key: "paused", width: 16 },
+    { header: "Idle Before (Min)", key: "idle", width: 18 },
+    { header: report.canSeePhi ? "Patient ID" : "Patient Ticket", key: "patient", width: 20 },
+    { header: "Assigned Nurse", key: "nurse", width: 22 },
+    { header: "Operator", key: "operator", width: 18 },
+    { header: "Tag", key: "tag", width: 12 },
+    { header: "Priority", key: "priority", width: 12 },
+    { header: "Status", key: "status", width: 14 }
+  ];
+  const sessionsHeader = sessionsSheet.getRow(1);
+  sessionsHeader.height = 26;
+  sessionsHeader.eachCell((cell) => {
+    cell.fill = tableHeaderFill;
+    cell.font = whiteBoldText;
+    cell.alignment = { vertical: "middle", horizontal: "center" };
+  });
+  for (const m of report.machines) {
+    for (const s of m.sessions) {
+      const row = sessionsSheet.addRow({
+        id: s.id,
+        machineLabel: s.machineLabel,
+        date: s.date,
+        startedAt: s.startedAt.toLocaleString([], { timeZone: "Asia/Manila" }),
+        endedAt: s.endedAt ? s.endedAt.toLocaleString([], { timeZone: "Asia/Manila" }) : "Active",
+        duration: s.durationMinutes,
+        actual: s.actualTreatmentMinutes,
+        paused: s.pausedMinutes,
+        idle: s.idleBeforeMinutes,
+        patient: s.patientId,
+        nurse: s.assignedNurse,
+        operator: s.operator,
+        tag: s.isolationTag.toUpperCase(),
+        priority: s.urgent ? "URGENT" : "Normal",
+        status: s.status.toUpperCase()
+      });
+      row.height = 20;
+      row.eachCell((cell) => {
+        cell.font = regularText;
+        cell.border = thinBorder;
+        cell.alignment = { vertical: "middle", horizontal: "center" };
+      });
+    }
+  }
+  const repairsSheet = workbook.addWorksheet("Maintenance & Repairs", {
+    views: [{ showGridLines: true }]
+  });
+  repairsSheet.columns = [
+    { header: "Repair ID", key: "id", width: 14 },
+    { header: "Machine", key: "machineLabel", width: 16 },
+    { header: "Reported Date", key: "reportedAt", width: 20 },
+    { header: "Reported By", key: "reportedBy", width: 18 },
+    { header: "Technician", key: "technician", width: 18 },
+    { header: "Issue Description", key: "issue", width: 32 },
+    { header: "Action Taken", key: "actionTaken", width: 32 },
+    { header: "Parts Replaced", key: "partsReplaced", width: 24 },
+    { header: "Resolved Date", key: "resolvedAt", width: 20 },
+    { header: "Status", key: "status", width: 16 }
+  ];
+  const repairsHeader = repairsSheet.getRow(1);
+  repairsHeader.height = 26;
+  repairsHeader.eachCell((cell) => {
+    cell.fill = tableHeaderFill;
+    cell.font = whiteBoldText;
+    cell.alignment = { vertical: "middle", horizontal: "center" };
+  });
+  for (const m of report.machines) {
+    for (const r of m.repairs) {
+      const row = repairsSheet.addRow({
+        id: r.id,
+        machineLabel: r.machineLabel,
+        reportedAt: r.reportedAt.toLocaleString([], { timeZone: "Asia/Manila" }),
+        reportedBy: r.reportedBy,
+        technician: r.technician ?? "\u2014",
+        issue: r.issue,
+        actionTaken: r.actionTaken ?? "\u2014",
+        partsReplaced: r.partsReplaced ?? "\u2014",
+        resolvedAt: r.resolvedAt ? r.resolvedAt.toLocaleString([], { timeZone: "Asia/Manila" }) : "Unresolved",
+        status: r.status.toUpperCase()
+      });
+      row.height = 20;
+      row.eachCell((cell) => {
+        cell.font = regularText;
+        cell.border = thinBorder;
+        cell.alignment = { vertical: "middle", horizontal: "left" };
+      });
+    }
+  }
+  const buffer = await workbook.xlsx.writeBuffer();
+  return Buffer.from(buffer);
+}
+
 // server/machines.ts
 var BOARD_CACHE_TTL_MS = 2e3;
 var boardCache = /* @__PURE__ */ new Map();
 function invalidateBoardCache() {
   boardCache.clear();
+  invalidateMachineMetricsCache();
 }
 async function listMachines(viewer = { canSeePhi: false }) {
   const key = viewer.canSeePhi ? "phi" : "masked";
@@ -1158,7 +1560,7 @@ async function listMachines(viewer = { canSeePhi: false }) {
     db.select().from(machines).orderBy(machines.floorId, machines.sortOrder, machines.id),
     // Floor boards only show machines with status 'active'. Backup/repair
     // machines live on the dedicated Backup & Repair board instead.
-    db.select().from(sessions).where(eq3(sessions.status, "active"))
+    db.select().from(sessions).where(eq4(sessions.status, "active"))
   ]);
   const byMachine = /* @__PURE__ */ new Map();
   for (const row of rows) byMachine.set(row.machineId, row);
@@ -1194,7 +1596,7 @@ async function assignSession(input) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   return await db.transaction(async (tx) => {
-    const conflict = await tx.select({ id: sessions.id }).from(sessions).where(and(eq3(sessions.machineId, input.machineId), eq3(sessions.status, "active"))).limit(1).for("update");
+    const conflict = await tx.select({ id: sessions.id }).from(sessions).where(and2(eq4(sessions.machineId, input.machineId), eq4(sessions.status, "active"))).limit(1).for("update");
     if (conflict.length > 0) {
       throw new Error("MACHINE_OCCUPIED");
     }
@@ -1226,7 +1628,7 @@ async function endSession(input) {
     pausedAt: sessions.pausedAt,
     pausedSeconds: sessions.pausedSeconds,
     endsAt: sessions.endsAt
-  }).from(sessions).where(eq3(sessions.id, input.sessionId)).limit(1);
+  }).from(sessions).where(eq4(sessions.id, input.sessionId)).limit(1);
   const row = session[0];
   if (row) {
     const elapsedPausedSeconds = row.pausedAt ? Math.round((now.getTime() - row.pausedAt.getTime()) / 1e3) : 0;
@@ -1239,9 +1641,9 @@ async function endSession(input) {
       status: "ended",
       endedAt: now,
       endedBy: input.endedBy
-    }).where(and(eq3(sessions.id, input.sessionId), eq3(sessions.status, "active")));
+    }).where(and2(eq4(sessions.id, input.sessionId), eq4(sessions.status, "active")));
   } else {
-    await db.update(sessions).set({ status: "ended", endedAt: now, endedBy: input.endedBy }).where(and(eq3(sessions.id, input.sessionId), eq3(sessions.status, "active")));
+    await db.update(sessions).set({ status: "ended", endedAt: now, endedBy: input.endedBy }).where(and2(eq4(sessions.id, input.sessionId), eq4(sessions.status, "active")));
   }
   if (session[0]?.needsRepairAfterSession) {
     await setMachineStatus({ machineId: session[0].machineId, status: "repair" }).catch(() => {
@@ -1251,18 +1653,18 @@ async function endSession(input) {
 async function toggleUrgent(input) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  await db.update(sessions).set({ urgent: sql2`NOT urgent` }).where(eq3(sessions.id, input.sessionId));
+  await db.update(sessions).set({ urgent: sql3`NOT urgent` }).where(eq4(sessions.id, input.sessionId));
 }
 async function togglePause(input) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   const now = /* @__PURE__ */ new Date();
-  const rows = await db.select({ pausedAt: sessions.pausedAt, pausedSeconds: sessions.pausedSeconds, endsAt: sessions.endsAt }).from(sessions).where(and(eq3(sessions.id, input.sessionId), eq3(sessions.status, "active"))).limit(1);
+  const rows = await db.select({ pausedAt: sessions.pausedAt, pausedSeconds: sessions.pausedSeconds, endsAt: sessions.endsAt }).from(sessions).where(and2(eq4(sessions.id, input.sessionId), eq4(sessions.status, "active"))).limit(1);
   const row = rows[0];
   if (!row) throw new Error("NO_ACTIVE_SESSION");
   if (input.paused) {
     if (row.pausedAt) return;
-    await db.update(sessions).set({ pausedAt: now }).where(eq3(sessions.id, input.sessionId));
+    await db.update(sessions).set({ pausedAt: now }).where(eq4(sessions.id, input.sessionId));
   } else {
     if (!row.pausedAt) return;
     const pausedMs = now.getTime() - row.pausedAt.getTime();
@@ -1272,30 +1674,30 @@ async function togglePause(input) {
       pausedAt: null,
       pausedSeconds: Math.max(0, row.pausedSeconds + addedSeconds),
       endsAt: newEndsAt
-    }).where(eq3(sessions.id, input.sessionId));
+    }).where(eq4(sessions.id, input.sessionId));
   }
 }
 async function setRepairFlag(input) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  await db.update(sessions).set({ needsRepairAfterSession: input.flag }).where(eq3(sessions.id, input.sessionId));
+  await db.update(sessions).set({ needsRepairAfterSession: input.flag }).where(eq4(sessions.id, input.sessionId));
 }
 async function updateIsolationTag(input) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  await db.update(sessions).set({ isolationTag: input.isolationTag }).where(eq3(sessions.id, input.sessionId));
+  await db.update(sessions).set({ isolationTag: input.isolationTag }).where(eq4(sessions.id, input.sessionId));
 }
 async function updateDisplayLabel(input) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   const label = input.displayLabel ? input.displayLabel.trim() || null : null;
   if (label !== null && label.length > 64) throw new Error("LABEL_TOO_LONG");
-  await db.update(sessions).set({ displayLabel: label }).where(eq3(sessions.id, input.sessionId));
+  await db.update(sessions).set({ displayLabel: label }).where(eq4(sessions.id, input.sessionId));
 }
 async function getSessionFloorId(sessionId) {
   const db = await getDb();
   if (!db) return void 0;
-  const rows = await db.select({ machineId: sessions.machineId }).from(sessions).where(eq3(sessions.id, sessionId)).limit(1);
+  const rows = await db.select({ machineId: sessions.machineId }).from(sessions).where(eq4(sessions.id, sessionId)).limit(1);
   if (!rows[0]) return void 0;
   const machine = await getMachineById(rows[0].machineId);
   return machine?.floorId ?? null;
@@ -1303,7 +1705,7 @@ async function getSessionFloorId(sessionId) {
 async function getMachineById(machineId) {
   const db = await getDb();
   if (!db) return void 0;
-  const rows = await db.select().from(machines).where(eq3(machines.id, machineId)).limit(1);
+  const rows = await db.select().from(machines).where(eq4(machines.id, machineId)).limit(1);
   return rows[0];
 }
 async function listFloors() {
@@ -1314,11 +1716,11 @@ async function listFloors() {
 async function addMachine(input) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const existing = await db.select({ id: machines.id }).from(machines).where(eq3(machines.label, input.label.trim())).limit(1);
+  const existing = await db.select({ id: machines.id }).from(machines).where(eq4(machines.label, input.label.trim())).limit(1);
   if (existing.length > 0) {
     throw new Error("MACHINE_LABEL_EXISTS");
   }
-  const maxOrder = await db.select({ sortOrder: machines.sortOrder }).from(machines).where(input.floorId ? eq3(machines.floorId, input.floorId) : isNull(machines.floorId)).orderBy(desc(machines.sortOrder)).limit(1);
+  const maxOrder = await db.select({ sortOrder: machines.sortOrder }).from(machines).where(input.floorId ? eq4(machines.floorId, input.floorId) : isNull(machines.floorId)).orderBy(desc2(machines.sortOrder)).limit(1);
   const nextOrder = (maxOrder[0]?.sortOrder ?? 0) + 1;
   const result = await db.insert(machines).values({
     label: input.label.trim(),
@@ -1333,11 +1735,11 @@ async function updateMachineLabel(input) {
   if (!db) throw new Error("Database not available");
   const newLabel = input.label.trim();
   if (!newLabel) throw new Error("LABEL_REQUIRED");
-  const existing = await db.select({ id: machines.id }).from(machines).where(and(eq3(machines.label, newLabel), sql2`${machines.id} <> ${input.machineId}`)).limit(1);
+  const existing = await db.select({ id: machines.id }).from(machines).where(and2(eq4(machines.label, newLabel), sql3`${machines.id} <> ${input.machineId}`)).limit(1);
   if (existing.length > 0) {
     throw new Error("MACHINE_LABEL_EXISTS");
   }
-  await db.update(machines).set({ label: newLabel }).where(eq3(machines.id, input.machineId));
+  await db.update(machines).set({ label: newLabel }).where(eq4(machines.id, input.machineId));
 }
 async function listOffboardedMachines() {
   const db = await getDb();
@@ -1350,7 +1752,7 @@ async function listOffboardedMachines() {
     statusNote: machines.statusNote,
     floorId: machines.floorId,
     createdAt: machines.createdAt
-  }).from(machines).where(sql2`${machines.status} <> 'active'`).orderBy(machines.status, machines.sortOrder, machines.id);
+  }).from(machines).where(sql3`${machines.status} <> 'active'`).orderBy(machines.status, machines.sortOrder, machines.id);
   return rows;
 }
 async function setMachineStatus(input) {
@@ -1358,7 +1760,7 @@ async function setMachineStatus(input) {
   if (!db) throw new Error("Database not available");
   const machine = await getMachineById(input.machineId);
   if (!machine) throw new Error("MACHINE_NOT_FOUND");
-  const active = await db.select({ id: sessions.id }).from(sessions).where(and(eq3(sessions.machineId, input.machineId), eq3(sessions.status, "active"))).limit(1);
+  const active = await db.select({ id: sessions.id }).from(sessions).where(and2(eq4(sessions.machineId, input.machineId), eq4(sessions.status, "active"))).limit(1);
   if (active.length > 0) {
     throw new Error("MACHINE_IN_TREATMENT");
   }
@@ -1366,7 +1768,7 @@ async function setMachineStatus(input) {
     if (input.floorId === void 0 || input.floorId === null) {
       throw new Error("FLOOR_REQUIRED");
     }
-    const floor = await db.select({ id: floors.id }).from(floors).where(eq3(floors.id, input.floorId)).limit(1);
+    const floor = await db.select({ id: floors.id }).from(floors).where(eq4(floors.id, input.floorId)).limit(1);
     if (floor.length === 0) throw new Error("FLOOR_NOT_FOUND");
   }
   const note = input.statusNote?.trim() || null;
@@ -1374,7 +1776,7 @@ async function setMachineStatus(input) {
     status: input.status,
     statusNote: note,
     floorId: input.status === "active" ? input.floorId : machine.floorId
-  }).where(eq3(machines.id, input.machineId));
+  }).where(eq4(machines.id, input.machineId));
 }
 async function swapMachines(input) {
   const db = await getDb();
@@ -1386,15 +1788,15 @@ async function swapMachines(input) {
   if (!a.floorId || !b.floorId) throw new Error("FLOOR_REQUIRED");
   if (a.status !== "active" || b.status !== "active") throw new Error("MACHINE_OFFBOARD");
   const active = await db.select({ id: sessions.id }).from(sessions).where(
-    and(sql2`${sessions.machineId} IN (${input.machineAId}, ${input.machineBId})`, eq3(sessions.status, "active"))
+    and2(sql3`${sessions.machineId} IN (${input.machineAId}, ${input.machineBId})`, eq4(sessions.status, "active"))
   ).limit(1);
   if (active.length > 0) throw new Error("MACHINE_IN_TREATMENT");
   if (a.floorId === b.floorId) {
     await reorderMachines(input.machineAId, input.machineBId);
     return;
   }
-  await db.update(machines).set({ floorId: b.floorId }).where(eq3(machines.id, a.id));
-  await db.update(machines).set({ floorId: a.floorId }).where(eq3(machines.id, b.id));
+  await db.update(machines).set({ floorId: b.floorId }).where(eq4(machines.id, a.id));
+  await db.update(machines).set({ floorId: a.floorId }).where(eq4(machines.id, b.id));
 }
 async function reorderMachines(machineAId, machineBId) {
   const db = await getDb();
@@ -1402,8 +1804,8 @@ async function reorderMachines(machineAId, machineBId) {
   const a = await getMachineById(machineAId);
   const b = await getMachineById(machineBId);
   if (!a || !b || a.floorId !== b.floorId) return;
-  await db.update(machines).set({ sortOrder: b.sortOrder }).where(eq3(machines.id, a.id));
-  await db.update(machines).set({ sortOrder: a.sortOrder }).where(eq3(machines.id, b.id));
+  await db.update(machines).set({ sortOrder: b.sortOrder }).where(eq4(machines.id, a.id));
+  await db.update(machines).set({ sortOrder: a.sortOrder }).where(eq4(machines.id, b.id));
 }
 var SUPERVISOR_PERIODS = [
   { key: "supShift1", label: "Supervisor Shift \xB7 7:00 AM \u2013 3:00 PM", hours: [7, 15] },
@@ -1485,26 +1887,26 @@ async function createNarrative(input) {
 async function getNarrativeById(id, floorId) {
   const db = await getDb();
   if (!db) return void 0;
-  const rows = await db.select().from(narrativeReports).where(and(eq3(narrativeReports.id, id), eq3(narrativeReports.floorId, floorId))).limit(1);
+  const rows = await db.select().from(narrativeReports).where(and2(eq4(narrativeReports.id, id), eq4(narrativeReports.floorId, floorId))).limit(1);
   return rows[0];
 }
 async function updateNarrativeBody(id, body) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  await db.update(narrativeReports).set({ body }).where(eq3(narrativeReports.id, id));
-  const rows = await db.select({ reportDate: narrativeReports.reportDate, floorId: narrativeReports.floorId }).from(narrativeReports).where(eq3(narrativeReports.id, id));
+  await db.update(narrativeReports).set({ body }).where(eq4(narrativeReports.id, id));
+  const rows = await db.select({ reportDate: narrativeReports.reportDate, floorId: narrativeReports.floorId }).from(narrativeReports).where(eq4(narrativeReports.id, id));
   if (rows[0]) reportCacheInvalidate(rows[0].reportDate, rows[0].floorId);
 }
 async function listNarratives(input) {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(narrativeReports).where(and(eq3(narrativeReports.floorId, input.floorId), eq3(narrativeReports.reportDate, input.reportDate))).orderBy(narrativeReports.updatedAt);
+  return db.select().from(narrativeReports).where(and2(eq4(narrativeReports.floorId, input.floorId), eq4(narrativeReports.reportDate, input.reportDate))).orderBy(narrativeReports.updatedAt);
 }
 async function deleteNarrative(input) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const rows = await db.select().from(narrativeReports).where(and(eq3(narrativeReports.id, input.id), eq3(narrativeReports.floorId, input.floorId)));
-  await db.delete(narrativeReports).where(and(eq3(narrativeReports.id, input.id), eq3(narrativeReports.floorId, input.floorId)));
+  const rows = await db.select().from(narrativeReports).where(and2(eq4(narrativeReports.id, input.id), eq4(narrativeReports.floorId, input.floorId)));
+  await db.delete(narrativeReports).where(and2(eq4(narrativeReports.id, input.id), eq4(narrativeReports.floorId, input.floorId)));
   const row = rows[0];
   if (row) {
     reportCacheInvalidate(row.reportDate, row.floorId);
@@ -1539,7 +1941,7 @@ async function listNarrativeHistory(input) {
   if (!db) return [];
   if (input.floorId !== void 0 && input.reportDate) {
     return db.select().from(narrativeHistory).where(
-      and(eq3(narrativeHistory.floorId, input.floorId), eq3(narrativeHistory.reportDate, input.reportDate))
+      and2(eq4(narrativeHistory.floorId, input.floorId), eq4(narrativeHistory.reportDate, input.reportDate))
     ).orderBy(narrativeHistory.createdAt);
   }
   return db.select().from(narrativeHistory).orderBy(narrativeHistory.createdAt);
@@ -1551,16 +1953,16 @@ async function machineDayMetrics(input) {
   const dateStart = /* @__PURE__ */ new Date(`${input.date}T00:00:00Z`);
   const dateEnd = /* @__PURE__ */ new Date(`${input.date}T23:59:59Z`);
   const rows = await db.select().from(sessions).where(
-    and(
-      eq3(sessions.status, "ended"),
-      sql2`${sessions.endedAt} >= ${dateStart}`,
-      sql2`${sessions.endedAt} <= ${dateEnd}`
+    and2(
+      eq4(sessions.status, "ended"),
+      sql3`${sessions.endedAt} >= ${dateStart}`,
+      sql3`${sessions.endedAt} <= ${dateEnd}`
     )
   );
   const activeToday = await db.select().from(sessions).where(
-    and(eq3(sessions.status, "active"), sql2`${sessions.startedAt} >= ${dateStart}`, sql2`${sessions.startedAt} <= ${dateEnd}`)
+    and2(eq4(sessions.status, "active"), sql3`${sessions.startedAt} >= ${dateStart}`, sql3`${sessions.startedAt} <= ${dateEnd}`)
   );
-  const floorMachines = await db.select({ id: machines.id, machineId: machines.id }).from(machines).where(and(eq3(machines.floorId, input.floorId), eq3(machines.status, "active")));
+  const floorMachines = await db.select({ id: machines.id, machineId: machines.id }).from(machines).where(and2(eq4(machines.floorId, input.floorId), eq4(machines.status, "active")));
   const onFloor = new Set(floorMachines.map((m) => m.id));
   const byMachine = /* @__PURE__ */ new Map();
   for (const s of [...rows, ...activeToday]) {
@@ -1599,26 +2001,26 @@ async function machineDayMetrics(input) {
 async function removeMachine(input) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const active = await db.select({ id: sessions.id }).from(sessions).where(and(eq3(sessions.machineId, input.machineId), eq3(sessions.status, "active"))).limit(1);
+  const active = await db.select({ id: sessions.id }).from(sessions).where(and2(eq4(sessions.machineId, input.machineId), eq4(sessions.status, "active"))).limit(1);
   if (active.length > 0) {
     throw new Error("MACHINE_IN_TREATMENT");
   }
-  const machine = await db.select({ status: machines.status }).from(machines).where(eq3(machines.id, input.machineId)).limit(1);
+  const machine = await db.select({ status: machines.status }).from(machines).where(eq4(machines.id, input.machineId)).limit(1);
   if (machine.length === 0) throw new Error("MACHINE_NOT_FOUND");
   if (machine[0].status !== "active") {
     throw new Error("MACHINE_OFFBOARD");
   }
-  await db.delete(sessions).where(eq3(sessions.machineId, input.machineId));
-  await db.delete(machines).where(eq3(machines.id, input.machineId));
+  await db.delete(sessions).where(eq4(sessions.machineId, input.machineId));
+  await db.delete(machines).where(eq4(machines.id, input.machineId));
 }
 async function addRoom(input) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const existing = await db.select({ id: floors.id }).from(floors).where(eq3(floors.name, input.name.trim())).limit(1);
+  const existing = await db.select({ id: floors.id }).from(floors).where(eq4(floors.name, input.name.trim())).limit(1);
   if (existing.length > 0) {
     throw new Error("ROOM_EXISTS");
   }
-  const maxOrder = await db.select({ sortOrder: floors.sortOrder }).from(floors).orderBy(desc(floors.sortOrder)).limit(1);
+  const maxOrder = await db.select({ sortOrder: floors.sortOrder }).from(floors).orderBy(desc2(floors.sortOrder)).limit(1);
   const code = `F${(maxOrder[0]?.sortOrder ?? 0) + 1}`;
   const result = await db.insert(floors).values({
     code,
@@ -1633,24 +2035,24 @@ async function renameRoom(input) {
   const newName = input.name.trim();
   if (!newName) throw new Error("ROOM_NAME_REQUIRED");
   if (newName.length > 64) throw new Error("ROOM_NAME_TOO_LONG");
-  const existing = await db.select({ id: floors.id }).from(floors).where(and(eq3(floors.name, newName), sql2`${floors.id} <> ${input.roomId}`)).limit(1);
+  const existing = await db.select({ id: floors.id }).from(floors).where(and2(eq4(floors.name, newName), sql3`${floors.id} <> ${input.roomId}`)).limit(1);
   if (existing.length > 0) {
     throw new Error("ROOM_EXISTS");
   }
-  await db.update(floors).set({ name: newName }).where(eq3(floors.id, input.roomId));
+  await db.update(floors).set({ name: newName }).where(eq4(floors.id, input.roomId));
 }
 async function removeRoom(input) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const active = await db.select({ id: sessions.id }).from(sessions).innerJoin(machines, eq3(machines.id, sessions.machineId)).where(and(eq3(machines.floorId, input.roomId), eq3(sessions.status, "active"))).limit(1);
+  const active = await db.select({ id: sessions.id }).from(sessions).innerJoin(machines, eq4(machines.id, sessions.machineId)).where(and2(eq4(machines.floorId, input.roomId), eq4(sessions.status, "active"))).limit(1);
   if (active.length > 0) {
     throw new Error("ROOM_HAS_ACTIVE_SESSIONS");
   }
-  const machineCount = await db.select({ id: machines.id }).from(machines).where(eq3(machines.floorId, input.roomId)).limit(1);
+  const machineCount = await db.select({ id: machines.id }).from(machines).where(eq4(machines.floorId, input.roomId)).limit(1);
   if (machineCount.length > 0) {
     throw new Error("ROOM_HAS_MACHINES");
   }
-  await db.delete(floors).where(eq3(floors.id, input.roomId));
+  await db.delete(floors).where(eq4(floors.id, input.roomId));
 }
 function toWaitingView(r, viewer = { canSeePhi: false }) {
   return {
@@ -1669,13 +2071,13 @@ function toWaitingView(r, viewer = { canSeePhi: false }) {
 async function listWaitingAll(viewer = { canSeePhi: false }) {
   const db = await getDb();
   if (!db) return [];
-  const rows = await db.select().from(waitingList).where(eq3(waitingList.status, "waiting")).orderBy(desc(waitingList.priority), waitingList.joinedAt, waitingList.id);
+  const rows = await db.select().from(waitingList).where(eq4(waitingList.status, "waiting")).orderBy(desc2(waitingList.priority), waitingList.joinedAt, waitingList.id);
   return rows.map((r) => toWaitingView(r, viewer));
 }
 async function listWaiting(input, viewer = { canSeePhi: false }) {
   const db = await getDb();
   if (!db) return [];
-  const rows = await db.select().from(waitingList).where(and(eq3(waitingList.floorId, input.floorId), eq3(waitingList.status, "waiting"))).orderBy(desc(waitingList.priority), waitingList.joinedAt, waitingList.id);
+  const rows = await db.select().from(waitingList).where(and2(eq4(waitingList.floorId, input.floorId), eq4(waitingList.status, "waiting"))).orderBy(desc2(waitingList.priority), waitingList.joinedAt, waitingList.id);
   return rows.map((r) => toWaitingView(r, viewer));
 }
 async function addWaiting(input) {
@@ -1702,26 +2104,26 @@ async function removeWaiting(input) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   await db.delete(waitingList).where(
-    and(eq3(waitingList.id, input.entryId), eq3(waitingList.floorId, input.floorId), eq3(waitingList.status, "waiting"))
+    and2(eq4(waitingList.id, input.entryId), eq4(waitingList.floorId, input.floorId), eq4(waitingList.status, "waiting"))
   );
 }
 async function markWaitingUrgent(input) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  await db.update(waitingList).set({ priority: input.priority }).where(and(eq3(waitingList.id, input.entryId), eq3(waitingList.floorId, input.floorId), eq3(waitingList.status, "waiting")));
+  await db.update(waitingList).set({ priority: input.priority }).where(and2(eq4(waitingList.id, input.entryId), eq4(waitingList.floorId, input.floorId), eq4(waitingList.status, "waiting")));
 }
 async function countVacantMachines(input) {
   const db = await getDb();
   if (!db) return 0;
-  const floorMachines = await db.select({ id: machines.id }).from(machines).where(eq3(machines.floorId, input.floorId));
-  const occupiedIds = await db.select({ machineId: sessions.machineId }).from(sessions).where(eq3(sessions.status, "active"));
+  const floorMachines = await db.select({ id: machines.id }).from(machines).where(eq4(machines.floorId, input.floorId));
+  const occupiedIds = await db.select({ machineId: sessions.machineId }).from(sessions).where(eq4(sessions.status, "active"));
   const occupied = new Set(occupiedIds.map((o) => o.machineId));
   return floorMachines.filter((m) => !occupied.has(m.id)).length;
 }
 async function admitWaiting(input) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const entry = await db.select().from(waitingList).where(and(eq3(waitingList.id, input.entryId), eq3(waitingList.floorId, input.floorId), eq3(waitingList.status, "waiting"))).limit(1);
+  const entry = await db.select().from(waitingList).where(and2(eq4(waitingList.id, input.entryId), eq4(waitingList.floorId, input.floorId), eq4(waitingList.status, "waiting"))).limit(1);
   if (entry.length === 0) {
     throw new Error("NO_WAITING_PATIENT");
   }
@@ -1730,12 +2132,12 @@ async function admitWaiting(input) {
   const isolationTag = input.isolationTag ?? entryRow.isolationTag;
   const assignedNurse = input.assignedNurse?.trim() || entryRow.assignedNurse;
   await db.transaction(async (tx) => {
-    const locked = await tx.select({ id: waitingList.id, patientId: waitingList.patientId }).from(waitingList).where(and(eq3(waitingList.id, input.entryId), eq3(waitingList.status, "waiting"))).limit(1).for("update", { skipLocked: true });
+    const locked = await tx.select({ id: waitingList.id, patientId: waitingList.patientId }).from(waitingList).where(and2(eq4(waitingList.id, input.entryId), eq4(waitingList.status, "waiting"))).limit(1).for("update", { skipLocked: true });
     if (locked.length === 0) {
       throw new Error("NO_WAITING_PATIENT");
     }
-    const floorMachines = await tx.select({ id: machines.id }).from(machines).where(eq3(machines.floorId, input.floorId)).orderBy(machines.sortOrder, machines.id);
-    const occupiedIds = await tx.select({ machineId: sessions.machineId }).from(sessions).where(eq3(sessions.status, "active"));
+    const floorMachines = await tx.select({ id: machines.id }).from(machines).where(eq4(machines.floorId, input.floorId)).orderBy(machines.sortOrder, machines.id);
+    const occupiedIds = await tx.select({ machineId: sessions.machineId }).from(sessions).where(eq4(sessions.status, "active"));
     const occupied = new Set(occupiedIds.map((o) => o.machineId));
     const vacant = floorMachines.find((m) => !occupied.has(m.id));
     if (!vacant) {
@@ -1755,7 +2157,7 @@ async function admitWaiting(input) {
       displayLabel: input.displayLabel ? input.displayLabel.trim() || null : null,
       assignedNurse: assignedNurse || null
     });
-    await tx.update(waitingList).set({ status: "admitted", admittedAt: now }).where(eq3(waitingList.id, input.entryId));
+    await tx.update(waitingList).set({ status: "admitted", admittedAt: now }).where(eq4(waitingList.id, input.entryId));
   });
 }
 var UNASSIGNED_NURSE = "Unassigned";
@@ -1773,7 +2175,7 @@ async function listNurseAssignments(input) {
     isolationTag: sessions.isolationTag,
     displayLabel: sessions.displayLabel,
     assignedNurse: sessions.assignedNurse
-  }).from(sessions).innerJoin(machines, eq3(sessions.machineId, machines.id)).where(and(eq3(sessions.status, "active"), eq3(machines.floorId, input.floorId)));
+  }).from(sessions).innerJoin(machines, eq4(sessions.machineId, machines.id)).where(and2(eq4(sessions.status, "active"), eq4(machines.floorId, input.floorId)));
   const machineLabels = await db.select({ id: machines.id, label: machines.label }).from(machines);
   const labelById = /* @__PURE__ */ new Map();
   for (const m of machineLabels) labelById.set(m.id, m.label);
@@ -1828,14 +2230,14 @@ async function endOfDayReport(opts) {
   const reportDate = opts?.date ?? manilaToday();
   const range = dayRangeUtc(reportDate);
   const floorName = opts?.floorId ? await floorNameFor(db, opts.floorId) : null;
-  const floorMachines = await db.select().from(machines).where(opts?.floorId ? eq3(machines.floorId, opts.floorId) : void 0);
+  const floorMachines = await db.select().from(machines).where(opts?.floorId ? eq4(machines.floorId, opts.floorId) : void 0);
   const totalMachinesOnFloor = floorMachines.length;
   const floorMachineIds = new Set(floorMachines.map((m) => m.id));
   const machineLabels = new Map(floorMachines.map((m) => [m.id, m.label]));
   const rows = await db.select().from(sessions).where(
-    and(
-      eq3(sessions.status, "ended"),
-      sql2`${sessions.endedAt} >= ${range.from} AND ${sessions.endedAt} < ${range.to}`
+    and2(
+      eq4(sessions.status, "ended"),
+      sql3`${sessions.endedAt} >= ${range.from} AND ${sessions.endedAt} < ${range.to}`
     )
   );
   const filtered = floorMachineIds.size > 0 ? rows.filter((r) => floorMachineIds.has(r.machineId)) : rows;
@@ -1854,10 +2256,10 @@ async function endOfDayReport(opts) {
     totalMinutes += s.durationMinutes;
   }
   const waitingRows = await db.select().from(waitingList).where(
-    opts?.floorId ? and(
-      eq3(waitingList.floorId, opts.floorId),
-      sql2`${waitingList.joinedAt} >= ${range.from} AND ${waitingList.joinedAt} < ${range.to}`
-    ) : sql2`${waitingList.joinedAt} >= ${range.from} AND ${waitingList.joinedAt} < ${range.to}`
+    opts?.floorId ? and2(
+      eq4(waitingList.floorId, opts.floorId),
+      sql3`${waitingList.joinedAt} >= ${range.from} AND ${waitingList.joinedAt} < ${range.to}`
+    ) : sql3`${waitingList.joinedAt} >= ${range.from} AND ${waitingList.joinedAt} < ${range.to}`
   );
   const waitingAdds = { normal: 0, urgent: 0, veryUrgent: 0, total: waitingRows.length };
   for (const w of waitingRows) {
@@ -1918,7 +2320,7 @@ function dayRangeUtc(isoDate) {
 }
 async function floorNameFor(db, floorId) {
   if (!db) return null;
-  const rows = await db.select().from(floors).where(eq3(floors.id, floorId)).limit(1);
+  const rows = await db.select().from(floors).where(eq4(floors.id, floorId)).limit(1);
   return rows[0]?.name ?? null;
 }
 function baseEmptyReport(floorId, date) {
@@ -1967,17 +2369,17 @@ async function monthReport(opts) {
   const rangeStart = dayRanges[0].from;
   const rangeEnd = dayRanges[dayRanges.length - 1].to;
   const [floorRows, allMachines, monthSessions, allWaiting, activeRows] = await Promise.all([
-    db.select().from(floors).where(opts?.floorId ? eq3(floors.id, opts.floorId) : void 0),
+    db.select().from(floors).where(opts?.floorId ? eq4(floors.id, opts.floorId) : void 0),
     db.select().from(machines),
-    db.execute(sql2`
+    db.execute(sql3`
       SELECT * FROM ${sessions}
       WHERE "status" = 'ended' AND "endedAt" >= ${rangeStart} AND "endedAt" < ${rangeEnd}
     `),
-    db.execute(sql2`
+    db.execute(sql3`
       SELECT * FROM ${waitingList}
       WHERE "joinedAt" >= ${rangeStart} AND "joinedAt" < ${rangeEnd}
     `),
-    db.execute(sql2`
+    db.execute(sql3`
       SELECT "machineId","startedAt","endedAt","pausedSeconds","status" FROM ${sessions}
       WHERE "status" = 'active' AND "startedAt" >= ${rangeStart} AND "startedAt" < ${rangeEnd}
     `)
@@ -2152,12 +2554,12 @@ async function endOfDayReportBulk(opts) {
   const t1 = Date.now();
   const [allMachines, waitingRows, daySessions] = await Promise.all([
     db.select().from(machines),
-    db.select().from(waitingList).where(sql2`${waitingList.joinedAt} >= ${range.from} AND ${waitingList.joinedAt} < ${range.to}`),
+    db.select().from(waitingList).where(sql3`${waitingList.joinedAt} >= ${range.from} AND ${waitingList.joinedAt} < ${range.to}`),
     // Both ended and active-today sessions in ONE round trip: the remote
     // Supabase pooler runs in transaction mode with a single connection,
     // so "parallel" queries actually serialize (~1.3s each). One UNION
     // all halves the session round trips.
-    db.execute(sql2`
+    db.execute(sql3`
       SELECT "machineId", "patientId", "startedAt", "endedAt", "pausedSeconds", "durationMinutes",
              "assignedNurse", "status", "urgent", "isolationTag"
       FROM ${sessions}
@@ -2310,7 +2712,7 @@ async function listNarrativesBulk(db, opts) {
     body: narrativeReports.body,
     createdAt: narrativeReports.createdAt,
     updatedAt: narrativeReports.updatedAt
-  }).from(narrativeReports).where(eq3(narrativeReports.reportDate, opts.reportDate)).orderBy(narrativeReports.floorId, narrativeReports.periodKey);
+  }).from(narrativeReports).where(eq4(narrativeReports.reportDate, opts.reportDate)).orderBy(narrativeReports.floorId, narrativeReports.periodKey);
 }
 function machineDayMetricsInline(input) {
   const { ended, activeToday, machines: machines2 } = input;
@@ -2352,17 +2754,17 @@ async function listShiftEndorsements(input) {
   const db = await getDb();
   if (!db) return [];
   const conditions = [];
-  if (input?.floorId !== void 0) conditions.push(eq3(shiftEndorsements.floorId, input.floorId));
-  if (input?.date !== void 0) conditions.push(eq3(shiftEndorsements.date, input.date));
+  if (input?.floorId !== void 0) conditions.push(eq4(shiftEndorsements.floorId, input.floorId));
+  if (input?.date !== void 0) conditions.push(eq4(shiftEndorsements.date, input.date));
   if (conditions.length > 0) {
-    return db.select().from(shiftEndorsements).where(and(...conditions)).orderBy(desc(shiftEndorsements.createdAt));
+    return db.select().from(shiftEndorsements).where(and2(...conditions)).orderBy(desc2(shiftEndorsements.createdAt));
   }
-  return db.select().from(shiftEndorsements).orderBy(desc(shiftEndorsements.createdAt));
+  return db.select().from(shiftEndorsements).orderBy(desc2(shiftEndorsements.createdAt));
 }
 async function getShiftEndorsementById(id) {
   const db = await getDb();
   if (!db) return void 0;
-  const rows = await db.select().from(shiftEndorsements).where(eq3(shiftEndorsements.id, id)).limit(1);
+  const rows = await db.select().from(shiftEndorsements).where(eq4(shiftEndorsements.id, id)).limit(1);
   return rows[0];
 }
 var trimmedOrNull = (v) => v ? v.trim() || null : null;
@@ -2416,12 +2818,12 @@ async function updateShiftEndorsement(id, input) {
     updates.status = input.status.trim();
     if (input.status.trim() === "ENDORSED_AND_LOCKED") updates.endorsedAt = /* @__PURE__ */ new Date();
   }
-  await db.update(shiftEndorsements).set(updates).where(eq3(shiftEndorsements.id, id));
+  await db.update(shiftEndorsements).set(updates).where(eq4(shiftEndorsements.id, id));
 }
 async function deleteShiftEndorsement(id) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  await db.delete(shiftEndorsements).where(eq3(shiftEndorsements.id, id));
+  await db.delete(shiftEndorsements).where(eq4(shiftEndorsements.id, id));
 }
 function parseInterventions(raw) {
   if (!raw) return [];
@@ -2435,7 +2837,7 @@ function parseInterventions(raw) {
 async function listSessionComplications(input) {
   const db = await getDb();
   if (!db) return [];
-  const rows = input?.sessionId !== void 0 ? await db.select().from(sessionComplications).where(eq3(sessionComplications.sessionId, input.sessionId)).orderBy(desc(sessionComplications.createdAt)) : await db.select().from(sessionComplications).orderBy(desc(sessionComplications.createdAt));
+  const rows = input?.sessionId !== void 0 ? await db.select().from(sessionComplications).where(eq4(sessionComplications.sessionId, input.sessionId)).orderBy(desc2(sessionComplications.createdAt)) : await db.select().from(sessionComplications).orderBy(desc2(sessionComplications.createdAt));
   return rows.map((r) => ({ ...r, interventions: parseInterventions(r.interventionsJson) }));
 }
 async function createSessionComplication(input) {
@@ -2478,28 +2880,28 @@ async function updateSessionComplication(id, input) {
   if (input.onsetMinutes !== void 0) updates.onsetMinutes = input.onsetMinutes ?? null;
   if (input.intervention !== void 0) updates.intervention = input.intervention ? input.intervention.trim() || null : null;
   if (input.resolved !== void 0) updates.resolved = input.resolved;
-  await db.update(sessionComplications).set(updates).where(eq3(sessionComplications.id, id));
+  await db.update(sessionComplications).set(updates).where(eq4(sessionComplications.id, id));
 }
 async function deleteSessionComplication(id) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  await db.delete(sessionComplications).where(eq3(sessionComplications.id, id));
+  await db.delete(sessionComplications).where(eq4(sessionComplications.id, id));
 }
 async function listWaterQualityLogs(input) {
   const db = await getDb();
   if (!db) return [];
   const conditions = [];
-  if (input?.floorId !== void 0) conditions.push(eq3(waterQualityLogs.floorId, input.floorId));
-  if (input?.date !== void 0) conditions.push(eq3(waterQualityLogs.date, input.date));
+  if (input?.floorId !== void 0) conditions.push(eq4(waterQualityLogs.floorId, input.floorId));
+  if (input?.date !== void 0) conditions.push(eq4(waterQualityLogs.date, input.date));
   if (conditions.length > 0) {
-    return db.select().from(waterQualityLogs).where(and(...conditions)).orderBy(desc(waterQualityLogs.createdAt));
+    return db.select().from(waterQualityLogs).where(and2(...conditions)).orderBy(desc2(waterQualityLogs.createdAt));
   }
-  return db.select().from(waterQualityLogs).orderBy(desc(waterQualityLogs.createdAt));
+  return db.select().from(waterQualityLogs).orderBy(desc2(waterQualityLogs.createdAt));
 }
 async function getWaterQualityLogById(id) {
   const db = await getDb();
   if (!db) return void 0;
-  const rows = await db.select().from(waterQualityLogs).where(eq3(waterQualityLogs.id, id)).limit(1);
+  const rows = await db.select().from(waterQualityLogs).where(eq4(waterQualityLogs.id, id)).limit(1);
   return rows[0];
 }
 function computeRejectionRate(feedTds, productTds) {
@@ -2555,25 +2957,25 @@ async function updateWaterQualityLog(id, input) {
   if (input.waterTemp !== void 0) updates.waterTemp = input.waterTemp ? input.waterTemp.trim() || null : null;
   if (input.technician !== void 0) updates.technician = input.technician.trim();
   if (input.status !== void 0) updates.status = input.status.trim();
-  await db.update(waterQualityLogs).set(updates).where(eq3(waterQualityLogs.id, id));
+  await db.update(waterQualityLogs).set(updates).where(eq4(waterQualityLogs.id, id));
 }
 async function deleteWaterQualityLog(id) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  await db.delete(waterQualityLogs).where(eq3(waterQualityLogs.id, id));
+  await db.delete(waterQualityLogs).where(eq4(waterQualityLogs.id, id));
 }
 async function listInfectionSurveillance(input) {
   const db = await getDb();
   if (!db) return [];
   if (input?.patientId !== void 0) {
-    return db.select().from(infectionSurveillance).where(eq3(infectionSurveillance.patientId, input.patientId)).orderBy(desc(infectionSurveillance.updatedAt));
+    return db.select().from(infectionSurveillance).where(eq4(infectionSurveillance.patientId, input.patientId)).orderBy(desc2(infectionSurveillance.updatedAt));
   }
-  return db.select().from(infectionSurveillance).orderBy(desc(infectionSurveillance.updatedAt));
+  return db.select().from(infectionSurveillance).orderBy(desc2(infectionSurveillance.updatedAt));
 }
 async function getInfectionSurveillanceByPatientId(patientId) {
   const db = await getDb();
   if (!db) return void 0;
-  const rows = await db.select().from(infectionSurveillance).where(eq3(infectionSurveillance.patientId, patientId)).limit(1);
+  const rows = await db.select().from(infectionSurveillance).where(eq4(infectionSurveillance.patientId, patientId)).limit(1);
   return rows[0];
 }
 async function upsertInfectionSurveillance(input) {
@@ -2589,7 +2991,7 @@ async function upsertInfectionSurveillance(input) {
       lastTestedDate: input.lastTestedDate !== void 0 ? input.lastTestedDate ? input.lastTestedDate.trim() || null : null : existing.lastTestedDate,
       assignedIsolationRoom: input.assignedIsolationRoom !== void 0 ? input.assignedIsolationRoom ? input.assignedIsolationRoom.trim() || null : null : existing.assignedIsolationRoom,
       updatedAt: /* @__PURE__ */ new Date()
-    }).where(eq3(infectionSurveillance.id, existing.id));
+    }).where(eq4(infectionSurveillance.id, existing.id));
     return { id: existing.id };
   }
   const result = await db.insert(infectionSurveillance).values({
@@ -2606,25 +3008,25 @@ async function upsertInfectionSurveillance(input) {
 async function deleteInfectionSurveillance(id) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  await db.delete(infectionSurveillance).where(eq3(infectionSurveillance.id, id));
+  await db.delete(infectionSurveillance).where(eq4(infectionSurveillance.id, id));
 }
 async function listInventorySupplies(input) {
   const db = await getDb();
   if (!db) return [];
   const conditions = [];
-  if (input?.category) conditions.push(eq3(inventorySupplies.category, input.category));
+  if (input?.category) conditions.push(eq4(inventorySupplies.category, input.category));
   if (input?.lowStockOnly) {
-    conditions.push(sql2`${inventorySupplies.currentStock} <= ${inventorySupplies.reorderLevel}`);
+    conditions.push(sql3`${inventorySupplies.currentStock} <= ${inventorySupplies.reorderLevel}`);
   }
   if (conditions.length > 0) {
-    return db.select().from(inventorySupplies).where(and(...conditions)).orderBy(inventorySupplies.category, inventorySupplies.itemName);
+    return db.select().from(inventorySupplies).where(and2(...conditions)).orderBy(inventorySupplies.category, inventorySupplies.itemName);
   }
   return db.select().from(inventorySupplies).orderBy(inventorySupplies.category, inventorySupplies.itemName);
 }
 async function getInventorySupplyByItemCode(itemCode) {
   const db = await getDb();
   if (!db) return void 0;
-  const rows = await db.select().from(inventorySupplies).where(eq3(inventorySupplies.itemCode, itemCode)).limit(1);
+  const rows = await db.select().from(inventorySupplies).where(eq4(inventorySupplies.itemCode, itemCode)).limit(1);
   return rows[0];
 }
 async function addInventorySupply(input) {
@@ -2653,20 +3055,20 @@ async function updateInventorySupply(id, input) {
   if (input.currentStock !== void 0) updates.currentStock = input.currentStock;
   if (input.reorderLevel !== void 0) updates.reorderLevel = input.reorderLevel;
   if (input.category !== void 0) updates.category = input.category.trim();
-  await db.update(inventorySupplies).set(updates).where(eq3(inventorySupplies.id, id));
+  await db.update(inventorySupplies).set(updates).where(eq4(inventorySupplies.id, id));
 }
 async function adjustInventoryStock(id, delta) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   await db.update(inventorySupplies).set({
-    currentStock: sql2`GREATEST(0, ${inventorySupplies.currentStock} + ${delta})`,
+    currentStock: sql3`GREATEST(0, ${inventorySupplies.currentStock} + ${delta})`,
     updatedAt: /* @__PURE__ */ new Date()
-  }).where(eq3(inventorySupplies.id, id));
+  }).where(eq4(inventorySupplies.id, id));
 }
 async function deleteInventorySupply(id) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  await db.delete(inventorySupplies).where(eq3(inventorySupplies.id, id));
+  await db.delete(inventorySupplies).where(eq4(inventorySupplies.id, id));
 }
 
 // server/_core/trpc.ts
@@ -2872,7 +3274,7 @@ function mapBackendError(error) {
 }
 
 // server/routers.ts
-import { eq as eq4 } from "drizzle-orm";
+import { eq as eq5 } from "drizzle-orm";
 function requireFloorAccess(staff, floorId, oauthUser) {
   if (oauthUser) return;
   if (staff.role === "guest") return;
@@ -3074,6 +3476,57 @@ var appRouter = router({
     /** Backup & Repair inventory: machines off the floors, with their status. */
     offboarded: router({
       list: publicProcedure.query(() => listOffboardedMachines())
+    }),
+    /** Aggregated metrics for a machine or floor over a date range. */
+    metrics: staffReadProcedure.input(
+      z2.object({
+        machineId: z2.number().int().positive().optional(),
+        floorId: z2.number().int().positive().optional(),
+        startDate: z2.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Format must be YYYY-MM-DD"),
+        endDate: z2.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Format must be YYYY-MM-DD")
+      })
+    ).query(async ({ ctx, input }) => {
+      return getMachineMetricsReport(input, { canSeePhi: ctx.isStaff });
+    }),
+    /** Download an Excel (.xlsx) file containing machine overview, sessions, and repairs. */
+    exportExcel: staffReadProcedure.input(
+      z2.object({
+        machineId: z2.number().int().positive().optional(),
+        floorId: z2.number().int().positive().optional(),
+        startDate: z2.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Format must be YYYY-MM-DD"),
+        endDate: z2.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Format must be YYYY-MM-DD")
+      })
+    ).mutation(async ({ ctx, input }) => {
+      const report = await getMachineMetricsReport(input, { canSeePhi: ctx.isStaff });
+      const buffer = await generateMachineMetricsExcel(report);
+      const prefix = input.machineId ? `machine-${input.machineId}` : input.floorId ? `floor-${input.floorId}` : "all-machines";
+      const filename = `${prefix}-metrics-${input.startDate}-to-${input.endDate}.xlsx`;
+      return {
+        filename,
+        base64: buffer.toString("base64")
+      };
+    }),
+    /** Machine maintenance & repair log. */
+    repairs: router({
+      list: staffReadProcedure.input(z2.object({ machineId: z2.number().int().positive() })).query(async ({ input }) => {
+        return listMachineRepairs(input.machineId);
+      }),
+      log: staffOrAdminProcedure.input(
+        z2.object({
+          machineId: z2.number().int().positive(),
+          issue: z2.string().trim().min(1, "Issue description is required").max(1e3),
+          technician: z2.string().trim().max(64).optional(),
+          actionTaken: z2.string().trim().max(1e3).optional(),
+          partsReplaced: z2.string().trim().max(500).optional(),
+          status: z2.enum(["pending", "in_progress", "resolved"]).default("pending")
+        })
+      ).mutation(async ({ ctx, input }) => {
+        const reporter = ctx.user?.name || ctx.staff?.displayName || ctx.staff?.username || "Staff";
+        return logMachineRepair({
+          ...input,
+          reportedBy: reporter
+        });
+      })
     })
   }),
   rooms: router({
@@ -3714,14 +4167,14 @@ var appRouter = router({
     ).mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable." });
-      const rows = await db.select().from(staffAccounts).where(eq4(staffAccounts.username, input.username)).limit(1);
+      const rows = await db.select().from(staffAccounts).where(eq5(staffAccounts.username, input.username)).limit(1);
       const account = rows[0];
       if (!account || !account.active || !verifyPassword(input.password, account.passwordSalt, account.passwordHash)) {
         throw new TRPCError4({ code: "UNAUTHORIZED", message: "Invalid username or password." });
       }
-      await db.update(staffAccounts).set({ lastSignedIn: /* @__PURE__ */ new Date() }).where(eq4(staffAccounts.id, account.id));
+      await db.update(staffAccounts).set({ lastSignedIn: /* @__PURE__ */ new Date() }).where(eq5(staffAccounts.id, account.id));
       await bumpTokenVersion(account.id);
-      const accountNow = await db.select({ tokenVersion: staffAccounts.tokenVersion }).from(staffAccounts).where(eq4(staffAccounts.id, account.id)).limit(1);
+      const accountNow = await db.select({ tokenVersion: staffAccounts.tokenVersion }).from(staffAccounts).where(eq5(staffAccounts.id, account.id)).limit(1);
       await setStaffSessionCookieSync(
         ctx.req,
         ctx.res,

@@ -70,6 +70,34 @@ export const machines = pgTable("machines", {
 export type Machine = typeof machines.$inferSelect;
 export type InsertMachine = typeof machines.$inferInsert;
 
+export type RepairStatus = "pending" | "in_progress" | "resolved";
+
+/**
+ * Historical maintenance and repair log per machine.
+ * Tracks timestamped breakdown reports, technician interventions, actions taken,
+ * replaced parts, and resolution status.
+ */
+export const machineRepairs = pgTable("machine_repairs", {
+  id: serial("id").primaryKey(),
+  machineId: integer("machineId").notNull(),
+  reportedAt: timestamp("reportedAt", { mode: "date" }).defaultNow().notNull(),
+  resolvedAt: timestamp("resolvedAt", { mode: "date" }),
+  reportedBy: varchar("reportedBy", { length: 64 }).notNull(),
+  technician: varchar("technician", { length: 64 }),
+  issue: text("issue").notNull(),
+  actionTaken: text("actionTaken"),
+  partsReplaced: text("partsReplaced"),
+  status: varchar("status", { length: 32 }).notNull().default("pending"),
+  createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt", { mode: "date" }).defaultNow().notNull(),
+}, table => [
+  index("machine_repairs_machine_status_idx").on(table.machineId, table.status),
+  index("machine_repairs_reported_at_idx").on(table.reportedAt),
+]);
+
+export type MachineRepair = typeof machineRepairs.$inferSelect;
+export type InsertMachineRepair = typeof machineRepairs.$inferInsert;
+
 /**
  * Building floors within the dialysis center. Machines are grouped into
  * floor-based rows on the occupancy board (e.g. Floor 1 · 100 machines,

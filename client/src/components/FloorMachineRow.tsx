@@ -8,13 +8,15 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useCanWrite } from "@/hooks/useCanWrite";
 import { trpc } from "@/lib/trpc";
+import { Button } from "@/components/ui/button";
 import EndSessionDialog from "@/components/EndSessionDialog";
 import RenameMachineDialog from "@/components/RenameMachineDialog";
 import RenameSessionLabelDialog from "@/components/RenameSessionLabelDialog";
 import RemoveMachineDialog from "@/components/RemoveMachineDialog";
 import AdverseComplicationModal from "@/components/AdverseComplicationModal";
+import { MachineMetricsExportDialog } from "@/components/MachineMetricsExportDialog";
 import { cn } from "@/lib/utils";
-import { Activity, AlertTriangle, BellRing, Clock, Droplets, FilePenLine, Loader2, MoreVertical, Pause, Play, Pencil, Plus, Power, Trash2, Boxes, Wrench, ShieldAlert, Zap } from "lucide-react";
+import { Activity, AlertTriangle, BellRing, Clock, Droplets, FileDown, FilePenLine, Loader2, MoreVertical, Pause, Play, Pencil, Plus, Power, Trash2, Boxes, Wrench, ShieldAlert, Zap } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import type { MachineWithSession } from "../../../server/machines";
@@ -92,6 +94,7 @@ export function FloorMachineChip({
   const [endSessionOpen, setEndSessionOpen] = useState(false);
   const [removeOpen, setRemoveOpen] = useState(false);
   const [complicationModalOpen, setComplicationModalOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
   const [isDragSource, setIsDragSource] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
 
@@ -260,6 +263,14 @@ export function FloorMachineChip({
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
+                className="text-[13px]"
+                onClick={() => setExportOpen(true)}
+              >
+                <FileDown className="mr-2 h-4 w-4" />
+                Export Metrics (.xlsx)
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
                 className="text-[13px] text-destructive focus:text-destructive"
                 onClick={() => setRemoveOpen(true)}
               >
@@ -419,6 +430,14 @@ export function FloorMachineChip({
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
+                className="text-[13px]"
+                onClick={() => setExportOpen(true)}
+              >
+                <FileDown className="mr-2 h-4 w-4" />
+                Export Metrics (.xlsx)
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
                 onClick={() => setEndSessionOpen(true)}
                 className="text-[13px] text-destructive focus:text-destructive"
               >
@@ -455,6 +474,13 @@ export function FloorMachineChip({
         patientDisplayAlias={session.displayLabel ?? undefined}
         floorId={row.machine.floorId ?? undefined}
       />
+      <MachineMetricsExportDialog
+        open={exportOpen}
+        onClose={() => setExportOpen(false)}
+        machineId={row.machine.id}
+        machineLabel={row.machine.label}
+        floorId={row.machine.floorId ?? undefined}
+      />
     </div>
   );
 }
@@ -464,16 +490,21 @@ export function FloorMachineChip({
  * continuous horizontal row of machine chips.
  */
 export function FloorRow({
+  floorId,
   floorName,
   machines,
   floorStats,
   onAssign,
 }: {
+  floorId?: number;
   floorName: string;
   machines: MachineWithSession[];
   floorStats: { occupied: number; urgent: number; dirty: number };
   onAssign: (machineId: number) => void;
 }) {
+  const [bulkExportOpen, setBulkExportOpen] = useState(false);
+  const resolvedFloorId = floorId ?? machines[0]?.machine.floorId ?? undefined;
+
   return (
     <div className="border border-[#D4DFE5]/80 bg-[#FBFCFD]">
       {/* Floor heading */}
@@ -484,7 +515,7 @@ export function FloorRow({
             {machines.length} machine{machines.length === 1 ? "" : "s"}
           </span>
         </div>
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-1">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
           <span className="smallcaps-detail text-[#7684A0]">
             <span className="font-display text-base text-[#3E8A6A]">
               {machines.length - floorStats.occupied}
@@ -509,6 +540,16 @@ export function FloorRow({
               dirty
             </span>
           )}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setBulkExportOpen(true)}
+            className="h-7 text-xs gap-1.5 border-[#D4DFE5] text-[#1F2A52] hover:bg-[#E8EFF1] ml-1"
+          >
+            <FileDown className="h-3.5 w-3.5" />
+            Export Floor (.xlsx)
+          </Button>
         </div>
       </div>
 
@@ -522,6 +563,12 @@ export function FloorRow({
           />
         ))}
       </div>
+      <MachineMetricsExportDialog
+        open={bulkExportOpen}
+        onClose={() => setBulkExportOpen(false)}
+        floorId={resolvedFloorId}
+        floorName={floorName}
+      />
     </div>
   );
 }

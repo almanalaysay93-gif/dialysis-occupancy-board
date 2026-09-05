@@ -382,6 +382,7 @@ export function OccupancyBoardContent({ floorId }: { floorId?: number }) {
               {floorGroups.map(group => (
                 <FloorRow
                   key={group.id ?? "unassigned"}
+                  floorId={typeof group.id === "number" ? group.id : undefined}
                   floorName={group.name}
                   machines={group.machines}
                   floorStats={floorStats(group)}

@@ -1,5 +1,6 @@
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { getDb } from "./db";
+import { invalidateMachineMetricsCache } from "./machine-metrics";
 import { patientTicket } from "./patient-ticket";
 import {
   floors,
@@ -61,6 +62,7 @@ const boardCache = new Map<string, { value: MachineWithSession[]; expiresAt: num
 
 export function invalidateBoardCache(): void {
   boardCache.clear();
+  invalidateMachineMetricsCache();
 }
 
 export async function listMachines(viewer: BoardViewer = { canSeePhi: false }): Promise<MachineWithSession[]> {

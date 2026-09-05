@@ -7,6 +7,12 @@ import { protectedProcedure, publicProcedure, router, staffOrAdminProcedure, cli
   staffReadProcedure, supervisorProcedure } from "./_core/trpc";
 import * as machineDb from "./machines";
 import {
+  getMachineMetricsReport,
+  generateMachineMetricsExcel,
+  logMachineRepair,
+  listMachineRepairs,
+} from "./machine-metrics";
+import {
   hashWithSalt,
   resolveStaffSession,
   setStaffSessionCookie,
@@ -266,6 +272,69 @@ export const appRouter = router({
     /** Backup & Repair inventory: machines off the floors, with their status. */
     offboarded: router({
       list: publicProcedure.query(() => machineDb.listOffboardedMachines()),
+    }),
+
+    /** Aggregated metrics for a machine or floor over a date range. */
+    metrics: staffReadProcedure
+      .input(
+        z.object({
+          machineId: z.number().int().positive().optional(),
+          floorId: z.number().int().positive().optional(),
+          startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Format must be YYYY-MM-DD"),
+          endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Format must be YYYY-MM-DD"),
+        })
+      )
+      .query(async ({ ctx, input }) => {
+        return getMachineMetricsReport(input, { canSeePhi: ctx.isStaff });
+      }),
+
+    /** Download an Excel (.xlsx) file containing machine overview, sessions, and repairs. */
+    exportExcel: staffReadProcedure
+      .input(
+        z.object({
+          machineId: z.number().int().positive().optional(),
+          floorId: z.number().int().positive().optional(),
+          startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Format must be YYYY-MM-DD"),
+          endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Format must be YYYY-MM-DD"),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const report = await getMachineMetricsReport(input, { canSeePhi: ctx.isStaff });
+        const buffer = await generateMachineMetricsExcel(report);
+        const prefix = input.machineId ? `machine-${input.machineId}` : (input.floorId ? `floor-${input.floorId}` : "all-machines");
+        const filename = `${prefix}-metrics-${input.startDate}-to-${input.endDate}.xlsx`;
+        return {
+          filename,
+          base64: buffer.toString("base64"),
+        };
+      }),
+
+    /** Machine maintenance & repair log. */
+    repairs: router({
+      list: staffReadProcedure
+        .input(z.object({ machineId: z.number().int().positive() }))
+        .query(async ({ input }) => {
+          return listMachineRepairs(input.machineId);
+        }),
+
+      log: staffOrAdminProcedure
+        .input(
+          z.object({
+            machineId: z.number().int().positive(),
+            issue: z.string().trim().min(1, "Issue description is required").max(1000),
+            technician: z.string().trim().max(64).optional(),
+            actionTaken: z.string().trim().max(1000).optional(),
+            partsReplaced: z.string().trim().max(500).optional(),
+            status: z.enum(["pending", "in_progress", "resolved"]).default("pending"),
+          })
+        )
+        .mutation(async ({ ctx, input }) => {
+          const reporter = ctx.user?.name || ctx.staff?.displayName || ctx.staff?.username || "Staff";
+          return logMachineRepair({
+            ...input,
+            reportedBy: reporter,
+          });
+        }),
     }),
   }),
 
