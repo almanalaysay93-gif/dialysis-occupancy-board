@@ -18,6 +18,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { trpc } from "@/lib/trpc";
+import { useCanWrite } from "@/hooks/useCanWrite";
 import { NarrativeReport, REPORT_PERIODS, REPORT_SHIFTS } from "@/components/NarrativeReport";
 
 const SUPERVISOR_PERIODS: { key: string; label: string }[] = [
@@ -141,6 +142,9 @@ export default function EndOfDayReport() {
   // Shift filter for narrative tables (server-side period-overlap filter).
   const [shiftKey, setShiftKey] = useState<string>("all");
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  // The export is clinical-read only on the server, so a guest clicking it
+  // would only collect a 401.
+  const { isClinicalHidden } = useCanWrite();
 
   // Staff session scoping: the summary query already restricts nurses to
   // their own board. Supervisors see every board — one call
@@ -266,17 +270,19 @@ export default function EndOfDayReport() {
             </div>
 
             <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className="h-9 border-[#D4DFE5] text-[#1F2A52] hover:bg-[#E8EFF1] gap-1.5"
-                onClick={() => setExportDialogOpen(true)}
-                aria-label="Export Machine Metrics as Excel"
-              >
-                <FileDown className="h-4 w-4 text-[#2E9A9B]" />
-                Export Metrics (.xlsx)
-              </Button>
+              {!isClinicalHidden && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-9 border-[#D4DFE5] text-[#1F2A52] hover:bg-[#E8EFF1] gap-1.5"
+                  onClick={() => setExportDialogOpen(true)}
+                  aria-label="Export Machine Metrics as Excel"
+                >
+                  <FileDown className="h-4 w-4 text-[#2E9A9B]" />
+                  Export Metrics (.xlsx)
+                </Button>
+              )}
               {activeReportTab === "daily" ? (
                 <Button
                   size="sm"
@@ -523,7 +529,7 @@ export default function EndOfDayReport() {
         </>
       )}
       <MachineMetricsExportDialog
-        open={exportDialogOpen}
+        open={exportDialogOpen && !isClinicalHidden}
         onClose={() => setExportDialogOpen(false)}
         floorId={staff?.assignedFloorId ?? undefined}
         floorName={staff?.assignedFloorId ? undefined : "All Floors"}

@@ -99,7 +99,8 @@ async function requireMetricsScope(
     requireFloorAccess(ctx.staff, input.floorId, ctx.user);
     return;
   }
-  if (ctx.user || ctx.staff.role === "guest") return;
+  // clinicalReadProcedure already rejected guests and anonymous callers.
+  if (ctx.user) return;
   const allowed = staffAccessedFloors(ctx.staff);
   if (allowed !== null) {
     throw new TRPCError({
@@ -333,7 +334,7 @@ export const appRouter = router({
     }),
 
     /** Aggregated metrics for a machine or floor over a date range. */
-    metrics: staffReadProcedure
+    metrics: clinicalReadProcedure
       .input(machineMetricsRangeSchema)
       .query(async ({ ctx, input }) => {
         await requireMetricsScope(ctx, input);
@@ -341,7 +342,7 @@ export const appRouter = router({
       }),
 
     /** Download an Excel (.xlsx) file containing machine overview, sessions, and repairs. */
-    exportExcel: staffReadProcedure
+    exportExcel: clinicalReadProcedure
       .input(machineMetricsRangeSchema)
       .mutation(async ({ ctx, input }) => {
         await requireMetricsScope(ctx, input);
@@ -357,7 +358,7 @@ export const appRouter = router({
 
     /** Machine maintenance & repair log. */
     repairs: router({
-      list: staffReadProcedure
+      list: clinicalReadProcedure
         .input(z.object({ machineId: z.number().int().positive() }))
         .query(async ({ ctx, input }) => {
           await requireMachineFloorAccess(ctx, input.machineId);

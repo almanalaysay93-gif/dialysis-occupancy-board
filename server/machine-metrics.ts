@@ -317,9 +317,10 @@ export async function getMachineMetricsReport(
         actualTreatmentMinutes: Math.round(actualTreatmentMs / 60000),
         idleBeforeMinutes: Math.round(idleBeforeMs / 60000),
         patientId: safePatient,
-        // Nurse and operator are staff PHI on the same footing as the patient
-        // id — listMachines nulls both for non-PHI viewers, and this report is
-        // reachable by anonymous visitors through staffReadProcedure.
+        // The routers gate this report behind clinicalReadProcedure, so a
+        // caller normally sees the real names: a supervisor needs them to trace
+        // a problem back to the patient and the staff on duty. The mask stays
+        // for any non-PHI caller a future route may introduce.
         assignedNurse: viewer.canSeePhi ? (s.assignedNurse?.trim() || "Unassigned") : MASKED_NAME,
         operator: viewer.canSeePhi ? (s.startedBy?.trim() || "—") : MASKED_NAME,
         isolationTag: s.isolationTag,
@@ -431,8 +432,8 @@ export async function listMachineRepairs(
     .where(eq(machineRepairs.machineId, machineId))
     .orderBy(desc(machineRepairs.reportedAt));
   if (viewer.canSeePhi) return rows;
-  // Reporter and technician are staff names; this endpoint is reachable by
-  // anonymous viewers through staffReadProcedure.
+  // Reporter and technician are staff names. The route is clinical-read only,
+  // so this branch guards a future non-PHI caller, not today's.
   return rows.map(r => ({ ...r, reportedBy: MASKED_NAME, technician: r.technician ? MASKED_NAME : null }));
 }
 

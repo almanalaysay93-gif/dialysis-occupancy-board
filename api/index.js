@@ -1326,9 +1326,10 @@ async function getMachineMetricsReport(opts, viewer = { canSeePhi: false }) {
         actualTreatmentMinutes: Math.round(actualTreatmentMs / 6e4),
         idleBeforeMinutes: Math.round(idleBeforeMs / 6e4),
         patientId: safePatient,
-        // Nurse and operator are staff PHI on the same footing as the patient
-        // id — listMachines nulls both for non-PHI viewers, and this report is
-        // reachable by anonymous visitors through staffReadProcedure.
+        // The routers gate this report behind clinicalReadProcedure, so a
+        // caller normally sees the real names: a supervisor needs them to trace
+        // a problem back to the patient and the staff on duty. The mask stays
+        // for any non-PHI caller a future route may introduce.
         assignedNurse: viewer.canSeePhi ? s.assignedNurse?.trim() || "Unassigned" : MASKED_NAME,
         operator: viewer.canSeePhi ? s.startedBy?.trim() || "\u2014" : MASKED_NAME,
         isolationTag: s.isolationTag,
@@ -3343,7 +3344,7 @@ async function requireMetricsScope(ctx, input) {
     requireFloorAccess(ctx.staff, input.floorId, ctx.user);
     return;
   }
-  if (ctx.user || ctx.staff.role === "guest") return;
+  if (ctx.user) return;
   const allowed = staffAccessedFloors(ctx.staff);
   if (allowed !== null) {
     throw new TRPCError4({
@@ -3547,12 +3548,12 @@ var appRouter = router({
       list: publicProcedure.query(() => listOffboardedMachines())
     }),
     /** Aggregated metrics for a machine or floor over a date range. */
-    metrics: staffReadProcedure.input(machineMetricsRangeSchema).query(async ({ ctx, input }) => {
+    metrics: clinicalReadProcedure.input(machineMetricsRangeSchema).query(async ({ ctx, input }) => {
       await requireMetricsScope(ctx, input);
       return getMachineMetricsReport(input, { canSeePhi: ctx.isStaff });
     }),
     /** Download an Excel (.xlsx) file containing machine overview, sessions, and repairs. */
-    exportExcel: staffReadProcedure.input(machineMetricsRangeSchema).mutation(async ({ ctx, input }) => {
+    exportExcel: clinicalReadProcedure.input(machineMetricsRangeSchema).mutation(async ({ ctx, input }) => {
       await requireMetricsScope(ctx, input);
       const report = await getMachineMetricsReport(input, { canSeePhi: ctx.isStaff });
       const buffer = await generateMachineMetricsExcel(report);
@@ -3565,7 +3566,7 @@ var appRouter = router({
     }),
     /** Machine maintenance & repair log. */
     repairs: router({
-      list: staffReadProcedure.input(z2.object({ machineId: z2.number().int().positive() })).query(async ({ ctx, input }) => {
+      list: clinicalReadProcedure.input(z2.object({ machineId: z2.number().int().positive() })).query(async ({ ctx, input }) => {
         await requireMachineFloorAccess(ctx, input.machineId);
         return listMachineRepairs(input.machineId, { canSeePhi: ctx.isStaff });
       }),
