@@ -1263,7 +1263,7 @@ export async function admitWaiting(input: {
 
   // Vacancy lookup + session start run in one transaction with row locks so
   // two concurrent admits for the same floor cannot grab the same machine.
-  await db.transaction(async tx => {
+  return await db.transaction(async tx => {
     // Re-verify the waiting entry is still claimable inside the transaction.
     const locked = await tx
       .select({ id: waitingList.id, patientId: waitingList.patientId })
@@ -1277,7 +1277,7 @@ export async function admitWaiting(input: {
 
     // Find the first vacant machine on this floor (lowest sortOrder).
     const floorMachines = await tx
-      .select({ id: machines.id })
+      .select({ id: machines.id, label: machines.label })
       .from(machines)
       .where(eq(machines.floorId, input.floorId))
       .orderBy(machines.sortOrder, machines.id);
@@ -1296,23 +1296,34 @@ export async function admitWaiting(input: {
     const now = new Date();
     const endsAt = new Date(now.getTime() + durationMinutes * 60 * 1000);
 
-    await tx.insert(sessions).values({
-      machineId: vacant.id,
-      patientId: locked[0].patientId,
-      durationMinutes,
-      startedAt: now,
-      endsAt,
-      isolationTag,
-      urgent: input.urgent || entryRow.priority === "veryUrgent",
-      startedBy: input.startedBy,
-      displayLabel: input.displayLabel ? input.displayLabel.trim() || null : null,
-      assignedNurse: assignedNurse || null,
-    });
+    const [inserted] = await tx
+      .insert(sessions)
+      .values({
+        machineId: vacant.id,
+        patientId: locked[0].patientId,
+        durationMinutes,
+        startedAt: now,
+        endsAt,
+        isolationTag,
+        urgent: input.urgent || entryRow.priority === "veryUrgent",
+        startedBy: input.startedBy,
+        displayLabel: input.displayLabel ? input.displayLabel.trim() || null : null,
+        assignedNurse: assignedNurse || null,
+      })
+      .returning({ id: sessions.id });
 
     await tx
       .update(waitingList)
       .set({ status: "admitted", admittedAt: now })
       .where(eq(waitingList.id, input.entryId));
+
+    return {
+      sessionId: inserted?.id,
+      machineId: vacant.id,
+      machineLabel: vacant.label,
+      patientId: locked[0].patientId,
+      ticket: patientTicket(locked[0].patientId),
+    };
   });
 }
 
@@ -2388,17 +2399,17 @@ function parseInterventions(raw: string | null): string[] {
   }
 }
 
-export async function listSessionComplications(input?: { sessionId?: number }) {
+export async function listSessionComplications(input?: { sessionId?: number; floorId?: number }) {
   const db = await getDb();
   if (!db) return [];
-  const rows =
-    input?.sessionId !== undefined
-      ? await db
-          .select()
-          .from(sessionComplications)
-          .where(eq(sessionComplications.sessionId, input.sessionId))
-          .orderBy(desc(sessionComplications.createdAt))
-      : await db.select().from(sessionComplications).orderBy(desc(sessionComplications.createdAt));
+  const conditions = [];
+  if (input?.sessionId !== undefined) conditions.push(eq(sessionComplications.sessionId, input.sessionId));
+  if (input?.floorId !== undefined) conditions.push(eq(sessionComplications.floorId, input.floorId));
+
+  const query = db.select().from(sessionComplications);
+  const rows = conditions.length > 0
+    ? await query.where(and(...conditions)).orderBy(desc(sessionComplications.createdAt))
+    : await query.orderBy(desc(sessionComplications.createdAt));
 
   return rows.map(r => ({ ...r, interventions: parseInterventions(r.interventionsJson) }));
 }

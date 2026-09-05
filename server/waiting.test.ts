@@ -408,6 +408,7 @@ describe("waiting.urgentRegister", () => {
     label: string;
     floorId: number | null;
     urgent?: boolean;
+    endsAt?: Date;
   }): {
     machine: {
       id: number;
@@ -429,7 +430,7 @@ describe("waiting.urgentRegister", () => {
     } | null;
   } {
     const now = new Date();
-    const endsAt = new Date(now.getTime() + 4 * 60 * 60 * 1000);
+    const endsAt = opts.endsAt ?? new Date(now.getTime() + 4 * 60 * 60 * 1000);
     return {
       machine: {
         id: opts.machineId,
@@ -457,8 +458,8 @@ describe("waiting.urgentRegister", () => {
   it("aggregates urgent sessions from every board with floor names", async () => {
     vi.mocked(machineDb.listFloors).mockResolvedValueOnce(floors);
     vi.mocked(machineDb.listMachines).mockResolvedValueOnce([
-      machineRow({ machineId: 1, label: "HD-001", floorId: 30001, urgent: true }),
-      machineRow({ machineId: 2, label: "HD-002", floorId: 30002, urgent: true }),
+      machineRow({ machineId: 1, label: "HD-001", floorId: 30001, urgent: true, endsAt: new Date(Date.now() + 500000) }),
+      machineRow({ machineId: 2, label: "HD-002", floorId: 30002, urgent: true, endsAt: new Date(Date.now() + 100000) }),
       machineRow({ machineId: 3, label: "HD-003", floorId: 30001, urgent: false }),
     ]);
     vi.mocked(machineDb.listWaitingAll).mockResolvedValueOnce([]);

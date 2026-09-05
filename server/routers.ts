@@ -827,7 +827,7 @@ export const appRouter = router({
         const entry = await machineDb.listWaiting({ floorId: input.floorId });
         const patient = entry.find(e => e.id === input.entryId);
         try {
-          await machineDb.admitWaiting({
+          const admitRes = await machineDb.admitWaiting({
             entryId: input.entryId,
             floorId: input.floorId,
             durationMinutes: input.durationMinutes,
@@ -837,7 +837,15 @@ export const appRouter = router({
             displayLabel: input.displayLabel,
             assignedNurse: input.assignedNurse,
           });
-          return { success: true, patientId: patient?.patientId ?? "" } as const;
+          const ticket =
+            admitRes?.ticket ||
+            (patient?.patientId ? patientTicket(patient.patientId) : "");
+          return {
+            success: true,
+            patientId: patient?.patientId ?? "",
+            ticket,
+            machineLabel: admitRes?.machineLabel ?? "",
+          } as const;
         } catch (error) {
           const msg = (error as Error)?.message;
           if (msg === "NO_WAITING_PATIENT") {
@@ -1327,17 +1335,13 @@ export const appRouter = router({
   shiftEndorsements: router({
     list: clinicalReadProcedure
       .input(
-        z
-          .object({
-            floorId: z.number().int().positive().optional(),
-            date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-          })
-          .optional()
+        z.object({
+          floorId: z.number().int().positive(),
+          date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+        })
       )
       .query(async ({ ctx, input }) => {
-        if (input?.floorId) {
-          requireFloorAccess(ctx.staff, input.floorId, ctx.user);
-        }
+        requireFloorAccess(ctx.staff, input.floorId, ctx.user);
         return machineDb.listShiftEndorsements(input);
       }),
 
@@ -1436,8 +1440,18 @@ export const appRouter = router({
    */
   sessionComplications: router({
     list: staffReadProcedure
-      .input(z.object({ sessionId: z.number().int().positive().optional() }).optional())
-      .query(async ({ input }) => machineDb.listSessionComplications(input)),
+      .input(
+        z
+          .object({
+            sessionId: z.number().int().positive().optional(),
+            floorId: z.number().int().positive().optional(),
+          })
+          .optional()
+      )
+      .query(async ({ ctx, input }) => {
+        if (input?.floorId) requireFloorAccess(ctx.staff, input.floorId, ctx.user);
+        return machineDb.listSessionComplications(input);
+      }),
 
     create: staffOrAdminProcedure
       .input(
@@ -1773,4 +1787,3 @@ export const appRouter = router({
 });
 
 export type AppRouter = typeof appRouter;
-

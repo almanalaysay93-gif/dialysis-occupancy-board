@@ -16,9 +16,10 @@ import RemoveMachineDialog from "@/components/RemoveMachineDialog";
 import AdverseComplicationModal from "@/components/AdverseComplicationModal";
 import { MachineMetricsExportDialog } from "@/components/MachineMetricsExportDialog";
 import { cn } from "@/lib/utils";
-import { Activity, AlertTriangle, BellRing, Clock, Droplets, FileDown, FilePenLine, Loader2, MoreVertical, Pause, Play, Pencil, Plus, Power, Trash2, Boxes, Wrench, ShieldAlert, Zap } from "lucide-react";
+import { Activity, AlertTriangle, BellRing, Clock, Droplets, FileDown, FilePenLine, Loader2, MoreVertical, Pause, Play, Pencil, Plus, Power, Trash2, Boxes, Wrench, ShieldAlert, Zap, Volume2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { playHospitalChime, announceTicketVoice } from "@/lib/kioskAudio";
 import type { MachineWithSession } from "../../../server/machines";
 
 /** Global drag payload registry so any board can receive a dragged tile. */
@@ -362,11 +363,22 @@ export function FloorMachineChip({
                 </DropdownMenuLabel>
               <DropdownMenuItem className="text-[13px]">
                 <Activity className="mr-2 h-4 w-4" />
-                Patient {session.patientId} · {durationLabel(session.durationMinutes)} · started{" "}
+                Patient {session.patientId} {session.ticket ? `(${session.ticket})` : ""} · {durationLabel(session.durationMinutes)} · started{" "}
                 {new Date(session.startedAt).toLocaleTimeString([], {
                   hour: "2-digit",
                   minute: "2-digit",
                 })}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => {
+                  playHospitalChime();
+                  announceTicketVoice(session.ticket, row.machine.label);
+                  toast.info(`Announcing Ticket ${session.ticket} for ${row.machine.label}`);
+                }}
+                className="text-[13px] text-cyan-700 dark:text-cyan-300 font-medium"
+              >
+                <Volume2 className="mr-2 h-4 w-4 text-cyan-600" />
+                Call / Announce Ticket ({session.ticket})
               </DropdownMenuItem>
               {isStaff && (
                 <DropdownMenuItem

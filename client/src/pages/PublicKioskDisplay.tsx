@@ -3,6 +3,12 @@ import { Link, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 import {
+  getAudioContext,
+  unlockAudio,
+  playHospitalChime,
+  announceTicketVoice,
+} from "@/lib/kioskAudio";
+import {
   Activity,
   AlertCircle,
   Bell,
@@ -61,81 +67,7 @@ function formatKioskTimer(ms: number): { time: string; minutes: number } {
   };
 }
 
-/**
- * One AudioContext for the life of the page.
- *
- * Constructing a context per chime leaks them: browsers cap how many a
- * document may hold, so on a kiosk running for days the constructor
- * eventually throws and the queue goes silent for good.
- */
-let sharedAudioCtx: AudioContext | null = null;
 
-function getAudioContext(): AudioContext | null {
-  try {
-    const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-    if (!AudioCtx) return null;
-    if (!sharedAudioCtx || sharedAudioCtx.state === "closed") {
-      sharedAudioCtx = new AudioCtx();
-    }
-    // Autoplay policy suspends the context until a user gesture; resuming is
-    // a no-op once the kiosk operator has interacted with the page.
-    if (sharedAudioCtx.state === "suspended") void sharedAudioCtx.resume();
-    return sharedAudioCtx;
-  } catch {
-    return null;
-  }
-}
-
-// Audio synthesizer for hospital chime
-function playHospitalChime() {
-  try {
-    const ctx = getAudioContext();
-    if (!ctx) return;
-    const now = ctx.currentTime;
-
-    const notes = [
-      { freq: 523.25, time: 0.0, dur: 0.4 }, // C5
-      { freq: 659.25, time: 0.15, dur: 0.4 }, // E5
-      { freq: 783.99, time: 0.3, dur: 0.6 }, // G5
-      { freq: 1046.5, time: 0.45, dur: 0.9 }, // C6
-    ];
-
-    notes.forEach(n => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = "sine";
-      osc.frequency.setValueAtTime(n.freq, now + n.time);
-
-      gain.gain.setValueAtTime(0, now + n.time);
-      gain.gain.linearRampToValueAtTime(0.18, now + n.time + 0.04);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + n.time + n.dur);
-
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-
-      osc.start(now + n.time);
-      osc.stop(now + n.time + n.dur + 0.1);
-    });
-  } catch {
-    // ignore audio block
-  }
-}
-
-// Voice announcement using Web Speech API
-function announceTicketVoice(ticket: string, bayLabel: string) {
-  if (!("speechSynthesis" in window)) return;
-  try {
-    window.speechSynthesis.cancel();
-    const spokenTicket = ticket.replace("TK-", "Ticket ").split("").join(" ");
-    const text = `Attention please. ${spokenTicket}, please proceed to Bay ${bayLabel.replace("HD-", "")}.`;
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 0.9;
-    utterance.pitch = 1.05;
-    window.speechSynthesis.speak(utterance);
-  } catch {
-    // ignore
-  }
-}
 
 type ThemeMode = "dark-oled" | "light-clinical" | "amber-contrast";
 
@@ -210,6 +142,24 @@ export default function PublicKioskDisplay() {
 
   const prevAdmittedIdsRef = useRef<Set<number>>(new Set());
   const announcedKeyRef = useRef<number | null>(null);
+  const isInitializedRef = useRef(false);
+  const [audioUnlocked, setAudioUnlocked] = useState(false);
+
+  // Auto-unlock audio context on first user interaction
+  useEffect(() => {
+    const handleGesture = () => {
+      unlockAudio();
+      setAudioUnlocked(true);
+    };
+    window.addEventListener("click", handleGesture, { once: true });
+    window.addEventListener("touchstart", handleGesture, { once: true });
+    window.addEventListener("keydown", handleGesture, { once: true });
+    return () => {
+      window.removeEventListener("click", handleGesture);
+      window.removeEventListener("touchstart", handleGesture);
+      window.removeEventListener("keydown", handleGesture);
+    };
+  }, []);
 
   // Real-time queries for machines and waiting lists
   const { data: machines, isLoading: machinesLoading } = trpc.machines.list.useQuery(undefined, {
@@ -309,22 +259,27 @@ export default function PublicKioskDisplay() {
     const currentActiveSessions = machines.filter(m => m.session !== null);
     const activeIds = new Set(currentActiveSessions.map(m => m.session!.id));
 
-    // Check for newly started sessions
-    if (prevAdmittedIdsRef.current.size > 0) {
-      const admits: KioskCallout[] = [];
-      for (const m of currentActiveSessions) {
-        if (m.session && !prevAdmittedIdsRef.current.has(m.session.id)) {
-          const floorObj = floors?.find(f => f.id === m.machine.floorId);
-          admits.push({
-            key: m.session.id,
-            ticket: m.session.ticket,
-            bay: m.machine.label,
-            floorName: floorObj?.name ?? "Dialysis Bay",
-          });
-        }
-      }
-      if (admits.length > 0) setCalloutQueue(q => [...q, ...admits]);
+    // First time machines data arrives: record active sessions to prevent announcing on page reload
+    if (!isInitializedRef.current) {
+      isInitializedRef.current = true;
+      prevAdmittedIdsRef.current = activeIds;
+      return;
     }
+
+    // Check for newly started sessions (triggers even when previously empty)
+    const admits: KioskCallout[] = [];
+    for (const m of currentActiveSessions) {
+      if (m.session && !prevAdmittedIdsRef.current.has(m.session.id)) {
+        const floorObj = floors?.find(f => f.id === m.machine.floorId);
+        admits.push({
+          key: m.session.id,
+          ticket: m.session.ticket,
+          bay: m.machine.label,
+          floorName: floorObj?.name ?? "Dialysis Bay",
+        });
+      }
+    }
+    if (admits.length > 0) setCalloutQueue(q => [...q, ...admits]);
 
     prevAdmittedIdsRef.current = activeIds;
   }, [machines, floors]);
@@ -384,6 +339,8 @@ export default function PublicKioskDisplay() {
 
   // Test Chime Action
   const handleTestChime = () => {
+    unlockAudio();
+    setAudioUnlocked(true);
     setCalloutQueue(q => [
       ...q,
       { key: -Date.now(), ticket: "TK-4821", bay: "HD-01", floorName: "Floor 1 Main" },
@@ -535,6 +492,20 @@ export default function PublicKioskDisplay() {
           </div>
         </div>
       </header>
+
+      {/* Audio Unlock Banner for Browser Autoplay Policy */}
+      {!audioUnlocked && (
+        <div
+          onClick={() => {
+            unlockAudio();
+            setAudioUnlocked(true);
+          }}
+          className="w-full bg-amber-500/15 border-b border-amber-500/30 px-4 py-2 text-center text-xs text-amber-300 flex items-center justify-center gap-2 cursor-pointer hover:bg-amber-500/20 transition-colors"
+        >
+          <Volume2 className="h-4 w-4 animate-bounce text-amber-400" />
+          <span>Lounge Audio is on standby. <strong>Click anywhere</strong> on this TV display to enable live ticket voice calls &amp; chimes.</span>
+        </div>
+      )}
 
       {/* Personalized Patient Banner when logged in */}
       {isPatient && myActiveSession && (

@@ -8,15 +8,21 @@ import {
 } from "@/components/ui/popover";
 import { useCanWrite } from "@/hooks/useCanWrite";
 import { trpc } from "@/lib/trpc";
-import { AlarmClock, ArrowRightCircle, Droplets, Plus, Siren, UserPlus, Users } from "lucide-react";
+import { AlarmClock, ArrowRightCircle, Droplets, Plus, Siren, UserPlus, Users, Volume2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
+import {
+  playHospitalChime,
+  announceTicketVoice,
+  announceWaitingTicket,
+} from "@/lib/kioskAudio";
 
 export type WaitingPriority = "normal" | "urgent" | "veryUrgent";
 
 export type WaitingEntry = {
   id: number;
+  ticket?: string;
   patientId: string;
   floorId: number;
   priority: WaitingPriority;
@@ -316,7 +322,13 @@ export default function WaitingListPanel({ floorId }: { floorId: number }) {
 
   const admitMut = trpc.waiting.admit.useMutation({
     onSuccess: res => {
-      toast.success(`Patient “${res.patientId}” admitted onto a machine — session started`);
+      const ticketInfo = res.ticket ? ` (${res.ticket})` : "";
+      const bayInfo = res.machineLabel ? ` onto ${res.machineLabel}` : " onto a machine";
+      toast.success(`Patient “${res.patientId}”${ticketInfo} admitted${bayInfo} — session started`);
+      if (res.ticket && res.machineLabel) {
+        playHospitalChime();
+        announceTicketVoice(res.ticket, res.machineLabel);
+      }
       setAdmitDraft(null);
       void utils.waiting.list.invalidate({ floorId });
       void utils.waiting.vacantCount.invalidate({ floorId });
@@ -483,8 +495,14 @@ export default function WaitingListPanel({ floorId }: { floorId: number }) {
       {/* Admit form — pre-filled from the queue entry, editable before placing */}
       {admitDraft && (
         <div className="border-b border-dashed border-[#9E1F2B]/40 bg-[#FBFCFD] px-5 py-4">
-          <p className="font-serif-light text-lg text-[#1F2A52]">
-            Admit <span className="font-semibold">“{admitDraft.entry.patientId}”</span> onto the next vacant machine
+          <p className="font-serif-light text-lg text-[#1F2A52] flex items-center gap-2 flex-wrap">
+            <span>Admit <strong className="font-semibold">“{admitDraft.entry.patientId}”</strong></span>
+            {admitDraft.entry.ticket ? (
+              <span className="font-mono text-xs font-semibold px-2 py-0.5 rounded bg-cyan-100 dark:bg-cyan-950/60 text-cyan-800 dark:text-cyan-300 border border-cyan-300 dark:border-cyan-700">
+                {admitDraft.entry.ticket}
+              </span>
+            ) : null}
+            <span>onto the next vacant machine</span>
           </p>
           <p className="smallcaps-detail mt-1 text-[#7684A0]">
             Prefilled from the waiting list — adjust only if something changed.
@@ -633,13 +651,20 @@ function WaitingRow({
         )}
       </span>
       <div className="min-w-[160px] flex-1">
-        <p
-          className={`font-serif-light text-lg ${
-            isVeryUrgent || isUrgent ? "text-[#9E1F2B]" : "text-[#1F2A52]"
-          } ${isVeryUrgent ? "font-semibold" : ""}`}
-        >
-          {entry.patientId}
-        </p>
+        <div className="flex items-center gap-2">
+          <p
+            className={`font-serif-light text-lg ${
+              isVeryUrgent || isUrgent ? "text-[#9E1F2B]" : "text-[#1F2A52]"
+            } ${isVeryUrgent ? "font-semibold" : ""}`}
+          >
+            {entry.patientId}
+          </p>
+          {entry.ticket && (
+            <span className="font-mono text-xs font-semibold px-2 py-0.5 rounded bg-cyan-100 dark:bg-cyan-950/60 text-cyan-800 dark:text-cyan-300 border border-cyan-300 dark:border-cyan-700">
+              {entry.ticket}
+            </span>
+          )}
+        </div>
         <p className="smallcaps-detail mt-0.5 text-[#7684A0]">
           Added {new Date(entry.joinedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
           {entry.addedBy ? ` · by ${entry.addedBy}` : ""}
@@ -674,6 +699,20 @@ function WaitingRow({
         </span>
         {!canWrite ? null : (
           <>
+            <Button
+              size="sm"
+              variant="outline"
+              title={`Call ticket ${entry.ticket || entry.patientId} to nurse station`}
+              onClick={() => {
+                playHospitalChime();
+                if (entry.ticket) announceWaitingTicket(entry.ticket);
+                toast.info(`Calling Ticket ${entry.ticket || entry.patientId} to nurse station`);
+              }}
+              className="h-10 sm:h-9 px-3 border-cyan-600/60 text-cyan-700 dark:text-cyan-300 font-medium hover:bg-cyan-50 dark:hover:bg-cyan-950/40"
+            >
+              <Volume2 className="mr-1.5 h-3.5 w-3.5" />
+              Call
+            </Button>
             <Button
               size="sm"
               variant="outline"

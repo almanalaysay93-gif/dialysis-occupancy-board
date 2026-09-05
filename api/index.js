@@ -2176,12 +2176,12 @@ async function admitWaiting(input) {
   const durationMinutes = input.durationMinutes ?? entryRow.durationMinutes;
   const isolationTag = input.isolationTag ?? entryRow.isolationTag;
   const assignedNurse = input.assignedNurse?.trim() || entryRow.assignedNurse;
-  await db.transaction(async (tx) => {
+  return await db.transaction(async (tx) => {
     const locked = await tx.select({ id: waitingList.id, patientId: waitingList.patientId }).from(waitingList).where(and2(eq4(waitingList.id, input.entryId), eq4(waitingList.status, "waiting"))).limit(1).for("update", { skipLocked: true });
     if (locked.length === 0) {
       throw new Error("NO_WAITING_PATIENT");
     }
-    const floorMachines = await tx.select({ id: machines.id }).from(machines).where(eq4(machines.floorId, input.floorId)).orderBy(machines.sortOrder, machines.id);
+    const floorMachines = await tx.select({ id: machines.id, label: machines.label }).from(machines).where(eq4(machines.floorId, input.floorId)).orderBy(machines.sortOrder, machines.id);
     const occupiedIds = await tx.select({ machineId: sessions.machineId }).from(sessions).where(eq4(sessions.status, "active"));
     const occupied = new Set(occupiedIds.map((o) => o.machineId));
     const vacant = floorMachines.find((m) => !occupied.has(m.id));
@@ -2190,7 +2190,7 @@ async function admitWaiting(input) {
     }
     const now = /* @__PURE__ */ new Date();
     const endsAt = new Date(now.getTime() + durationMinutes * 60 * 1e3);
-    await tx.insert(sessions).values({
+    const [inserted] = await tx.insert(sessions).values({
       machineId: vacant.id,
       patientId: locked[0].patientId,
       durationMinutes,
@@ -2201,8 +2201,15 @@ async function admitWaiting(input) {
       startedBy: input.startedBy,
       displayLabel: input.displayLabel ? input.displayLabel.trim() || null : null,
       assignedNurse: assignedNurse || null
-    });
+    }).returning({ id: sessions.id });
     await tx.update(waitingList).set({ status: "admitted", admittedAt: now }).where(eq4(waitingList.id, input.entryId));
+    return {
+      sessionId: inserted?.id,
+      machineId: vacant.id,
+      machineLabel: vacant.label,
+      patientId: locked[0].patientId,
+      ticket: patientTicket(locked[0].patientId)
+    };
   });
 }
 var UNASSIGNED_NURSE = "Unassigned";
@@ -2882,7 +2889,11 @@ function parseInterventions(raw) {
 async function listSessionComplications(input) {
   const db = await getDb();
   if (!db) return [];
-  const rows = input?.sessionId !== void 0 ? await db.select().from(sessionComplications).where(eq4(sessionComplications.sessionId, input.sessionId)).orderBy(desc2(sessionComplications.createdAt)) : await db.select().from(sessionComplications).orderBy(desc2(sessionComplications.createdAt));
+  const conditions = [];
+  if (input?.sessionId !== void 0) conditions.push(eq4(sessionComplications.sessionId, input.sessionId));
+  if (input?.floorId !== void 0) conditions.push(eq4(sessionComplications.floorId, input.floorId));
+  const query = db.select().from(sessionComplications);
+  const rows = conditions.length > 0 ? await query.where(and2(...conditions)).orderBy(desc2(sessionComplications.createdAt)) : await query.orderBy(desc2(sessionComplications.createdAt));
   return rows.map((r) => ({ ...r, interventions: parseInterventions(r.interventionsJson) }));
 }
 async function createSessionComplication(input) {
@@ -3968,7 +3979,7 @@ var appRouter = router({
       const entry = await listWaiting({ floorId: input.floorId });
       const patient = entry.find((e) => e.id === input.entryId);
       try {
-        await admitWaiting({
+        const admitRes = await admitWaiting({
           entryId: input.entryId,
           floorId: input.floorId,
           durationMinutes: input.durationMinutes,
@@ -3978,7 +3989,13 @@ var appRouter = router({
           displayLabel: input.displayLabel,
           assignedNurse: input.assignedNurse
         });
-        return { success: true, patientId: patient?.patientId ?? "" };
+        const ticket = admitRes?.ticket || (patient?.patientId ? patientTicket(patient.patientId) : "");
+        return {
+          success: true,
+          patientId: patient?.patientId ?? "",
+          ticket,
+          machineLabel: admitRes?.machineLabel ?? ""
+        };
       } catch (error) {
         const msg = error?.message;
         if (msg === "NO_WAITING_PATIENT") {
@@ -4372,13 +4389,11 @@ var appRouter = router({
   shiftEndorsements: router({
     list: clinicalReadProcedure.input(
       z2.object({
-        floorId: z2.number().int().positive().optional(),
+        floorId: z2.number().int().positive(),
         date: z2.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional()
-      }).optional()
+      })
     ).query(async ({ ctx, input }) => {
-      if (input?.floorId) {
-        requireFloorAccess(ctx.staff, input.floorId, ctx.user);
-      }
+      requireFloorAccess(ctx.staff, input.floorId, ctx.user);
       return listShiftEndorsements(input);
     }),
     byId: clinicalReadProcedure.input(z2.object({ id: z2.number().int().positive() })).query(async ({ ctx, input }) => {
@@ -4463,7 +4478,15 @@ var appRouter = router({
    * Intra-dialytic session complications and adverse clinical events.
    */
   sessionComplications: router({
-    list: staffReadProcedure.input(z2.object({ sessionId: z2.number().int().positive().optional() }).optional()).query(async ({ input }) => listSessionComplications(input)),
+    list: staffReadProcedure.input(
+      z2.object({
+        sessionId: z2.number().int().positive().optional(),
+        floorId: z2.number().int().positive().optional()
+      }).optional()
+    ).query(async ({ ctx, input }) => {
+      if (input?.floorId) requireFloorAccess(ctx.staff, input.floorId, ctx.user);
+      return listSessionComplications(input);
+    }),
     create: staffOrAdminProcedure.input(
       z2.object({
         sessionId: z2.number().int().positive(),
