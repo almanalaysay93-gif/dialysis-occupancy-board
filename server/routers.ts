@@ -800,6 +800,35 @@ export const appRouter = router({
         return { success: true } as const;
       }),
 
+    /**
+     * Call a waiting patient to the treatment area (staff only). The stored
+     * call state is what the lounge kiosk reads, so the announcement survives
+     * a kiosk reload and reaches every screen, not only the nurse's device.
+     */
+    callIn: staffOrAdminProcedure
+      .input(
+        z.object({
+          entryId: z.number().int().positive(),
+          floorId: z.number().int().positive(),
+          /** false cancels a call made by mistake. */
+          called: z.boolean().default(true),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        requireFloorAccess(ctx.staff, input.floorId, ctx.user);
+        try {
+          await machineDb.setWaitingCall({
+            entryId: input.entryId,
+            floorId: input.floorId,
+            called: input.called,
+            calledBy: ctx.user?.name ?? ctx.user?.email ?? ctx.staff?.displayName ?? "staff",
+          });
+        } catch (error) {
+          mapBackendError(error);
+        }
+        return { success: true } as const;
+      }),
+
     /** Number of vacant machines on a floor (for enabling the admit control). */
     vacantCount: publicProcedure
       .input(z.object({ floorId: z.number().int().positive() }))
