@@ -292,6 +292,13 @@ export function FloorMachineChip({
           machineLabel={row.machine.label}
           onClose={() => setRemoveOpen(false)}
         />
+        <MachineMetricsExportDialog
+          open={exportOpen}
+          onClose={() => setExportOpen(false)}
+          machineId={row.machine.id}
+          machineLabel={row.machine.label}
+          floorId={row.machine.floorId ?? undefined}
+        />
       </div>
     );
   }
