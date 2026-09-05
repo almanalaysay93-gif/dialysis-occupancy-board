@@ -676,7 +676,8 @@ export default function PublicKioskDisplay() {
                       )}
                     </div>
                     <span className="text-[11px] opacity-75">
-                      Position #{t.queuePosition} · Est. {t.estimatedWaitMin}m
+                      Position #{t.queuePosition} ·{" "}
+                      <span className="whitespace-nowrap">Est. {t.estimatedWaitMin}m</span>
                     </span>
                   </div>
 
