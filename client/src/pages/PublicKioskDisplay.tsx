@@ -7,6 +7,7 @@ import {
   unlockAudio,
   playHospitalChime,
   announceTicketVoice,
+  announceTreatmentArea,
 } from "@/lib/kioskAudio";
 import {
   Activity,
@@ -72,10 +73,11 @@ function formatKioskTimer(ms: number): { time: string; minutes: number } {
 type ThemeMode = "dark-oled" | "light-clinical" | "amber-contrast";
 
 type KioskCallout = {
-  /** Session id, or a synthetic value for the test chime. Identifies one announcement. */
-  key: number;
+  /** Identifies one announcement so it is never played twice. */
+  key: string;
   ticket: string;
-  bay: string;
+  /** Bay label once a machine is assigned. NULL for a nurse call to the treatment area. */
+  bay: string | null;
   floorName: string;
 };
 
@@ -141,7 +143,9 @@ export default function PublicKioskDisplay() {
   const activeCallout = calloutQueue[0] ?? null;
 
   const prevAdmittedIdsRef = useRef<Set<number>>(new Set());
-  const announcedKeyRef = useRef<number | null>(null);
+  const announcedKeyRef = useRef<string | null>(null);
+  /** Waiting entry id to the call timestamp already announced, so a poll never repeats it. */
+  const announcedCallsRef = useRef<Map<number, number>>(new Map());
   const isInitializedRef = useRef(false);
   const [audioUnlocked, setAudioUnlocked] = useState(false);
 
@@ -272,7 +276,7 @@ export default function PublicKioskDisplay() {
       if (m.session && !prevAdmittedIdsRef.current.has(m.session.id)) {
         const floorObj = floors?.find(f => f.id === m.machine.floorId);
         admits.push({
-          key: m.session.id,
+          key: `session-${m.session.id}`,
           ticket: m.session.ticket,
           bay: m.machine.label,
           floorName: floorObj?.name ?? "Dialysis Bay",
@@ -290,11 +294,37 @@ export default function PublicKioskDisplay() {
     if (announcedKeyRef.current !== activeCallout.key) {
       announcedKeyRef.current = activeCallout.key;
       if (soundEnabled) playHospitalChime();
-      if (voiceEnabled) announceTicketVoice(activeCallout.ticket, activeCallout.bay);
+      if (voiceEnabled) {
+        if (activeCallout.bay) announceTicketVoice(activeCallout.ticket, activeCallout.bay);
+        else announceTreatmentArea(activeCallout.ticket);
+      }
     }
     const timer = setTimeout(() => setCalloutQueue(q => q.slice(1)), 12000);
     return () => clearTimeout(timer);
   }, [activeCallout, soundEnabled, voiceEnabled]);
+
+  // A nurse called a waiting patient in. The call is stored server-side, so this
+  // fires on whichever kiosk sees it first and survives a reload. Only a recent
+  // call is announced; an old one still shows as CALLING on the queue card.
+  useEffect(() => {
+    if (!waitingList) return;
+    const calls: KioskCallout[] = [];
+    for (const w of waitingList) {
+      if (!w.calledAt) continue;
+      const calledMs = new Date(w.calledAt).getTime();
+      if (announcedCallsRef.current.get(w.id) === calledMs) continue;
+      announcedCallsRef.current.set(w.id, calledMs);
+      if (Date.now() - calledMs > 90_000) continue;
+      const floorObj = floors?.find(f => f.id === w.floorId);
+      calls.push({
+        key: `call-${w.id}-${calledMs}`,
+        ticket: w.ticket,
+        bay: null,
+        floorName: floorObj?.name ?? "Dialysis Unit",
+      });
+    }
+    if (calls.length > 0) setCalloutQueue(q => [...q, ...calls]);
+  }, [waitingList, floors]);
 
   // Filtered machines
   const filteredMachines = useMemo(() => {
@@ -333,9 +363,9 @@ export default function PublicKioskDisplay() {
       priority: w.priority,
       queuePosition: index + 1,
       estimatedWaitMin: (index + 1) * 25,
-      status: index === 0 && stats.vacant > 0 ? "CALLING / PROCEED" : index === 0 ? "NEXT IN LINE" : "WAITING IN LOUNGE",
+      status: w.calledAt ? "CALLING / PROCEED" : index === 0 ? "NEXT IN LINE" : "WAITING IN LOUNGE",
     }));
-  }, [waitingList, stats.vacant]);
+  }, [waitingList]);
 
   // Test Chime Action
   const handleTestChime = () => {
@@ -343,7 +373,7 @@ export default function PublicKioskDisplay() {
     setAudioUnlocked(true);
     setCalloutQueue(q => [
       ...q,
-      { key: -Date.now(), ticket: "TK-4821", bay: "HD-01", floorName: "Floor 1 Main" },
+      { key: `test-${Date.now()}`, ticket: "TK-4821", bay: "HD-01", floorName: "Floor 1 Main" },
     ]);
   };
 
@@ -559,7 +589,16 @@ export default function PublicKioskDisplay() {
               {activeCallout.ticket}
             </span>
             <span className="text-xl sm:text-2xl font-bold">
-              → PLEASE PROCEED TO <strong className="underline underline-offset-4">{activeCallout.bay}</strong> ({activeCallout.floorName})
+              {activeCallout.bay ? (
+                <>
+                  → PLEASE PROCEED TO <strong className="underline underline-offset-4">{activeCallout.bay}</strong> ({activeCallout.floorName})
+                </>
+              ) : (
+                <>
+                  → PLEASE PROCEED TO THE{" "}
+                  <strong className="underline underline-offset-4">TREATMENT AREA</strong> ({activeCallout.floorName})
+                </>
+              )}
             </span>
           </div>
         </div>

@@ -8,14 +8,14 @@ import {
 } from "@/components/ui/popover";
 import { useCanWrite } from "@/hooks/useCanWrite";
 import { trpc } from "@/lib/trpc";
-import { AlarmClock, ArrowRightCircle, Droplets, Plus, Siren, UserPlus, Users, Volume2 } from "lucide-react";
+import { AlarmClock, ArrowRightCircle, BellRing, Droplets, Plus, Siren, UserPlus, Users, Volume2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
 import {
   playHospitalChime,
   announceTicketVoice,
-  announceWaitingTicket,
+  announceTreatmentArea,
 } from "@/lib/kioskAudio";
 
 export type WaitingPriority = "normal" | "urgent" | "veryUrgent";
@@ -31,6 +31,7 @@ export type WaitingEntry = {
   assignedNurse: string | null;
   addedBy: string | null;
   joinedAt: Date;
+  calledAt?: Date | string | null;
 };
 
 type DurationValue = 180 | 240 | 360 | 480 | "custom";
@@ -320,6 +321,11 @@ export default function WaitingListPanel({ floorId }: { floorId: number }) {
     onError: e => toast.error(e.message),
   });
 
+  const callMut = trpc.waiting.callIn.useMutation({
+    onSuccess: () => void utils.waiting.list.invalidate({ floorId }),
+    onError: e => toast.error(e.message),
+  });
+
   const admitMut = trpc.waiting.admit.useMutation({
     onSuccess: res => {
       const ticketInfo = res.ticket ? ` (${res.ticket})` : "";
@@ -582,6 +588,7 @@ export default function WaitingListPanel({ floorId }: { floorId: number }) {
                   tier={tier}
                   removeEntry={removeEntry}
                   setPriorityMut={setPriorityMut}
+                  callMut={callMut}
                   admitOpen={admitDraft !== null}
                   onAdmit={() => startAdmit(entry)}
                   isAdmitDisabled={isAdmitDisabled}
@@ -602,6 +609,7 @@ type RowProps = {
   tier: WaitingPriority;
   removeEntry: ReturnType<typeof trpc.waiting.remove.useMutation>;
   setPriorityMut: ReturnType<typeof trpc.waiting.setPriority.useMutation>;
+  callMut: ReturnType<typeof trpc.waiting.callIn.useMutation>;
   admitOpen: boolean;
   onAdmit: () => void;
   isAdmitDisabled: boolean;
@@ -614,6 +622,7 @@ function WaitingRow({
   tier,
   removeEntry,
   setPriorityMut,
+  callMut,
   admitOpen,
   onAdmit,
   isAdmitDisabled,
@@ -622,6 +631,10 @@ function WaitingRow({
 }: RowProps) {
   const isVeryUrgent = tier === "veryUrgent";
   const isUrgent = tier === "urgent";
+  const isCalled = entry.calledAt != null;
+  const calledClock = entry.calledAt
+    ? new Date(entry.calledAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+    : "";
 
   return (
     <div
@@ -699,20 +712,47 @@ function WaitingRow({
         </span>
         {!canWrite ? null : (
           <>
-            <Button
-              size="sm"
-              variant="outline"
-              title={`Call ticket ${entry.ticket || entry.patientId} to nurse station`}
-              onClick={() => {
-                playHospitalChime();
-                if (entry.ticket) announceWaitingTicket(entry.ticket);
-                toast.info(`Calling Ticket ${entry.ticket || entry.patientId} to nurse station`);
-              }}
-              className="h-10 sm:h-9 px-3 border-cyan-600/60 text-cyan-700 dark:text-cyan-300 font-medium hover:bg-cyan-50 dark:hover:bg-cyan-950/40"
-            >
-              <Volume2 className="mr-1.5 h-3.5 w-3.5" />
-              Call
-            </Button>
+            {isCalled ? (
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={callMut.isPending}
+                title={`Cancel the call for ticket ${entry.ticket || entry.patientId}`}
+                onClick={() =>
+                  callMut.mutate({ entryId: entry.id, floorId: entry.floorId, called: false })
+                }
+                className="h-10 sm:h-9 px-3 border-emerald-600/60 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 font-medium hover:bg-emerald-100 dark:hover:bg-emerald-900/50"
+              >
+                <BellRing className="mr-1.5 h-3.5 w-3.5 animate-pulse" />
+                Called {calledClock}
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={callMut.isPending}
+                title={`Call ticket ${entry.ticket || entry.patientId} into the treatment area`}
+                onClick={() => {
+                  // Chime locally so the nurse hears the call land; the lounge TV
+                  // announces from the stored call state.
+                  playHospitalChime();
+                  if (entry.ticket) announceTreatmentArea(entry.ticket);
+                  callMut.mutate(
+                    { entryId: entry.id, floorId: entry.floorId, called: true },
+                    {
+                      onSuccess: () =>
+                        toast.success(
+                          `Ticket ${entry.ticket || entry.patientId} called to the treatment area`
+                        ),
+                    }
+                  );
+                }}
+                className="h-10 sm:h-9 px-3 border-cyan-600/60 text-cyan-700 dark:text-cyan-300 font-medium hover:bg-cyan-50 dark:hover:bg-cyan-950/40"
+              >
+                <Volume2 className="mr-1.5 h-3.5 w-3.5" />
+                Call in
+              </Button>
+            )}
             <Button
               size="sm"
               variant="outline"

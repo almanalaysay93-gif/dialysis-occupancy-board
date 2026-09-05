@@ -1086,6 +1086,10 @@ export type WaitingEntryView = {
   assignedNurse: string | null;
   addedBy: string | null;
   joinedAt: Date;
+  /** Set once a nurse calls this patient to the treatment area. */
+  calledAt: Date | null;
+  /** Nurse who made the call. NULL for viewers without PHI access. */
+  calledBy: string | null;
 };
 
 /**
@@ -1109,6 +1113,8 @@ function toWaitingView(
     assignedNurse: viewer.canSeePhi ? r.assignedNurse : null,
     addedBy: viewer.canSeePhi ? r.addedBy : null,
     joinedAt: r.joinedAt,
+    calledAt: r.calledAt,
+    calledBy: viewer.canSeePhi ? r.calledBy : null,
   };
 }
 
@@ -1202,6 +1208,31 @@ export async function markWaitingUrgent(input: {
     .update(waitingList)
     .set({ priority: input.priority })
     .where(and(eq(waitingList.id, input.entryId), eq(waitingList.floorId, input.floorId), eq(waitingList.status, "waiting")));
+}
+
+/**
+ * Call a waiting patient to the treatment area, or cancel that call.
+ * `calledBy` is kept so a supervisor can trace who called the patient.
+ */
+export async function setWaitingCall(input: {
+  entryId: number;
+  floorId: number;
+  called: boolean;
+  calledBy: string;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db
+    .update(waitingList)
+    .set(
+      input.called
+        ? { calledAt: new Date(), calledBy: input.calledBy.slice(0, 64) }
+        : { calledAt: null, calledBy: null }
+    )
+    .where(
+      and(eq(waitingList.id, input.entryId), eq(waitingList.floorId, input.floorId), eq(waitingList.status, "waiting"))
+    );
 }
 
 /** Number of vacant machines on a floor (no active session). */

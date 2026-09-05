@@ -103,15 +103,16 @@ export function announceTicketVoice(ticket: string, bayLabel: string): void {
 }
 
 /**
- * Announces a waiting ticket to report to the nurse station or triage desk.
+ * Announces a waiting ticket called by a nurse to enter the treatment area.
+ * No bay is spoken: the machine is only assigned at admit time.
  */
-export function announceWaitingTicket(ticket: string): void {
+export function announceTreatmentArea(ticket: string): void {
   if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
   try {
     window.speechSynthesis.cancel();
     const cleanTicket = ticket.replace(/^TK-?/i, "").trim();
     const spokenDigits = cleanTicket.split("").join(" ");
-    const text = `Attention please. Ticket, ${spokenDigits}. Please proceed to the nurse station.`;
+    const text = `Attention please. Ticket, ${spokenDigits}. Please proceed to the treatment area.`;
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.rate = 0.88;
     utterance.pitch = 1.05;
