@@ -654,7 +654,7 @@ export default function PublicKioskDisplay() {
                 <div
                   key={t.id}
                   className={cn(
-                    "p-3.5 rounded-xl border transition-all flex items-center justify-between",
+                    "p-3.5 rounded-xl border transition-all flex items-center justify-between gap-3 shrink-0",
                     t.status === "CALLING / PROCEED"
                       ? "bg-emerald-500/20 border-emerald-500 text-emerald-200 ring-2 ring-emerald-400/30 animate-pulse"
                       : t.status === "NEXT IN LINE"
@@ -664,13 +664,13 @@ export default function PublicKioskDisplay() {
                           : "bg-slate-50 border-slate-200 text-slate-800"
                   )}
                 >
-                  <div>
+                  <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="font-mono text-lg font-black tracking-wider">
+                      <span className="font-mono text-lg font-black tracking-wider whitespace-nowrap">
                         {t.ticketNumber}
                       </span>
                       {t.priority === "veryUrgent" && (
-                        <span className="px-1.5 py-0.5 text-[9px] font-black uppercase rounded bg-red-500 text-white">
+                        <span className="shrink-0 px-1.5 py-0.5 text-[9px] font-black uppercase rounded bg-red-500 text-white">
                           Priority
                         </span>
                       )}
@@ -680,7 +680,7 @@ export default function PublicKioskDisplay() {
                     </span>
                   </div>
 
-                  <div className="text-right">
+                  <div className="shrink-0 text-right">
                     <span
                       className={cn(
                         "text-[10px] font-black uppercase px-2 py-1 rounded-md tracking-wider block",
