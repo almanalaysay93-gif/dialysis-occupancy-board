@@ -751,7 +751,7 @@ export default function PublicKioskDisplay() {
           </p>
 
           {/* Queue List Cards */}
-          <div className="flex flex-col gap-2.5 overflow-y-auto max-h-[580px] pr-1">
+          <div className="flex flex-col gap-2.5 overflow-y-auto max-h-[580px] scrollbar-none">
             {anonymousQueue.length === 0 ? (
               <div className="py-12 text-center text-slate-400 font-serif text-sm">
                 <CheckCircle2 className="h-8 w-8 text-emerald-400 mx-auto mb-2 opacity-80" />

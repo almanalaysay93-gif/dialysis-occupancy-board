@@ -4,6 +4,15 @@
 @custom-variant dark (&:is(.dark *));
 @custom-variant xs (@media (min-width: 475px));
 
+/* Scrollable without painting a scrollbar. Kiosk and TV surfaces have no pointer. */
+@utility scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 @theme inline {
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
