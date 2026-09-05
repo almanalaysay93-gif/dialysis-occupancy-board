@@ -198,10 +198,6 @@ export const waitingList = pgTable("waiting_list", {
   assignedNurse: varchar("assignedNurse", { length: 64 }),
   addedBy: text("addedBy"),
   joinedAt: timestamp("joinedAt", { mode: "date" }).defaultNow().notNull(),
-  /** When a nurse called this patient to the treatment area. NULL until called. */
-  calledAt: timestamp("calledAt", { mode: "date" }),
-  /** Nurse who made the call. Kept for the supervisor report. */
-  calledBy: varchar("calledBy", { length: 64 }),
   /** When the patient was admitted onto a machine (leaves the list). */
   admittedAt: timestamp("admittedAt", { mode: "date" }),
   status: waitingStatusEnum("status").notNull().default("waiting"),

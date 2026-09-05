@@ -165,10 +165,6 @@ var waitingList = pgTable("waiting_list", {
   assignedNurse: varchar("assignedNurse", { length: 64 }),
   addedBy: text("addedBy"),
   joinedAt: timestamp("joinedAt", { mode: "date" }).defaultNow().notNull(),
-  /** When a nurse called this patient to the treatment area. NULL until called. */
-  calledAt: timestamp("calledAt", { mode: "date" }),
-  /** Nurse who made the call. Kept for the supervisor report. */
-  calledBy: varchar("calledBy", { length: 64 }),
   /** When the patient was admitted onto a machine (leaves the list). */
   admittedAt: timestamp("admittedAt", { mode: "date" }),
   status: waitingStatusEnum("status").notNull().default("waiting"),
@@ -2114,9 +2110,7 @@ function toWaitingView(r, viewer = { canSeePhi: false }) {
     isolationTag: r.isolationTag,
     assignedNurse: viewer.canSeePhi ? r.assignedNurse : null,
     addedBy: viewer.canSeePhi ? r.addedBy : null,
-    joinedAt: r.joinedAt,
-    calledAt: r.calledAt,
-    calledBy: viewer.canSeePhi ? r.calledBy : null
+    joinedAt: r.joinedAt
   };
 }
 async function listWaitingAll(viewer = { canSeePhi: false }) {
@@ -2162,15 +2156,6 @@ async function markWaitingUrgent(input) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   await db.update(waitingList).set({ priority: input.priority }).where(and2(eq4(waitingList.id, input.entryId), eq4(waitingList.floorId, input.floorId), eq4(waitingList.status, "waiting")));
-}
-async function setWaitingCall(input) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  await db.update(waitingList).set(
-    input.called ? { calledAt: /* @__PURE__ */ new Date(), calledBy: input.calledBy.slice(0, 64) } : { calledAt: null, calledBy: null }
-  ).where(
-    and2(eq4(waitingList.id, input.entryId), eq4(waitingList.floorId, input.floorId), eq4(waitingList.status, "waiting"))
-  );
 }
 async function countVacantMachines(input) {
   const db = await getDb();
@@ -3966,32 +3951,6 @@ var appRouter = router({
           entryId: input.entryId,
           floorId: input.floorId,
           priority: input.priority
-        });
-      } catch (error) {
-        mapBackendError(error);
-      }
-      return { success: true };
-    }),
-    /**
-     * Call a waiting patient to the treatment area (staff only). The stored
-     * call state is what the lounge kiosk reads, so the announcement survives
-     * a kiosk reload and reaches every screen, not only the nurse's device.
-     */
-    callIn: staffOrAdminProcedure.input(
-      z2.object({
-        entryId: z2.number().int().positive(),
-        floorId: z2.number().int().positive(),
-        /** false cancels a call made by mistake. */
-        called: z2.boolean().default(true)
-      })
-    ).mutation(async ({ ctx, input }) => {
-      requireFloorAccess(ctx.staff, input.floorId, ctx.user);
-      try {
-        await setWaitingCall({
-          entryId: input.entryId,
-          floorId: input.floorId,
-          called: input.called,
-          calledBy: ctx.user?.name ?? ctx.user?.email ?? ctx.staff?.displayName ?? "staff"
         });
       } catch (error) {
         mapBackendError(error);

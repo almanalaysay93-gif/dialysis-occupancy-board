@@ -22,7 +22,6 @@ vi.mock("./machines", () => ({
   markWaitingUrgent: vi.fn(async () => undefined),
   countVacantMachines: vi.fn(async () => 3),
   admitWaiting: vi.fn(async () => undefined),
-  setWaitingCall: vi.fn(async () => undefined),
   listNurseAssignments: vi.fn(async () => []),
 }));
 import * as machineDb from "./machines";
@@ -646,43 +645,5 @@ describe("guest viewers never receive clinical panel data", () => {
 
     expect(result).toEqual([]);
     expect(vi.mocked(machineDb.listNurseAssignments)).not.toHaveBeenCalled();
-  });
-});
-
-describe("waiting.callIn", () => {
-  it("stores the call with the nurse who made it", async () => {
-    const caller = appRouter.createCaller(createStaffContext().ctx);
-    const result = await caller.waiting.callIn({ entryId: 5, floorId: 30001 });
-
-    expect(result).toEqual({ success: true });
-    expect(vi.mocked(machineDb.setWaitingCall)).toHaveBeenCalledWith({
-      entryId: 5,
-      floorId: 30001,
-      called: true,
-      calledBy: "Staff Member",
-    });
-  });
-
-  it("clears the call when cancelled", async () => {
-    const caller = appRouter.createCaller(createStaffContext().ctx);
-    await caller.waiting.callIn({ entryId: 5, floorId: 30001, called: false });
-
-    expect(vi.mocked(machineDb.setWaitingCall)).toHaveBeenCalledWith(
-      expect.objectContaining({ called: false })
-    );
-  });
-
-  it("rejects a viewer who cannot write", async () => {
-    const { resolveStaffSession } = await import("./staffAuth");
-    vi.mocked(resolveStaffSession).mockResolvedValueOnce(null);
-
-    const caller = appRouter.createCaller({
-      user: null,
-      req: { protocol: "https", headers: {} } as TrpcContext["req"],
-      res: {} as TrpcContext["res"],
-    });
-
-    await expect(caller.waiting.callIn({ entryId: 5, floorId: 30001 })).rejects.toBeInstanceOf(TRPCError);
-    expect(vi.mocked(machineDb.setWaitingCall)).not.toHaveBeenCalled();
   });
 });
