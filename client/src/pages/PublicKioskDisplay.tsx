@@ -905,8 +905,8 @@ function KioskBayCard({
   const endingSoon = occupied && minutes > 0 && minutes <= 20;
   const treatmentDone = occupied && countdownMs === 0;
 
-  // Clean label without HD prefix for large display
-  const bayNumber = item.machine.label.replace("HD-", "Bay ");
+  // Keep the registered machine number visible on every public card.
+  const machineNumber = item.machine.label;
 
   return (
     <div
@@ -940,10 +940,10 @@ function KioskBayCard({
         )
       )}
     >
-      {/* Top Bay Tag & Status Dot */}
+      {/* Top machine number and status dot */}
       <div className="flex items-center justify-between gap-2">
         <span className="font-mono text-sm font-black tracking-wider uppercase opacity-90">
-          {bayNumber}
+          {machineNumber}
         </span>
         <span
           className={cn(
