@@ -18,17 +18,28 @@ export type NurseRosterEntry = {
 let _sql: ReturnType<typeof postgres> | null = null;
 let _sqlFailed = false;
 
-/** Strips wrapping quotes a pasted env var value commonly picks up (e.g. `"postgresql://..."`). */
+/**
+ * Undoes two common copy-paste mistakes when setting the env var: wrapping
+ * quotes (`"postgresql://..."`), and pasting a whole `.env` line instead of
+ * just its value (`DATABASE_URL=postgresql://...`).
+ */
 function normalizeConnectionString(raw: string): string {
-  const trimmed = raw.trim();
-  if (trimmed.length >= 2) {
-    const first = trimmed[0];
-    const last = trimmed[trimmed.length - 1];
+  let value = raw.trim();
+  if (value.length >= 2) {
+    const first = value[0];
+    const last = value[value.length - 1];
     if ((first === '"' && last === '"') || (first === "'" && last === "'")) {
-      return trimmed.slice(1, -1).trim();
+      value = value.slice(1, -1).trim();
     }
   }
-  return trimmed;
+  if (!/^[a-z]+:\/\//i.test(value)) {
+    const eqIndex = value.indexOf("=");
+    const prefix = eqIndex === -1 ? "" : value.slice(0, eqIndex);
+    if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(prefix)) {
+      value = value.slice(eqIndex + 1).trim();
+    }
+  }
+  return value;
 }
 
 function getSql(): ReturnType<typeof postgres> | null {

@@ -71,6 +71,17 @@ describe("listActiveNurses", () => {
     );
   });
 
+  it("strips an accidental KEY= prefix from a pasted .env line", async () => {
+    process.env.NURSETRACK_DATABASE_URL =
+      "DATABASE_URL=postgresql://user:pass@localhost:5432/nursetrack";
+    const { listActiveNurses } = await import("./nurse-roster");
+    await listActiveNurses();
+    expect(postgresFactory).toHaveBeenCalledWith(
+      "postgresql://user:pass@localhost:5432/nursetrack",
+      expect.anything(),
+    );
+  });
+
   it("returns an empty roster instead of throwing when the connection string is invalid", async () => {
     postgresFactory.mockImplementationOnce(() => {
       throw new TypeError("Invalid URL");
