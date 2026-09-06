@@ -12,15 +12,18 @@ const FAKE_ROWS = [
 ];
 
 const sqlMock = vi.fn(async () => FAKE_ROWS);
+const postgresFactory = vi.fn(() => sqlMock);
 
 vi.mock("postgres", () => ({
-  default: vi.fn(() => sqlMock),
+  default: postgresFactory,
 }));
 
 beforeEach(() => {
   vi.resetModules();
   sqlMock.mockClear();
   sqlMock.mockResolvedValue(FAKE_ROWS);
+  postgresFactory.mockClear();
+  postgresFactory.mockImplementation(() => sqlMock);
   process.env.NURSETRACK_DATABASE_URL = "postgresql://user:pass@localhost:5432/nursetrack";
 });
 
@@ -56,5 +59,24 @@ describe("listActiveNurses", () => {
     sqlMock.mockRejectedValueOnce(new Error("connection terminated"));
     const { listActiveNurses } = await import("./nurse-roster");
     await expect(listActiveNurses()).resolves.toEqual([]);
+  });
+
+  it("strips wrapping quotes a pasted connection string picks up", async () => {
+    process.env.NURSETRACK_DATABASE_URL = '"postgresql://user:pass@localhost:5432/nursetrack"';
+    const { listActiveNurses } = await import("./nurse-roster");
+    await listActiveNurses();
+    expect(postgresFactory).toHaveBeenCalledWith(
+      "postgresql://user:pass@localhost:5432/nursetrack",
+      expect.anything(),
+    );
+  });
+
+  it("returns an empty roster instead of throwing when the connection string is invalid", async () => {
+    postgresFactory.mockImplementationOnce(() => {
+      throw new TypeError("Invalid URL");
+    });
+    const { listActiveNurses } = await import("./nurse-roster");
+    await expect(listActiveNurses()).resolves.toEqual([]);
+    expect(sqlMock).not.toHaveBeenCalled();
   });
 });

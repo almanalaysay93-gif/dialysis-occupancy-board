@@ -16,12 +16,34 @@ export type NurseRosterEntry = {
 };
 
 let _sql: ReturnType<typeof postgres> | null = null;
+let _sqlFailed = false;
+
+/** Strips wrapping quotes a pasted env var value commonly picks up (e.g. `"postgresql://..."`). */
+function normalizeConnectionString(raw: string): string {
+  const trimmed = raw.trim();
+  if (trimmed.length >= 2) {
+    const first = trimmed[0];
+    const last = trimmed[trimmed.length - 1];
+    if ((first === '"' && last === '"') || (first === "'" && last === "'")) {
+      return trimmed.slice(1, -1).trim();
+    }
+  }
+  return trimmed;
+}
 
 function getSql(): ReturnType<typeof postgres> | null {
-  const url = process.env.NURSETRACK_DATABASE_URL?.trim();
-  if (!url) return null;
+  if (_sqlFailed) return null;
+  const raw = process.env.NURSETRACK_DATABASE_URL;
+  if (!raw?.trim()) return null;
   if (!_sql) {
-    _sql = postgres(url, { max: 2, idle_timeout: 30, connect_timeout: 8, ssl: { rejectUnauthorized: false } });
+    try {
+      const url = normalizeConnectionString(raw);
+      _sql = postgres(url, { max: 2, idle_timeout: 30, connect_timeout: 8, ssl: { rejectUnauthorized: false } });
+    } catch (error) {
+      _sqlFailed = true;
+      console.warn("[NurseRoster] NURSETRACK_DATABASE_URL is set but not a valid connection string:", error);
+      return null;
+    }
   }
   return _sql;
 }
