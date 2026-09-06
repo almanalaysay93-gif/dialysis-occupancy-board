@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,22 +15,24 @@ export default function PatientLogin() {
   const [ticketOrId, setTicketOrId] = useState("");
 
   const utils = trpc.useUtils();
+  const queryClient = useQueryClient();
 
   const patientLoginMut = trpc.staff.patientLogin.useMutation({
     onSuccess: data => {
+      queryClient.removeQueries();
       utils.staff.me.setData(undefined, {
         accountId: 0,
         username: data.ticket,
         displayName: data.displayName,
         role: "patient",
-        assignedFloorId: null,
+        assignedFloorId: data.assignedFloorId,
         fromCookie: true,
       });
 
       toast.success(`Welcome, ${data.displayName}`, {
         description: data.activeBay
-          ? `Assigned to Bay ${data.activeBay} · ${data.activeStatus === "in_treatment" ? "Treatment in progress" : "Waiting"}`
-          : "Opening public lounge display.",
+          ? `Assigned to machine ${data.activeBay}`
+          : data.assignedFloorId !== null ? "Opening your assigned floor board." : "Waiting for your floor assignment.",
       });
 
       navigate("/kiosk");
@@ -40,6 +43,7 @@ export default function PatientLogin() {
 
   const patientGuestMut = trpc.staff.patientGuest.useMutation({
     onSuccess: () => {
+      queryClient.removeQueries();
       utils.staff.me.setData(undefined, {
         accountId: 0,
         username: "patient.guest",

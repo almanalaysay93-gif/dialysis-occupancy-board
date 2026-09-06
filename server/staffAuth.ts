@@ -7,6 +7,7 @@ import { getDb } from "./db";
 import { ENV } from "./_core/env";
 import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
+import { findPatientAssignment } from "./patient-assignment";
 
 /** Local staff session cookie name (separate from the OAuth user session). */
 export const STAFF_COOKIE_NAME = "staff_session_id";
@@ -18,7 +19,7 @@ export interface StaffSession {
   username: string;
   displayName: string;
   role: StaffRole;
-  /** Floor this nurse may access; null for supervisors and guests. */
+  /** Assigned floor for nurses and identified patients. */
   assignedFloorId: number | null;
   /** True only when the guest/nurse/supervisor role came from an actual
    *  staff cookie. When false the request simply has no staff session —
@@ -147,12 +148,22 @@ export async function verifyStaffSession(
     const isPatientJwt = String(staff.role) === "patient";
     if (isPatientJwt) {
       // Patient JWTs carry accountId 0 and their ticket number as username.
+      // Resolve live placement rather than trusting a floor saved before a transfer.
+      // Lookup failure must retain the patient role with no floor access.
+      let assignedFloorId: number | null = null;
+      if (staff.username !== "patient.guest") {
+        try {
+          assignedFloorId = (await findPatientAssignment(staff.username))?.assignedFloorId ?? null;
+        } catch {
+          assignedFloorId = null;
+        }
+      }
       return {
         accountId: 0,
         username: String(staff.username || "patient"),
         displayName: String(staff.displayName || "Patient"),
         role: "patient",
-        assignedFloorId: null,
+        assignedFloorId,
       };
     }
     // Re-fetch the live account to respect deactivation and floor reassignment.

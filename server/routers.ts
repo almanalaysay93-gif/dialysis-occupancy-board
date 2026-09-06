@@ -25,11 +25,29 @@ import {
   STAFF_COOKIE_NAME,
   type StaffSession,
 } from "./staffAuth";
-import { staffAccounts, sessions, machines, waitingList } from "../drizzle/schema";
+import { staffAccounts } from "../drizzle/schema";
 import { patientTicket } from "./patient-ticket";
+import { findPatientAssignment } from "./patient-assignment";
 import { getDb } from "./db";
 import { mapBackendError } from "./errors";
 import { eq } from "drizzle-orm";
+
+function isAssignedPatient(staff: StaffSession) {
+  return staff.role === "patient" && staff.username !== "patient.guest";
+}
+
+async function visibleFloors(staff: StaffSession) {
+  const floors = await machineDb.listFloors();
+  return isAssignedPatient(staff)
+    ? floors.filter(floor => floor.id === staff.assignedFloorId)
+    : floors;
+}
+
+function requirePatientFloor(staff: StaffSession, floorId: number) {
+  if (isAssignedPatient(staff) && staff.assignedFloorId !== floorId) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "You can only view your assigned floor board." });
+  }
+}
 
 /**
  * Floor scoping for nurses: rejects access to floors outside the staff
@@ -139,9 +157,12 @@ export const appRouter = router({
      *  Open to anonymous viewers (kiosk, guest board) but PHI is masked
      *  server-side: only a staff session receives the real patientId and
      *  staff names. Everyone else gets the public ticket code. */
-    list: staffReadProcedure.query(({ ctx }) =>
-      machineDb.listMachines({ canSeePhi: ctx.isStaff })
-    ),
+    list: staffReadProcedure.query(async ({ ctx }) => {
+      const rows = await machineDb.listMachines({ canSeePhi: ctx.isStaff });
+      return isAssignedPatient(ctx.staff)
+        ? rows.filter(row => ctx.staff.assignedFloorId !== null && row.machine.floorId === ctx.staff.assignedFloorId)
+        : rows;
+    }),
 
     /** Rename a machine (staff only). */
     updateLabel: staffOrAdminProcedure
@@ -174,7 +195,7 @@ export const appRouter = router({
 
 
     /** Floors machines are grouped into on the board. */
-    listFloors: publicProcedure.query(() => machineDb.listFloors()),
+    listFloors: staffReadProcedure.query(({ ctx }) => visibleFloors(ctx.staff)),
 
     /** Add a new machine to the inventory (staff only). */
     add: staffOrAdminProcedure
@@ -332,7 +353,7 @@ export const appRouter = router({
 
     /** Backup & Repair inventory: machines off the floors, with their status. */
     offboarded: router({
-      list: publicProcedure.query(() => machineDb.listOffboardedMachines()),
+      list: staffReadProcedure.query(() => machineDb.listOffboardedMachines()),
     }),
 
     /** Aggregated metrics for a machine or floor over a date range. */
@@ -396,7 +417,7 @@ export const appRouter = router({
 
   rooms: router({
     /** All rooms (floors) visible on the board. Public so every staff device sees them. */
-    list: publicProcedure.query(() => machineDb.listFloors()),
+    list: staffReadProcedure.query(({ ctx }) => visibleFloors(ctx.staff)),
 
     /** Add a new room (supervisor/admin only — global resource, not floor-scoped). */
     add: staffOrAdminProcedure
@@ -659,12 +680,13 @@ export const appRouter = router({
      *  but guest viewers never receive clinical queue data. */
     list: staffReadProcedure
       .input(z.object({ floorId: z.number().int().positive() }))
-      .query(({ ctx, input }) =>
+      .query(({ ctx, input }) => {
         // The kiosk shows this queue in a public waiting room, so the rows
         // stay readable but carry only the ticket code unless the caller
         // holds a staff session.
-        machineDb.listWaiting({ floorId: input.floorId }, { canSeePhi: ctx.isStaff })
-      ),
+        requirePatientFloor(ctx.staff, input.floorId);
+        return machineDb.listWaiting({ floorId: input.floorId }, { canSeePhi: ctx.isStaff });
+      }),
     /**
      * Cross-board urgent register: urgent-flagged active sessions from every
      * floor plus very-urgent patients still waiting anywhere. Public so all
@@ -850,9 +872,12 @@ export const appRouter = router({
       }),
 
     /** Number of vacant machines on a floor (for enabling the admit control). */
-    vacantCount: publicProcedure
+    vacantCount: staffReadProcedure
       .input(z.object({ floorId: z.number().int().positive() }))
-      .query(({ input }) => machineDb.countVacantMachines({ floorId: input.floorId })),
+      .query(({ ctx, input }) => {
+        requirePatientFloor(ctx.staff, input.floorId);
+        return machineDb.countVacantMachines({ floorId: input.floorId });
+      }),
 
     /**
      * Admit a waiting patient onto the first vacant machine of the floor.
@@ -1213,68 +1238,11 @@ export const appRouter = router({
       )
       .mutation(async ({ ctx, input }) => {
         const raw = input.ticketOrId.trim();
-        let ticket = raw.toUpperCase();
-        let patientId = raw;
-        let activeBay: string | null = null;
-        let activeStatus: "in_treatment" | "waiting" | "unregistered" = "unregistered";
-
-        const db = await getDb();
-        if (db) {
-          const activeSessions = await db
-            .select({
-              machineId: sessions.machineId,
-              patientId: sessions.patientId,
-            })
-            .from(sessions)
-            .where(eq(sessions.status, "active"));
-
-          const match = activeSessions.find(
-            s =>
-              s.patientId.toLowerCase() === raw.toLowerCase() ||
-              patientTicket(s.patientId).toLowerCase() === raw.toLowerCase()
-          );
-
-          if (match) {
-            activeStatus = "in_treatment";
-            ticket = patientTicket(match.patientId);
-            patientId = match.patientId;
-            const m = await db
-              .select({ label: machines.label })
-              .from(machines)
-              .where(eq(machines.id, match.machineId))
-              .limit(1);
-            if (m[0]) activeBay = m[0].label;
-          } else {
-            const waiting = await db
-              .select({ id: waitingList.id, patientId: waitingList.patientId })
-              .from(waitingList)
-              .where(eq(waitingList.status, "waiting"));
-
-            const waitMatch = waiting.find(
-              w =>
-                w.patientId.toLowerCase() === raw.toLowerCase() ||
-                patientTicket(w.patientId).toLowerCase() === raw.toLowerCase()
-            );
-
-            if (waitMatch) {
-              activeStatus = "waiting";
-              ticket = patientTicket(waitMatch.patientId);
-              patientId = waitMatch.patientId;
-            } else {
-              if (/^tk-\d+$/i.test(raw)) {
-                ticket = raw.toUpperCase();
-              } else {
-                ticket = patientTicket(raw);
-              }
-            }
-          }
-        } else {
-          if (/^tk-\d+$/i.test(raw)) {
-            ticket = raw.toUpperCase();
-          } else {
-            ticket = patientTicket(raw);
-          }
-        }
+        const assignment = await findPatientAssignment(raw);
+        const ticket = assignment?.ticket ?? (/^tk-\d+$/i.test(raw) ? raw.toUpperCase() : patientTicket(raw));
+        const assignedFloorId = assignment?.assignedFloorId ?? null;
+        const activeBay = assignment?.activeBay ?? null;
+        const activeStatus = assignment?.activeStatus ?? "unregistered";
 
         const displayName = `Patient ${ticket}`;
         await setStaffSessionCookieSync(
@@ -1285,7 +1253,7 @@ export const appRouter = router({
             username: ticket,
             displayName,
             role: "patient",
-            assignedFloorId: null,
+            assignedFloorId,
           },
           1
         );
@@ -1295,6 +1263,7 @@ export const appRouter = router({
           displayName,
           role: "patient" as const,
           ticket,
+          assignedFloorId,
           activeBay,
           activeStatus,
         };

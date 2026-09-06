@@ -56,6 +56,13 @@ export const staffReadProcedure = t.procedure.use(
     const { ctx, next } = opts;
     const staff: StaffSession = await resolveStaffSession(ctx.req);
     const oauthUser = ctx.user;
+    if (staff.role === "patient" && staff.username !== "patient.guest") {
+      const patientReads = ["machines.list", "machines.listFloors", "rooms.list", "waiting.list", "waiting.vacantCount"];
+      if (!patientReads.includes(opts.path)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "You can only view your assigned floor board." });
+      }
+      return next({ ctx: { ...ctx, user: null, staff, isStaff: false as const } });
+    }
     // Anonymous visitors (no staff cookie, no OAuth) count as read-only
     // viewers — the same visibility as board content (machines.list is
     // fully public). Write endpoints stay on staffOrAdminProcedure.
@@ -96,6 +103,9 @@ export const clinicalReadProcedure = t.procedure.use(
     const { ctx, next } = opts;
     const staff: StaffSession = await resolveStaffSession(ctx.req);
     const oauthUser = ctx.user;
+    if (staff.role === "patient") {
+      throw new TRPCError({ code: "FORBIDDEN", message: "You can only view your assigned floor board." });
+    }
     if (oauthUser) {
       return next({
         ctx: { ...ctx, user: oauthUser, staff, isStaff: true as const },

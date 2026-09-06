@@ -180,31 +180,49 @@ export default function PublicKioskDisplay() {
     };
   }, []);
 
-  // Real-time queries for machines and waiting lists
-  const { data: machines, isLoading: machinesLoading } = trpc.machines.list.useQuery(undefined, {
-    refetchInterval: 10000,
-  });
-
-  const { data: floors } = trpc.machines.listFloors.useQuery(undefined, {
-    refetchInterval: 30000,
-  });
-
-  // Fetch all waiting patients across floors
-  const activeFloorIdNum = typeof selectedFloorId === "number" ? selectedFloorId : (floors?.[0]?.id ?? 1);
-  const { data: waitingList } = trpc.waiting.list.useQuery(
-    { floorId: activeFloorIdNum },
-    { refetchInterval: 10000 }
-  );
-
   const [, navigate] = useLocation();
   const utils = trpc.useUtils();
   const staffMe = trpc.staff.me.useQuery(undefined, {
     retry: false,
     staleTime: 15_000,
+    refetchInterval: 10000,
   });
   const staff = staffMe.data;
   const isPatient = staff?.role === "patient";
   const userTicket = isPatient && staff.username !== "patient.guest" ? staff.username.toUpperCase() : null;
+  const isFloorRestricted = Boolean(userTicket);
+  const patientFloorId = staff?.assignedFloorId ?? null;
+
+  const { data: machineData, isLoading: machinesLoading } = trpc.machines.list.useQuery(undefined, {
+    enabled: staffMe.isSuccess,
+    refetchInterval: 10000,
+  });
+  const { data: floorData } = trpc.machines.listFloors.useQuery(undefined, {
+    enabled: staffMe.isSuccess,
+    refetchInterval: 10000,
+  });
+  // Also scope cached results so a previous viewer's boards cannot flash on login.
+  const machines = useMemo(() => isFloorRestricted
+    ? machineData?.filter(item => patientFloorId !== null && item.machine.floorId === patientFloorId)
+    : machineData, [machineData, isFloorRestricted, patientFloorId]);
+  const floors = useMemo(() => isFloorRestricted
+    ? (floorData ?? []).filter(floor => floor.id === patientFloorId)
+    : floorData, [floorData, isFloorRestricted, patientFloorId]);
+  const activeFloorIdNum = isFloorRestricted ? patientFloorId
+    : typeof selectedFloorId === "number" ? selectedFloorId : (floors?.[0]?.id ?? null);
+  const { data: waitingList } = trpc.waiting.list.useQuery(
+    { floorId: activeFloorIdNum ?? 0 },
+    { enabled: staffMe.isSuccess && activeFloorIdNum !== null, refetchInterval: 10000 }
+  );
+
+  useEffect(() => {
+    if (!isFloorRestricted) return;
+    setAutoCycle(false);
+    setSelectedFloorId(patientFloorId ?? "ALL");
+    setCalloutQueue([]);
+    void utils.machines.list.invalidate();
+    void utils.machines.listFloors.invalidate();
+  }, [isFloorRestricted, patientFloorId, utils]);
 
   const logoutMut = trpc.staff.logout.useMutation({
     onSuccess: () => {
@@ -258,7 +276,7 @@ export default function PublicKioskDisplay() {
 
   // Auto-cycle through floors if multiple floors exist
   useEffect(() => {
-    if (!autoCycle || !floors || floors.length <= 1) return;
+    if (isFloorRestricted || !autoCycle || !floors || floors.length <= 1) return;
     const interval = setInterval(() => {
       setSelectedFloorId(prev => {
         if (prev === "ALL") return floors[0].id;
@@ -270,7 +288,7 @@ export default function PublicKioskDisplay() {
       });
     }, 14000);
     return () => clearInterval(interval);
-  }, [autoCycle, floors]);
+  }, [autoCycle, floors, isFloorRestricted]);
 
   // Audio-visual alert trigger when a new session starts
   useEffect(() => {
@@ -353,9 +371,9 @@ export default function PublicKioskDisplay() {
   // Filtered machines
   const filteredMachines = useMemo(() => {
     if (!machines) return [];
-    if (selectedFloorId === "ALL") return machines;
+    if (isFloorRestricted || selectedFloorId === "ALL") return machines;
     return machines.filter(m => m.machine.floorId === selectedFloorId);
-  }, [machines, selectedFloorId]);
+  }, [machines, selectedFloorId, isFloorRestricted]);
 
   // Aggregate stats
   const stats = useMemo(() => {
@@ -406,6 +424,12 @@ export default function PublicKioskDisplay() {
       },
     ]);
   };
+
+  if (!staffMe.isSuccess) {
+    return <div className="min-h-screen bg-[#070B14] p-6 text-white" role="status">
+      {staffMe.isError ? "Unable to load your session. Please reload the page." : "Loading your board…"}
+    </div>;
+  }
 
   return (
     <div
@@ -488,7 +512,9 @@ export default function PublicKioskDisplay() {
                   <p>Please wait in the lounge until called.</p>
                 </>
               ) : (
-                <p>Keep this ticket number ready. Watch the queue for your call.</p>
+                <p>{patientFloorId === null
+                  ? "Waiting for your floor assignment. Please contact the nurse station."
+                  : "Keep this ticket number ready. Watch the queue for your call."}</p>
               )}
             </div>
           </section>
@@ -532,14 +558,14 @@ export default function PublicKioskDisplay() {
             </button>
 
             {/* Test Audio Button */}
-            <button
+            {!isFloorRestricted && <button
               onClick={handleTestChime}
               title="Test Hospital Chime & Announcement"
               className="px-2.5 py-1 text-xs font-semibold rounded-md bg-white/10 hover:bg-white/20 transition-colors flex items-center gap-1"
             >
               <Bell className="h-3.5 w-3.5" />
               Test Cue
-            </button>
+            </button>}
 
             {/* Fullscreen Button */}
             <button
@@ -641,6 +667,9 @@ export default function PublicKioskDisplay() {
           <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 mr-2 flex items-center gap-1">
             <Layers className="h-3.5 w-3.5" /> Floor:
           </span>
+          {isFloorRestricted ? (
+            <span className="text-sm font-bold">{floors?.[0]?.name ?? "Waiting for floor assignment"}</span>
+          ) : <>
           <button
             aria-pressed={selectedFloorId === "ALL"}
             onClick={() => {
@@ -674,10 +703,11 @@ export default function PublicKioskDisplay() {
               {f.name}
             </button>
           ))}
+          </>}
         </div>
 
         <div className="kiosk-summary flex flex-wrap items-center gap-4 text-xs">
-          <label className="flex items-center gap-2 cursor-pointer">
+          {!isFloorRestricted && <label className="flex items-center gap-2 cursor-pointer">
             <input
               type="checkbox"
               checked={autoCycle}
@@ -685,10 +715,10 @@ export default function PublicKioskDisplay() {
               className="rounded accent-cyan-500 h-4 w-4"
             />
             <span className="text-slate-300 font-medium">Auto-Rotate Boards (14s)</span>
-          </label>
+          </label>}
 
           {/* Machine Summary Badges */}
-          <div className="kiosk-summary-badges flex flex-wrap items-center gap-2">
+          {(!isFloorRestricted || patientFloorId !== null) && <div className="kiosk-summary-badges flex flex-wrap items-center gap-2">
             <span className="px-3 py-1 rounded-md bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-bold">
               {stats.vacant} Vacant / Ready
             </span>
@@ -700,12 +730,12 @@ export default function PublicKioskDisplay() {
                 {stats.readySoon} Ending Soon
               </span>
             )}
-          </div>
+          </div>}
         </div>
       </div>
 
       {/* Main Kiosk Content Grid: Machine Readiness Bay Grid + Anonymous Queue Strip */}
-      <main className="kiosk-content flex-1 p-6 grid grid-cols-1 xl:grid-cols-4 gap-6">
+      {(!isFloorRestricted || patientFloorId !== null) && <main className="kiosk-content flex-1 p-6 grid grid-cols-1 xl:grid-cols-4 gap-6">
         {/* Left 3 Columns: Live Machine Readiness Bay Matrix */}
         <section className="kiosk-bays xl:col-span-3 flex flex-col gap-4">
           <div className="kiosk-board-heading flex flex-wrap items-center justify-between gap-3">
@@ -862,7 +892,7 @@ export default function PublicKioskDisplay() {
             </div>
           </div>
         </aside>
-      </main>
+      </main>}
 
       {/* Footer Ticker */}
       <footer
