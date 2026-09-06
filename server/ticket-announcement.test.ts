@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { appRouter } from "./routers";
 import * as machineDb from "./machines";
 import { patientTicket } from "./patient-ticket";
+import { ticketCallText, treatmentAreaCallText } from "@/lib/kioskAudio";
 import type { TrpcContext } from "./_core/context";
 
 vi.mock("./machines", async importOriginal => {
@@ -11,6 +12,9 @@ vi.mock("./machines", async importOriginal => {
     listWaiting: vi.fn(),
     admitWaiting: vi.fn(),
     listMachines: vi.fn(),
+    listFloors: vi.fn().mockResolvedValue([{ id: 30001, name: "SKTI Main" }]),
+    setWaitingCall: vi.fn(),
+    nextVacantMachine: vi.fn(),
   };
 });
 
@@ -72,19 +76,35 @@ describe("ticket calling and admission announcement", () => {
     expect(res.patientId).toBe("P-1001");
     expect(res.ticket).toBe(patientTicket("P-1001"));
     expect(res.machineLabel).toBe("HD-05");
+    expect(res.floorName).toBe("SKTI Main");
   });
 
-  it("formats ticket voice announcements without spelling out the word 'ticket'", () => {
-    const ticket = "TK-4821";
-    const bayLabel = "HD-02";
+  it("waiting.callIn returns the board and the machine the next admit lands on", async () => {
+    vi.mocked(machineDb.nextVacantMachine).mockResolvedValueOnce({
+      machineLabel: "HD-07",
+      floorName: "SKTI Main",
+    });
 
-    const cleanTicket = ticket.replace(/^TK-?/i, "").trim();
-    const spokenDigits = cleanTicket.split("").join(" ");
-    const cleanBay = bayLabel.replace(/^HD-?/i, "").trim();
-    const text = `Attention please. Ticket, ${spokenDigits}. Please proceed to Bay ${cleanBay}.`;
+    const caller = appRouter.createCaller(createStaffContext());
+    const res = await caller.waiting.callIn({ entryId: 10, floorId: 30001, called: true });
 
-    expect(text).toBe("Attention please. Ticket, 4 8 2 1. Please proceed to Bay 02.");
-    expect(text).not.toContain("T i c k e t");
+    expect(res.machineLabel).toBe("HD-07");
+    expect(res.floorName).toBe("SKTI Main");
+  });
+
+  it("speaks only the board, the ticket and the machine number", () => {
+    expect(ticketCallText("TK-4821", "HD-02", "SKTI Main")).toBe(
+      "SKTI Main. Ticket 4 8 2 1. Machine 2."
+    );
+    expect(treatmentAreaCallText("TK-4821", "RDU Annex", "RA-07")).toBe(
+      "RDU Annex. Ticket 4 8 2 1. Machine 7 is next."
+    );
+  });
+
+  it("drops the machine from a call when the board has none free", () => {
+    expect(treatmentAreaCallText("TK-0300", "SKTI ICU", null)).toBe(
+      "SKTI ICU. Ticket 0 3 0 0."
+    );
   });
 
   it("detects first admitted session when previous active session set was empty", () => {

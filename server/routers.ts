@@ -832,7 +832,15 @@ export const appRouter = router({
           }
           mapBackendError(error);
         }
-        return { success: true } as const;
+        // The caller announces the board and the machine the patient walks to.
+        const next = input.called
+          ? await machineDb.nextVacantMachine({ floorId: input.floorId })
+          : { machineLabel: null, floorName: "" };
+        return {
+          success: true,
+          machineLabel: next.machineLabel,
+          floorName: next.floorName,
+        } as const;
       }),
 
     /** Number of vacant machines on a floor (for enabling the admit control). */
@@ -861,6 +869,7 @@ export const appRouter = router({
         requireFloorAccess(ctx.staff, input.floorId, ctx.user);
         const entry = await machineDb.listWaiting({ floorId: input.floorId });
         const patient = entry.find(e => e.id === input.entryId);
+        const floors = await machineDb.listFloors();
         try {
           const admitRes = await machineDb.admitWaiting({
             entryId: input.entryId,
@@ -880,6 +889,7 @@ export const appRouter = router({
             patientId: patient?.patientId ?? "",
             ticket,
             machineLabel: admitRes?.machineLabel ?? "",
+            floorName: floors.find(f => f.id === input.floorId)?.name ?? "",
           } as const;
         } catch (error) {
           const msg = (error as Error)?.message;

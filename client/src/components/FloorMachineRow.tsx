@@ -70,9 +70,12 @@ function durationLabel(min: number): string {
  */
 export function FloorMachineChip({
   row,
+  floorName,
   onAssign,
 }: {
   row: MachineWithSession;
+  /** Board the machine sits on. Spoken first in the ticket announcement. */
+  floorName: string;
   onAssign: (machineId: number) => void;
 }) {
   const utils = trpc.useUtils();
@@ -372,7 +375,7 @@ export function FloorMachineChip({
               <DropdownMenuItem
                 onClick={() => {
                   playHospitalChime();
-                  announceTicketVoice(session.ticket, row.machine.label);
+                  announceTicketVoice(session.ticket, row.machine.label, floorName);
                   toast.info(`Announcing Ticket ${session.ticket} for ${row.machine.label}`);
                 }}
                 className="text-[13px] text-cyan-700 dark:text-cyan-300 font-medium"
@@ -584,6 +587,7 @@ export function FloorRow({
           <FloorMachineChip
             key={row.machine.id}
             row={row}
+            floorName={floorName}
             onAssign={onAssign}
           />
         ))}

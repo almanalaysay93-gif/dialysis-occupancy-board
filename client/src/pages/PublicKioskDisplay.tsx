@@ -78,8 +78,22 @@ type KioskCallout = {
   ticket: string;
   /** Bay label once a machine is assigned. NULL for a nurse call to the treatment area. */
   bay: string | null;
+  /** Machine the next admit lands on. Spoken for a call with no bay yet. */
+  nextMachine: string | null;
   floorName: string;
 };
+
+/** Lowest-sorted machine on the floor with no session: where the next admit goes. */
+function nextVacantLabel(
+  machines: MachineWithSession[] | undefined,
+  floorId: number | null
+): string | null {
+  if (!machines || floorId === null) return null;
+  const vacant = machines
+    .filter(m => m.machine.floorId === floorId && !m.session)
+    .sort((a, b) => a.machine.sortOrder - b.machine.sortOrder || a.machine.id - b.machine.id);
+  return vacant[0]?.machine.label ?? null;
+}
 
 /**
  * The clock ticks once a second. Holding that state on the page would
@@ -279,6 +293,7 @@ export default function PublicKioskDisplay() {
           key: `session-${m.session.id}`,
           ticket: m.session.ticket,
           bay: m.machine.label,
+          nextMachine: null,
           floorName: floorObj?.name ?? "Dialysis Bay",
         });
       }
@@ -295,8 +310,14 @@ export default function PublicKioskDisplay() {
       announcedKeyRef.current = activeCallout.key;
       if (soundEnabled) playHospitalChime();
       if (voiceEnabled) {
-        if (activeCallout.bay) announceTicketVoice(activeCallout.ticket, activeCallout.bay);
-        else announceTreatmentArea(activeCallout.ticket);
+        if (activeCallout.bay)
+          announceTicketVoice(activeCallout.ticket, activeCallout.bay, activeCallout.floorName);
+        else
+          announceTreatmentArea(
+            activeCallout.ticket,
+            activeCallout.floorName,
+            activeCallout.nextMachine
+          );
       }
     }
     const timer = setTimeout(() => setCalloutQueue(q => q.slice(1)), 12000);
@@ -307,7 +328,8 @@ export default function PublicKioskDisplay() {
   // fires on whichever kiosk sees it first and survives a reload. Only a recent
   // call is announced; an old one still shows as CALLING on the queue card.
   useEffect(() => {
-    if (!waitingList) return;
+    // The board is needed too: the call names the machine the next admit lands on.
+    if (!waitingList || !machines) return;
     const calls: KioskCallout[] = [];
     for (const w of waitingList) {
       if (!w.calledAt) continue;
@@ -320,11 +342,12 @@ export default function PublicKioskDisplay() {
         key: `call-${w.id}-${calledMs}`,
         ticket: w.ticket,
         bay: null,
+        nextMachine: nextVacantLabel(machines, w.floorId),
         floorName: floorObj?.name ?? "Dialysis Unit",
       });
     }
     if (calls.length > 0) setCalloutQueue(q => [...q, ...calls]);
-  }, [waitingList, floors]);
+  }, [waitingList, machines, floors]);
 
   // Filtered machines
   const filteredMachines = useMemo(() => {
@@ -373,7 +396,13 @@ export default function PublicKioskDisplay() {
     setAudioUnlocked(true);
     setCalloutQueue(q => [
       ...q,
-      { key: `test-${Date.now()}`, ticket: "TK-4821", bay: "HD-01", floorName: "Floor 1 Main" },
+      {
+        key: `test-${Date.now()}`,
+        ticket: "TK-4821",
+        bay: "HD-01",
+        nextMachine: null,
+        floorName: "SKTI Main",
+      },
     ]);
   };
 

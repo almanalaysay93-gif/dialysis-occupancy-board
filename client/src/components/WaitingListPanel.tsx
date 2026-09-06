@@ -333,7 +333,7 @@ export default function WaitingListPanel({ floorId }: { floorId: number }) {
       toast.success(`Patient “${res.patientId}”${ticketInfo} admitted${bayInfo} — session started`);
       if (res.ticket && res.machineLabel) {
         playHospitalChime();
-        announceTicketVoice(res.ticket, res.machineLabel);
+        announceTicketVoice(res.ticket, res.machineLabel, res.floorName);
       }
       setAdmitDraft(null);
       void utils.waiting.list.invalidate({ floorId });
@@ -734,16 +734,19 @@ function WaitingRow({
                 title={`Call ticket ${entry.ticket || entry.patientId} into the treatment area`}
                 onClick={() => {
                   // Chime locally so the nurse hears the call land; the lounge TV
-                  // announces from the stored call state.
+                  // announces from the stored call state. The machine spoken comes
+                  // back with the call, so both screens name the same one.
                   playHospitalChime();
-                  if (entry.ticket) announceTreatmentArea(entry.ticket);
                   callMut.mutate(
                     { entryId: entry.id, floorId: entry.floorId, called: true },
                     {
-                      onSuccess: () =>
+                      onSuccess: res => {
+                        if (entry.ticket)
+                          announceTreatmentArea(entry.ticket, res.floorName, res.machineLabel);
                         toast.success(
                           `Ticket ${entry.ticket || entry.patientId} called to the treatment area`
-                        ),
+                        );
+                      },
                     }
                   );
                 }}

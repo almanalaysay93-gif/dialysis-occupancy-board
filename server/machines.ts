@@ -1316,6 +1316,39 @@ export async function countVacantMachines(input: { floorId: number }): Promise<n
 }
 
 /**
+ * Floor name plus the machine the next admit would land on: the lowest-sorted
+ * machine with no active session. Used by the call announcement, which names
+ * the board and the machine before a session exists.
+ */
+export async function nextVacantMachine(input: {
+  floorId: number;
+}): Promise<{ machineLabel: string | null; floorName: string }> {
+  const db = await getDb();
+  if (!db) return { machineLabel: null, floorName: "" };
+
+  const [floor] = await db
+    .select({ name: floors.name })
+    .from(floors)
+    .where(eq(floors.id, input.floorId))
+    .limit(1);
+
+  const floorMachines = await db
+    .select({ id: machines.id, label: machines.label })
+    .from(machines)
+    .where(eq(machines.floorId, input.floorId))
+    .orderBy(machines.sortOrder, machines.id);
+
+  const occupiedIds = await db
+    .select({ machineId: sessions.machineId })
+    .from(sessions)
+    .where(eq(sessions.status, "active"));
+  const occupied = new Set(occupiedIds.map(o => o.machineId));
+
+  const vacant = floorMachines.find(m => !occupied.has(m.id));
+  return { machineLabel: vacant?.label ?? null, floorName: floor?.name ?? "" };
+}
+
+/**
  * Admit the top waiting patient onto the first vacant machine of the floor.
  * Marks the waiting entry as admitted and starts a session. Throws
  * NO_WAITING_PATIENTS if the queue is empty or NO_VACANT_MACHINE if the floor

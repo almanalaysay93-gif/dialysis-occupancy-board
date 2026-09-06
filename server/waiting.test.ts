@@ -23,6 +23,7 @@ vi.mock("./machines", () => ({
   countVacantMachines: vi.fn(async () => 3),
   admitWaiting: vi.fn(async () => undefined),
   setWaitingCall: vi.fn(async () => undefined),
+  nextVacantMachine: vi.fn(async () => ({ machineLabel: "HD-03", floorName: "SKTI Main" })),
   listNurseAssignments: vi.fn(async () => []),
 }));
 import * as machineDb from "./machines";
@@ -654,7 +655,7 @@ describe("waiting.callIn", () => {
     const caller = appRouter.createCaller(createStaffContext().ctx);
     const result = await caller.waiting.callIn({ entryId: 5, floorId: 30001 });
 
-    expect(result).toEqual({ success: true });
+    expect(result).toEqual({ success: true, machineLabel: "HD-03", floorName: "SKTI Main" });
     expect(vi.mocked(machineDb.setWaitingCall)).toHaveBeenCalledWith({
       entryId: 5,
       floorId: 30001,
