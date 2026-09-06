@@ -35,6 +35,7 @@ import {
   Info,
 } from "lucide-react";
 import type { MachineWithSession } from "../../../server/machines";
+import "./PublicKioskDisplay.css";
 
 // Anonymous ticket generator from patient ID to protect privacy in public lounge
 export 
@@ -109,7 +110,7 @@ function KioskClock({ theme }: { theme: ThemeMode }) {
   }, []);
 
   return (
-    <div className="text-right">
+    <div className="kiosk-clock text-right">
       <div
         className={cn(
           "font-mono text-2xl lg:text-3xl font-black tracking-wider",
@@ -409,7 +410,7 @@ export default function PublicKioskDisplay() {
   return (
     <div
       className={cn(
-        "min-h-screen w-full select-none flex flex-col font-sans transition-colors duration-500 overflow-x-hidden",
+        "public-kiosk min-h-screen w-full flex flex-col font-sans transition-colors duration-500",
         theme === "dark-oled" && "bg-[#070B14] text-[#F1F5F9]",
         theme === "light-clinical" && "bg-[#F8FAFC] text-[#0F172A]",
         theme === "amber-contrast" && "bg-[#000000] text-[#FBBF24]"
@@ -418,14 +419,14 @@ export default function PublicKioskDisplay() {
       {/* Top Lounge Masthead */}
       <header
         className={cn(
-          "w-full px-6 py-4 border-b flex flex-wrap items-center justify-between gap-4 sticky top-0 z-40 backdrop-blur-md",
+          "kiosk-header w-full px-6 py-4 border-b flex flex-wrap items-center justify-between gap-4 z-40 backdrop-blur-md",
           theme === "dark-oled" && "bg-[#0A101F]/90 border-[#1E293B]",
           theme === "light-clinical" && "bg-white/95 border-[#E2E8F0] shadow-xs",
           theme === "amber-contrast" && "bg-black border-[#F59E0B]/40"
         )}
       >
         {/* Hospital Branding */}
-        <div className="flex items-center gap-4">
+        <div className="kiosk-brand flex items-center gap-4">
           <img
             src="/images/skti-seal-transparent.png"
             alt="SPMCKTI Seal"
@@ -451,7 +452,7 @@ export default function PublicKioskDisplay() {
                   theme === "amber-contrast" && "bg-[#F59E0B]/20 text-[#F59E0B] border border-[#F59E0B]"
                 )}
               >
-                <span className="h-2 w-2 rounded-full bg-emerald-400 animate-ping" />
+                <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-400" />
                 Live TV Lounge Display
               </span>
             </div>
@@ -468,13 +469,38 @@ export default function PublicKioskDisplay() {
           </div>
         </div>
 
+        {userTicket && (
+          <section className="kiosk-patient-ticket" aria-label="Your ticket">
+            <div>
+              <p className="kiosk-ticket-label">Your ticket</p>
+              <p className="kiosk-ticket-number">{userTicket}</p>
+            </div>
+            <div className="kiosk-patient-status" aria-live="polite">
+              {myActiveSession ? (
+                <>
+                  <p>Assigned machine</p>
+                  <p className="kiosk-patient-bay">{myActiveSession.bay}</p>
+                  <p>{myActiveSession.floorName}</p>
+                </>
+              ) : myWaitingQueuePosition !== null ? (
+                <>
+                  <p className="kiosk-patient-bay">Queue position #{myWaitingQueuePosition}</p>
+                  <p>Please wait in the lounge until called.</p>
+                </>
+              ) : (
+                <p>Keep this ticket number ready. Watch the queue for your call.</p>
+              )}
+            </div>
+          </section>
+        )}
+
         {/* Live Clock & Control Suite */}
-        <div className="flex items-center gap-4 sm:gap-6">
+        <div className="kiosk-controls-row flex items-center gap-4 sm:gap-6">
           {/* Big Digital Clock */}
           <KioskClock theme={theme} />
 
           {/* Quick TV Control Buttons */}
-          <div className="flex items-center gap-1.5 p-1 rounded-lg border border-white/10 bg-black/20">
+          <div className="kiosk-controls flex items-center gap-1.5 p-1 rounded-lg border border-white/10 bg-black/20">
             {/* Theme Toggle */}
             <button
               onClick={() => {
@@ -483,6 +509,7 @@ export default function PublicKioskDisplay() {
                 else setTheme("dark-oled");
               }}
               title="Toggle Display Theme Mode"
+              aria-label="Change display theme"
               className="p-2 rounded-md hover:bg-white/10 transition-colors"
             >
               {theme === "dark-oled" && <Moon className="h-5 w-5 text-cyan-400" />}
@@ -494,6 +521,8 @@ export default function PublicKioskDisplay() {
             <button
               onClick={() => setSoundEnabled(!soundEnabled)}
               title={soundEnabled ? "Mute Ready Chime" : "Enable Ready Chime"}
+              aria-label={soundEnabled ? "Mute ready chime" : "Enable ready chime"}
+              aria-pressed={soundEnabled}
               className={cn(
                 "p-2 rounded-md hover:bg-white/10 transition-colors",
                 soundEnabled ? "text-emerald-400" : "text-slate-500 line-through"
@@ -516,6 +545,7 @@ export default function PublicKioskDisplay() {
             <button
               onClick={toggleFullscreen}
               title="Toggle Fullscreen TV View"
+              aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
               className="p-2 rounded-md hover:bg-white/10 transition-colors"
             >
               {isFullscreen ? <Minimize className="h-5 w-5" /> : <Maximize className="h-5 w-5" />}
@@ -523,28 +553,26 @@ export default function PublicKioskDisplay() {
 
             {/* Patient Session Indicator / Sign In */}
             {isPatient ? (
-              <div className="flex items-center gap-1.5 pl-2 border-l border-white/20">
-                <div className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-xs font-mono">
-                  <Ticket className="h-3.5 w-3.5" />
-                  <span>{staff?.username || "Patient"}</span>
-                </div>
+              <div className="flex items-center gap-1.5">
                 <button
                   onClick={() => logoutMut.mutate(undefined, { onSuccess: () => navigate("/patient-login") })}
                   title="Sign Out of Patient Kiosk"
+                  aria-label="Sign out"
                   className="px-2 py-1 text-xs rounded-md bg-red-500/20 text-red-300 border border-red-500/30 hover:bg-red-500/30 flex items-center gap-1 transition-colors"
                 >
                   <LogOut className="h-3 w-3" />
-                  <span className="hidden sm:inline">Exit</span>
+                  <span>Exit</span>
                 </button>
               </div>
             ) : (
               <Link href="/patient-login">
                 <button
                   title="Patient / Family Sign In"
+                  aria-label="Patient sign in"
                   className="px-2.5 py-1.5 text-xs font-medium rounded-md bg-white/10 hover:bg-white/20 text-white transition-colors flex items-center gap-1.5 border border-white/20 ml-1"
                 >
                   <User className="h-3.5 w-3.5 text-cyan-300" />
-                  <span className="hidden sm:inline">Patient Sign In</span>
+                  <span>Sign in</span>
                 </button>
               </Link>
             )}
@@ -566,55 +594,22 @@ export default function PublicKioskDisplay() {
         </div>
       )}
 
-      {/* Personalized Patient Banner when logged in */}
-      {isPatient && myActiveSession && (
-        <div className="w-full bg-gradient-to-r from-emerald-950 via-teal-900 to-cyan-950 border-b border-teal-500/40 px-6 py-3 flex flex-wrap items-center justify-between gap-3 text-emerald-100 text-sm shadow-md">
-          <div className="flex items-center gap-2.5">
-            <span className="flex h-3 w-3 rounded-full bg-emerald-400 animate-ping" />
-            <span className="font-bold text-white uppercase tracking-wider text-xs bg-emerald-700/80 px-2 py-0.5 rounded">
-              Your Session
-            </span>
-            <span>Assigned to Machine <strong className="text-white text-base">{myActiveSession.bay}</strong> ({myActiveSession.floorName})</span>
-          </div>
-          <div className="flex items-center gap-2 text-xs font-mono bg-black/40 px-3 py-1 rounded-full border border-teal-400/30">
-            <Ticket className="h-3.5 w-3.5 text-teal-300" />
-            <span>Ticket {staff?.username}</span>
-          </div>
-        </div>
-      )}
-
-      {isPatient && myWaitingQueuePosition !== null && !myActiveSession && (
-        <div className="w-full bg-gradient-to-r from-amber-950 via-amber-900 to-orange-950 border-b border-amber-500/40 px-6 py-3 flex flex-wrap items-center justify-between gap-3 text-amber-100 text-sm shadow-md">
-          <div className="flex items-center gap-2.5">
-            <span className="flex h-3 w-3 rounded-full bg-amber-400 animate-ping" />
-            <span className="font-bold text-white uppercase tracking-wider text-xs bg-amber-700/80 px-2 py-0.5 rounded">
-              Your Queue Status
-            </span>
-            <span>You are <strong className="text-white text-base">#{myWaitingQueuePosition}</strong> in the waiting list. Please wait in the lounge until called.</span>
-          </div>
-          <div className="flex items-center gap-2 text-xs font-mono bg-black/40 px-3 py-1 rounded-full border border-amber-400/30">
-            <Ticket className="h-3.5 w-3.5 text-amber-300" />
-            <span>Ticket {staff?.username}</span>
-          </div>
-        </div>
-      )}
-
       {/* Prominent Real-Time Callout Banner (Appears when ticket is called!) */}
       {activeCallout && (
         <div
           className={cn(
-            "w-full py-4 px-6 text-center animate-bounce shadow-2xl flex items-center justify-center gap-4 transition-all z-50",
+            "kiosk-callout w-full py-4 px-6 text-center shadow-2xl flex items-center justify-center gap-4 transition-all z-50",
             theme === "dark-oled" && "bg-gradient-to-r from-emerald-600 via-teal-500 to-cyan-600 text-white",
             theme === "light-clinical" && "bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 text-white",
             theme === "amber-contrast" && "bg-[#F59E0B] text-black font-black"
           )}
         >
-          <Bell className="h-8 w-8 animate-spin" />
+          <Bell className="h-8 w-8 shrink-0" />
           <div className="flex flex-wrap items-center justify-center gap-3">
             <span className="text-xl sm:text-2xl font-black uppercase tracking-wider">
               NOW CALLING TICKET:
             </span>
-            <span className="text-2xl sm:text-4xl font-black tracking-widest px-4 py-1 rounded-lg bg-black/30 border border-white/40 shadow-inner">
+            <span className="kiosk-callout-ticket text-2xl sm:text-4xl font-black tracking-widest px-4 py-1 rounded-lg bg-black/30 border border-white/40 shadow-inner">
               {activeCallout.ticket}
             </span>
             <span className="text-xl sm:text-2xl font-bold">
@@ -636,17 +631,18 @@ export default function PublicKioskDisplay() {
       {/* Floor Filter Tabs & Auto-cycle Status */}
       <div
         className={cn(
-          "px-6 py-3 border-b flex flex-wrap items-center justify-between gap-4",
+          "kiosk-filters px-6 py-3 border-b flex flex-wrap items-center justify-between gap-4",
           theme === "dark-oled" && "bg-[#0B1222] border-[#1E293B]",
           theme === "light-clinical" && "bg-[#F1F5F9] border-[#CBD5E1]",
           theme === "amber-contrast" && "bg-black border-[#F59E0B]/30"
         )}
       >
-        <div className="flex items-center gap-2 overflow-x-auto py-1">
+        <div className="kiosk-floor-buttons flex flex-wrap items-center gap-2 py-1" role="group" aria-label="Floor filter">
           <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 mr-2 flex items-center gap-1">
             <Layers className="h-3.5 w-3.5" /> Floor:
           </span>
           <button
+            aria-pressed={selectedFloorId === "ALL"}
             onClick={() => {
               setSelectedFloorId("ALL");
               setAutoCycle(false);
@@ -663,6 +659,7 @@ export default function PublicKioskDisplay() {
           {floors?.map(f => (
             <button
               key={f.id}
+              aria-pressed={selectedFloorId === f.id}
               onClick={() => {
                 setSelectedFloorId(f.id);
                 setAutoCycle(false);
@@ -679,7 +676,7 @@ export default function PublicKioskDisplay() {
           ))}
         </div>
 
-        <div className="flex items-center gap-4 text-xs">
+        <div className="kiosk-summary flex flex-wrap items-center gap-4 text-xs">
           <label className="flex items-center gap-2 cursor-pointer">
             <input
               type="checkbox"
@@ -691,7 +688,7 @@ export default function PublicKioskDisplay() {
           </label>
 
           {/* Machine Summary Badges */}
-          <div className="flex items-center gap-2">
+          <div className="kiosk-summary-badges flex flex-wrap items-center gap-2">
             <span className="px-3 py-1 rounded-md bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-bold">
               {stats.vacant} Vacant / Ready
             </span>
@@ -708,10 +705,10 @@ export default function PublicKioskDisplay() {
       </div>
 
       {/* Main Kiosk Content Grid: Machine Readiness Bay Grid + Anonymous Queue Strip */}
-      <main className="flex-1 p-6 grid grid-cols-1 xl:grid-cols-4 gap-6">
+      <main className="kiosk-content flex-1 p-6 grid grid-cols-1 xl:grid-cols-4 gap-6">
         {/* Left 3 Columns: Live Machine Readiness Bay Matrix */}
-        <section className="xl:col-span-3 flex flex-col gap-4">
-          <div className="flex items-center justify-between">
+        <section className="kiosk-bays xl:col-span-3 flex flex-col gap-4">
+          <div className="kiosk-board-heading flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <Activity className="h-6 w-6 text-cyan-400" />
               <h2
@@ -725,7 +722,7 @@ export default function PublicKioskDisplay() {
                 Dialysis Bay Readiness Board
               </h2>
             </div>
-            <div className="flex items-center gap-4 text-xs font-semibold">
+            <div className="kiosk-legend flex flex-wrap items-center gap-4 text-xs font-semibold">
               <span className="flex items-center gap-1.5">
                 <span className="h-3 w-3 rounded-full bg-emerald-500 shadow-sm animate-pulse" />
                 <span>Ready to Hook / Vacant</span>
@@ -742,7 +739,7 @@ export default function PublicKioskDisplay() {
           </div>
 
           {/* Bay Cards Grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3.5">
+          <div className="kiosk-bay-grid grid gap-3.5">
             {machinesLoading ? (
               Array.from({ length: 18 }).map((_, i) => (
                 <div
@@ -769,13 +766,13 @@ export default function PublicKioskDisplay() {
         {/* Right 1 Column: Privacy-Safe Waiting Queue & Calling Board */}
         <aside
           className={cn(
-            "xl:col-span-1 rounded-2xl p-5 border flex flex-col gap-4 shadow-xl",
+            "kiosk-queue xl:col-span-1 rounded-2xl p-5 border flex flex-col gap-4 shadow-xl",
             theme === "dark-oled" && "bg-[#0D1527] border-[#1E293B]",
             theme === "light-clinical" && "bg-white border-[#E2E8F0]",
             theme === "amber-contrast" && "bg-[#080808] border-[#F59E0B]/40"
           )}
         >
-          <div className="flex items-center justify-between border-b border-white/10 pb-3">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 pb-3">
             <div className="flex items-center gap-2">
               <Clock className="h-5 w-5 text-cyan-400" />
               <h3 className="font-display text-lg font-bold">Lounge Patient Queue</h3>
@@ -790,7 +787,7 @@ export default function PublicKioskDisplay() {
           </p>
 
           {/* Queue List Cards */}
-          <div className="flex flex-col gap-2.5 overflow-y-auto max-h-[580px] scrollbar-none">
+          <div className="kiosk-queue-list flex flex-col gap-2.5">
             {anonymousQueue.length === 0 ? (
               <div className="py-12 text-center text-slate-400 font-serif text-sm">
                 <CheckCircle2 className="h-8 w-8 text-emerald-400 mx-auto mb-2 opacity-80" />
@@ -801,7 +798,7 @@ export default function PublicKioskDisplay() {
                 <div
                   key={t.id}
                   className={cn(
-                    "p-3.5 rounded-xl border transition-all flex items-center justify-between gap-3 shrink-0",
+                    "kiosk-queue-card p-3.5 rounded-xl border transition-all flex flex-wrap items-center justify-between gap-3 shrink-0",
                     t.status === "CALLING / PROCEED"
                       ? "bg-emerald-500/20 border-emerald-500 text-emerald-200 ring-2 ring-emerald-400/30 animate-pulse"
                       : t.status === "NEXT IN LINE"
@@ -812,8 +809,8 @@ export default function PublicKioskDisplay() {
                   )}
                 >
                   <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-lg font-black tracking-wider whitespace-nowrap">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="kiosk-queue-ticket font-mono text-3xl font-black tracking-wide">
                         {t.ticketNumber}
                       </span>
                       {t.priority === "veryUrgent" && (
@@ -914,7 +911,7 @@ function KioskBayCard({
   return (
     <div
       className={cn(
-        "rounded-2xl p-3.5 border transition-all flex flex-col justify-between h-40 shadow-md relative overflow-hidden",
+        "kiosk-bay-card rounded-2xl p-3.5 border transition-all flex flex-col justify-between gap-3 min-h-44 shadow-md relative",
         !occupied && (
           theme === "dark-oled"
             ? "bg-gradient-to-b from-emerald-950/40 to-emerald-900/20 border-emerald-500/50 hover:border-emerald-400"
@@ -944,14 +941,14 @@ function KioskBayCard({
       )}
     >
       {/* Top Bay Tag & Status Dot */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <span className="font-mono text-sm font-black tracking-wider uppercase opacity-90">
           {bayNumber}
         </span>
         <span
           className={cn(
-            "h-2.5 w-2.5 rounded-full",
-            !occupied && "bg-emerald-400 shadow-[0_0_10px_#10B981] animate-ping",
+            "h-2.5 w-2.5 shrink-0 rounded-full",
+            !occupied && "bg-emerald-400 shadow-[0_0_10px_#10B981]",
             occupied && !endingSoon && "bg-cyan-400",
             endingSoon && "bg-amber-400 shadow-[0_0_10px_#F59E0B]",
             treatmentDone && "bg-purple-400"
@@ -972,7 +969,7 @@ function KioskBayCard({
           </div>
         ) : (
           <div>
-            <span className="font-mono text-2xl sm:text-3xl font-black tracking-tight block">
+            <span className="font-mono text-2xl font-black tracking-tight block">
               {treatmentDone ? "COMPLETED" : time}
             </span>
             <span className="text-[10px] uppercase font-bold tracking-wider opacity-75">
@@ -983,10 +980,10 @@ function KioskBayCard({
       </div>
 
       {/* Bottom Ticket / Location Footer */}
-      <div className="border-t border-white/10 pt-2 flex items-center justify-between text-[11px] font-medium">
-        <span className="truncate opacity-75">{item.machine.location || "Bay Area"}</span>
+      <div className="border-t border-white/10 pt-2 flex flex-wrap items-center justify-between gap-2 text-xs font-medium">
+        <span className="opacity-75">{item.machine.location || "Bay Area"}</span>
         {occupied && item.session && (
-          <span className="font-mono font-bold px-1.5 py-0.5 rounded bg-white/10 text-cyan-300">
+          <span className="kiosk-bay-ticket font-mono text-xl font-bold px-1.5 py-0.5 rounded bg-white/10">
             {item.session.ticket}
           </span>
         )}

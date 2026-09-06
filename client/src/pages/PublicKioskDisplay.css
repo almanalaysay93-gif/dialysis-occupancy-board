@@ -1,0 +1,254 @@
+/* Keep one page scroll surface. Floor buttons and queue cards wrap in place. */
+html:has(.public-kiosk),
+body:has(.public-kiosk) {
+  scrollbar-width: none;
+}
+
+html:has(.public-kiosk)::-webkit-scrollbar,
+body:has(.public-kiosk)::-webkit-scrollbar {
+  display: none;
+}
+
+.public-kiosk {
+  overflow-wrap: anywhere;
+}
+
+.public-kiosk svg {
+  flex-shrink: 0;
+}
+
+.public-kiosk button {
+  min-height: 44px;
+  min-width: 44px;
+  max-width: 100%;
+}
+
+.public-kiosk button:focus-visible,
+.public-kiosk input:focus-visible {
+  outline: 3px solid currentColor;
+  outline-offset: 3px;
+}
+
+.kiosk-brand {
+  flex: 1 1 32rem;
+}
+
+.kiosk-brand img {
+  flex-shrink: 0;
+}
+
+.kiosk-brand > div,
+.kiosk-patient-ticket > div,
+.kiosk-content > * {
+  min-width: 0;
+}
+
+.kiosk-brand > div > div {
+  flex-wrap: wrap;
+}
+
+.kiosk-controls-row,
+.kiosk-controls {
+  flex-wrap: wrap;
+}
+
+.kiosk-controls-row {
+  order: 2;
+}
+
+.kiosk-clock {
+  flex-shrink: 0;
+}
+
+.kiosk-clock > div:first-child {
+  white-space: nowrap;
+  font-size: clamp(1.125rem, 4.5vw, 1.875rem);
+}
+
+.kiosk-patient-ticket {
+  order: 3;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 1rem;
+  width: 100%;
+  padding: 1.25rem 1.5rem;
+  border: 2px solid #5eead4;
+  border-radius: 1rem;
+  background: #083344;
+  color: #fff;
+}
+
+.kiosk-ticket-label {
+  color: #99f6e4;
+  font-size: 0.875rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.kiosk-ticket-number {
+  font-family: ui-monospace, monospace;
+  font-size: clamp(2.5rem, 10vw, 4rem);
+  font-weight: 900;
+  line-height: 1.4;
+  letter-spacing: 0.025em;
+  margin-top: 0.25rem;
+}
+
+.kiosk-patient-status {
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+.kiosk-patient-bay {
+  font-size: 1.5rem;
+  font-weight: 800;
+}
+
+.kiosk-floor-buttons {
+  width: 100%;
+}
+
+.kiosk-floor-buttons button {
+  flex: 0 1 auto;
+}
+
+.kiosk-summary label {
+  min-height: 44px;
+}
+
+.kiosk-summary input {
+  flex-shrink: 0;
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.kiosk-bay-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
+}
+
+.kiosk-legend > span > span:first-child {
+  flex-shrink: 0;
+}
+
+.kiosk-callout {
+  flex-wrap: wrap;
+}
+
+.kiosk-callout-ticket {
+  max-width: 100%;
+  font-size: clamp(2rem, 8vw, 3rem);
+}
+
+.kiosk-queue-ticket,
+.kiosk-bay-ticket {
+  line-height: 1.4;
+}
+
+.public-kiosk footer > div {
+  flex-wrap: wrap;
+}
+
+@media (max-width: 1279px) {
+  .kiosk-queue {
+    order: -1;
+  }
+}
+
+@media (max-width: 639px) {
+  .kiosk-header,
+  .kiosk-filters,
+  .kiosk-content,
+  .public-kiosk footer {
+    padding: 1rem;
+  }
+
+  .kiosk-header {
+    gap: 0.875rem;
+  }
+
+  .kiosk-brand {
+    gap: 0.75rem;
+  }
+
+  .kiosk-brand img {
+    width: 44px;
+    height: 44px;
+  }
+
+  .kiosk-brand h1 {
+    font-family: inherit;
+    font-size: 1.125rem;
+    line-height: 1.35;
+  }
+
+  .kiosk-brand p {
+    font-size: 0.75rem;
+    line-height: 1.5;
+  }
+
+  .kiosk-patient-ticket {
+    order: 1;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.75rem;
+    padding: 1rem;
+  }
+
+  .kiosk-patient-status {
+    border-top: 1px solid #5eead466;
+    padding-top: 0.75rem;
+  }
+
+  .kiosk-controls-row {
+    width: 100%;
+    gap: 0.75rem;
+  }
+
+  .kiosk-clock {
+    width: 100%;
+    text-align: left;
+  }
+
+  .kiosk-controls {
+    width: 100%;
+  }
+
+  .kiosk-floor-buttons > span {
+    width: 100%;
+  }
+
+  .kiosk-floor-buttons button {
+    flex: 1 1 7rem;
+    padding: 0.625rem;
+  }
+
+  .kiosk-summary,
+  .kiosk-summary-badges {
+    width: 100%;
+    gap: 0.5rem;
+  }
+
+  .kiosk-summary-badges > span {
+    flex: 1 1 7rem;
+    padding: 0.625rem;
+  }
+
+  .kiosk-board-heading h2 {
+    font-family: inherit;
+    font-size: 1.25rem;
+  }
+
+  .kiosk-legend {
+    gap: 0.75rem;
+  }
+
+  .kiosk-queue {
+    padding: 1rem;
+  }
+
+  .kiosk-queue-card {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
