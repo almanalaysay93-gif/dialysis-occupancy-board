@@ -6,6 +6,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import NurseCombobox from "@/components/NurseCombobox";
 import { useCanWrite } from "@/hooks/useCanWrite";
 import { trpc } from "@/lib/trpc";
 import { AlarmClock, ArrowRightCircle, BellRing, Droplets, Plus, Siren, UserPlus, Users, Volume2 } from "lucide-react";
@@ -209,33 +210,6 @@ function TagPicker({
           </Button>
         ))}
       </div>
-    </div>
-  );
-}
-
-/** Optional nurse-name field. */
-function NurseField({
-  id,
-  value,
-  onChange,
-}: {
-  id: string;
-  value: string;
-  onChange: (v: string) => void;
-}) {
-  return (
-    <div className="flex flex-col gap-1.5">
-      <Label htmlFor={id} className="smallcaps-detail text-[#7684A0]">
-        Nurse (optional)
-      </Label>
-      <Input
-        id={id}
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        maxLength={64}
-        placeholder="e.g. Nurse Ana"
-        className="h-9 w-40 border-[#D4DFE5] bg-[#F4F7F8] text-[#1F2A52]"
-      />
     </div>
   );
 }
@@ -475,7 +449,7 @@ export default function WaitingListPanel({ floorId }: { floorId: number }) {
             </div>
             <DurationPicker idPrefix="wl-add" draft={addDuration} onChange={setAddDuration} />
             <TagPicker value={addTag} onChange={setAddTag} />
-            <NurseField id="wl-add-nurse" value={addNurse} onChange={setAddNurse} />
+            <NurseCombobox id="wl-add-nurse" value={addNurse} onChange={setAddNurse} />
             <Button
               type="submit"
               size="sm"
@@ -536,7 +510,7 @@ export default function WaitingListPanel({ floorId }: { floorId: number }) {
               draft={admitDraft}
               onChange={next => setAdmitDraft({ ...admitDraft, ...next })}
             />
-            <NurseField
+            <NurseCombobox
               id="wl-admit-nurse"
               value={admitDraft.nurse}
               onChange={v => setAdmitDraft({ ...admitDraft, nurse: v })}

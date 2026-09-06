@@ -6,6 +6,7 @@ import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router, staffOrAdminProcedure, clinicalReadProcedure,
   staffReadProcedure, supervisorProcedure } from "./_core/trpc";
 import * as machineDb from "./machines";
+import { listActiveNurses } from "./nurse-roster";
 import {
   getMachineMetricsReport,
   generateMachineMetricsExcel,
@@ -386,6 +387,11 @@ export const appRouter = router({
           });
         }),
     }),
+  }),
+
+  nurses: router({
+    /** Active nurse roster from the skti-nursetrack database, for the nurse-assignment dropdown. */
+    roster: staffReadProcedure.query(() => listActiveNurses()),
   }),
 
   rooms: router({
