@@ -582,14 +582,14 @@ export default function PublicKioskDisplay() {
             </button>
 
             {/* Test Audio Button */}
-            {!isFloorRestricted && <button
+            <button
               onClick={handleTestChime}
               title="Test Hospital Chime & Announcement"
               className="px-2.5 py-1 text-xs font-semibold rounded-md bg-white/10 hover:bg-white/20 transition-colors flex items-center gap-1"
             >
               <Bell className="h-3.5 w-3.5" />
               Test Cue
-            </button>}
+            </button>
 
             {/* Fullscreen Button */}
             <button

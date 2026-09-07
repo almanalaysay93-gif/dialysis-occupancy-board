@@ -18,9 +18,16 @@ export async function findPatientAssignment(ticketOrId: string) {
   const matches = (id: string) => id.toLowerCase() === raw || patientTicket(id).toLowerCase() === raw;
   const activeMatches = active.filter(row => matches(row.patientId));
   const waitingMatches = waiting.filter(row => matches(row.patientId));
+  const patientIds = new Set([...activeMatches, ...waitingMatches].map(row => row.patientId));
+  // If exact patientId queried, patientIds has 1 element.
+  // If short ticket code queried and multiple patients match:
+  if (patientIds.size !== 1) {
+    // When short ticket codes collide across different floors, reject
+    const allMatches = [...activeMatches, ...waitingMatches];
+    if (new Set(allMatches.map(row => row.floorId)).size !== 1) return null;
+  }
   const placements = activeMatches.length ? activeMatches : waitingMatches;
   if (placements.length === 0) return null;
-  // If multiple patient IDs match (ticket collision) but they are on different floors, deny access.
   if (new Set(placements.map(row => row.floorId)).size !== 1) return null;
   const placement = placements[0];
   if (placement.floorId === null) return null;

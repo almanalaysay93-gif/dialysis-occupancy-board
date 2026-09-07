@@ -123,11 +123,24 @@ export function treatmentAreaCallText(
 export function announceTicketVoice(ticket: string, bayLabel: string, floorName: string): void {
   if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
   try {
+    if (window.speechSynthesis.paused) {
+      window.speechSynthesis.resume();
+    }
     window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(ticketCallText(ticket, bayLabel, floorName));
-    utterance.rate = 0.88;
-    utterance.pitch = 1.05;
-    window.speechSynthesis.speak(utterance);
+    setTimeout(() => {
+      try {
+        const text = ticketCallText(ticket, bayLabel, floorName);
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.rate = 0.88;
+        utterance.pitch = 1.05;
+        const voices = window.speechSynthesis.getVoices();
+        const englishVoice = voices.find(v => v.lang.startsWith("en"));
+        if (englishVoice) utterance.voice = englishVoice;
+        window.speechSynthesis.speak(utterance);
+      } catch {
+        // ignore voice error
+      }
+    }, 100);
   } catch {
     // ignore voice error
   }
@@ -141,13 +154,24 @@ export function announceTreatmentArea(
 ): void {
   if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
   try {
+    if (window.speechSynthesis.paused) {
+      window.speechSynthesis.resume();
+    }
     window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(
-      treatmentAreaCallText(ticket, floorName, nextMachineLabel)
-    );
-    utterance.rate = 0.88;
-    utterance.pitch = 1.05;
-    window.speechSynthesis.speak(utterance);
+    setTimeout(() => {
+      try {
+        const text = treatmentAreaCallText(ticket, floorName, nextMachineLabel);
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.rate = 0.88;
+        utterance.pitch = 1.05;
+        const voices = window.speechSynthesis.getVoices();
+        const englishVoice = voices.find(v => v.lang.startsWith("en"));
+        if (englishVoice) utterance.voice = englishVoice;
+        window.speechSynthesis.speak(utterance);
+      } catch {
+        // ignore voice error
+      }
+    }, 100);
   } catch {
     // ignore voice error
   }
