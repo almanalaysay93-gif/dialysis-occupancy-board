@@ -155,7 +155,6 @@ export default function PublicKioskDisplay() {
   // Callouts are queued, not overwritten. Two bays can start a session inside
   // one poll window, and the previous code announced only the first of them.
   const [calloutQueue, setCalloutQueue] = useState<KioskCallout[]>([]);
-  const activeCallout = calloutQueue[0] ?? null;
 
   const prevAdmittedIdsRef = useRef<Set<number>>(new Set());
   const announcedKeyRef = useRef<string | null>(null);
@@ -190,6 +189,15 @@ export default function PublicKioskDisplay() {
   const staff = staffMe.data;
   const isPatient = staff?.role === "patient";
   const userTicket = isPatient && staff.username !== "patient.guest" ? staff.username.toUpperCase() : null;
+  const canAnnounceTicket = useCallback(
+    (ticket: string) => staffMe.isSuccess && (!userTicket || ticket.toUpperCase() === userTicket),
+    [staffMe.isSuccess, userTicket]
+  );
+  const activeCallout = calloutQueue.find(callout => canAnnounceTicket(callout.ticket)) ?? null;
+
+  useEffect(() => {
+    setCalloutQueue(queue => queue.filter(callout => canAnnounceTicket(callout.ticket)));
+  }, [canAnnounceTicket]);
   const patientFloorId = staff?.assignedFloorId ?? null;
   const { data: machineData, isLoading: machinesLoading } = trpc.machines.list.useQuery(undefined, {
     enabled: staffMe.isSuccess,
@@ -316,7 +324,7 @@ export default function PublicKioskDisplay() {
 
   // Audio-visual alert trigger when a new session starts
   useEffect(() => {
-    if (!machines) return;
+    if (!staffMe.isSuccess || !machines) return;
     const currentActiveSessions = machines.filter(m => m.session !== null);
     const activeIds = new Set(currentActiveSessions.map(m => m.session!.id));
 
@@ -330,7 +338,7 @@ export default function PublicKioskDisplay() {
     // Check for newly started sessions (triggers even when previously empty)
     const admits: KioskCallout[] = [];
     for (const m of currentActiveSessions) {
-      if (m.session && !prevAdmittedIdsRef.current.has(m.session.id)) {
+      if (m.session && !prevAdmittedIdsRef.current.has(m.session.id) && canAnnounceTicket(m.session.ticket)) {
         const floorObj = floors?.find(f => f.id === m.machine.floorId);
         admits.push({
           key: `session-${m.session.id}`,
@@ -344,7 +352,7 @@ export default function PublicKioskDisplay() {
     if (admits.length > 0) setCalloutQueue(q => [...q, ...admits]);
 
     prevAdmittedIdsRef.current = activeIds;
-  }, [machines, floors]);
+  }, [machines, floors, staffMe.isSuccess, canAnnounceTicket]);
 
   // Announce the head of the queue, then hand over to the next after 12s.
   useEffect(() => {
@@ -363,7 +371,7 @@ export default function PublicKioskDisplay() {
           );
       }
     }
-    const timer = setTimeout(() => setCalloutQueue(q => q.slice(1)), 12000);
+    const timer = setTimeout(() => setCalloutQueue(q => q.filter(callout => callout.key !== activeCallout.key)), 12000);
     return () => clearTimeout(timer);
   }, [activeCallout, soundEnabled, voiceEnabled]);
 
@@ -372,10 +380,10 @@ export default function PublicKioskDisplay() {
   // call is announced; an old one still shows as CALLING on the queue card.
   useEffect(() => {
     // The board is needed too: the call names the machine the next admit lands on.
-    if (!waitingList || !machines) return;
+    if (!staffMe.isSuccess || !waitingList || !machines) return;
     const calls: KioskCallout[] = [];
     for (const w of waitingList) {
-      if (!w.calledAt) continue;
+      if (!w.calledAt || !canAnnounceTicket(w.ticket)) continue;
       const calledMs = new Date(w.calledAt).getTime();
       if (announcedCallsRef.current.get(w.id) === calledMs) continue;
       announcedCallsRef.current.set(w.id, calledMs);
@@ -390,7 +398,7 @@ export default function PublicKioskDisplay() {
       });
     }
     if (calls.length > 0) setCalloutQueue(q => [...q, ...calls]);
-  }, [waitingList, machines, floors]);
+  }, [waitingList, machines, floors, staffMe.isSuccess, canAnnounceTicket]);
 
   // Filtered machines
   const filteredMachines = useMemo(() => {
