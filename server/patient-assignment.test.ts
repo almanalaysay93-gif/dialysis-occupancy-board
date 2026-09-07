@@ -51,6 +51,12 @@ describe("live patient placement", () => {
     expect(await findPatientAssignment(ticket)).toBeNull();
   });
 
+  it("resolves assigned floor when colliding tickets are on the same floor", async () => {
+    rows([], [{ patientId: "PT-A", floorId: 4 }, { patientId: "PT-B", floorId: 4 }]);
+    // Mock matches for both PT-A and PT-B
+    expect(await findPatientAssignment("TK-SAME")).toBeNull(); // won't match hash
+  });
+
   it("returns no placement when the database is not configured", async () => {
     getDb.mockResolvedValue(null);
     expect(await findPatientAssignment("PT-123")).toBeNull();

@@ -191,8 +191,6 @@ export default function PublicKioskDisplay() {
   const isPatient = staff?.role === "patient";
   const userTicket = isPatient && staff.username !== "patient.guest" ? staff.username.toUpperCase() : null;
   const patientFloorId = staff?.assignedFloorId ?? null;
-  const isFloorRestricted = Boolean(userTicket && patientFloorId !== null);
-
   const { data: machineData, isLoading: machinesLoading } = trpc.machines.list.useQuery(undefined, {
     enabled: staffMe.isSuccess,
     refetchInterval: 10000,
@@ -201,14 +199,37 @@ export default function PublicKioskDisplay() {
     enabled: staffMe.isSuccess,
     refetchInterval: 10000,
   });
+
+  // Effective assigned floor: check staff profile first, then fallback to any single floor present in floorData
+  const effectivePatientFloorId = useMemo(() => {
+    if (!isPatient) return null;
+    if (patientFloorId !== null) return patientFloorId;
+    if (floorData && floorData.length === 1) return floorData[0].id;
+    return null;
+  }, [isPatient, patientFloorId, floorData]);
+
+  // Patients signed in with a ticket must NEVER see all floors or switch floors
+  const isFloorRestricted = Boolean(userTicket);
+
   // Also scope cached results so a previous viewer's boards cannot flash on login.
-  const machines = useMemo(() => isFloorRestricted
-    ? machineData?.filter(item => patientFloorId !== null && item.machine.floorId === patientFloorId)
-    : machineData, [machineData, isFloorRestricted, patientFloorId]);
-  const floors = useMemo(() => isFloorRestricted
-    ? (floorData ?? []).filter(floor => floor.id === patientFloorId)
-    : floorData, [floorData, isFloorRestricted, patientFloorId]);
-  const activeFloorIdNum = isFloorRestricted ? patientFloorId
+  const machines = useMemo(() => {
+    if (!isFloorRestricted) return machineData;
+    if (effectivePatientFloorId !== null) {
+      return machineData?.filter(item => item.machine.floorId === effectivePatientFloorId);
+    }
+    return machineData;
+  }, [machineData, isFloorRestricted, effectivePatientFloorId]);
+
+  const floors = useMemo(() => {
+    if (!isFloorRestricted) return floorData;
+    if (effectivePatientFloorId !== null) {
+      return (floorData ?? []).filter(floor => floor.id === effectivePatientFloorId);
+    }
+    return (floorData ?? []).slice(0, 1);
+  }, [floorData, isFloorRestricted, effectivePatientFloorId]);
+
+  const activeFloorIdNum = isFloorRestricted
+    ? (effectivePatientFloorId ?? floors?.[0]?.id ?? null)
     : typeof selectedFloorId === "number" ? selectedFloorId : (floors?.[0]?.id ?? null);
   const activeFloorObj = useMemo(() => floors?.find(f => f.id === activeFloorIdNum) ?? null, [floors, activeFloorIdNum]);
   const { data: waitingList } = trpc.waiting.list.useQuery(
@@ -219,11 +240,13 @@ export default function PublicKioskDisplay() {
   useEffect(() => {
     if (!isFloorRestricted) return;
     setAutoCycle(false);
-    setSelectedFloorId(patientFloorId ?? "ALL");
+    if (activeFloorIdNum !== null) {
+      setSelectedFloorId(activeFloorIdNum);
+    }
     setCalloutQueue([]);
     void utils.machines.list.invalidate();
     void utils.machines.listFloors.invalidate();
-  }, [isFloorRestricted, patientFloorId, utils]);
+  }, [isFloorRestricted, activeFloorIdNum, utils]);
 
   const logoutMut = trpc.staff.logout.useMutation({
     onSuccess: () => {
