@@ -28,16 +28,14 @@ export function getAudioContext(): AudioContext | null {
  * Unlocks Web Audio and Web Speech API on the current document.
  * Must be triggered on or after a user gesture (click/touch/keypress).
  */
-export function unlockAudio(): boolean {
+export async function unlockAudio(): Promise<boolean> {
   try {
     const ctx = getAudioContext();
-    if (ctx && ctx.state === "suspended") {
-      void ctx.resume();
-    }
     if (typeof window !== "undefined" && "speechSynthesis" in window) {
       window.speechSynthesis.resume();
     }
-    return true;
+    if (ctx && ctx.state !== "running") await ctx.resume();
+    return ctx?.state === "running";
   } catch {
     return false;
   }

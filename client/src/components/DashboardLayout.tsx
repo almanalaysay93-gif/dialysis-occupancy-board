@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/sidebar";
 import { startLogin } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { Activity, BellRing, ClipboardCheck, ClipboardList, Droplets, LogOut, PanelLeft, LayoutGrid, Layers, Tv, Wrench } from "lucide-react";
+import { Activity, BellRing, ClipboardCheck, ClipboardList, Droplets, LogOut, PanelLeft, LayoutGrid, Layers, Ticket, Tv, Wrench } from "lucide-react";
 import { CSSProperties, useRef } from "react";
 import { Redirect, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
@@ -112,6 +112,24 @@ export default function DashboardLayout({
               <p className="smallcaps-detail text-muted-foreground">
               Internal Clinical Staff Portal
             </p>
+            <Button
+              variant="default"
+              size="lg"
+              className="w-full bg-[#1F2A52] hover:bg-[#151D3A] text-white flex items-center justify-center gap-2 shadow-sm font-medium"
+              onClick={() => navigate("/kiosk")}
+            >
+              <Tv className="h-4 w-4 text-cyan-400" />
+              <span>Live Lounge Queue &amp; Bay Readiness</span>
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full text-xs text-[#2E9A9B] border-[#2E9A9B]/40 hover:bg-[#2E9A9B]/10 flex items-center justify-center gap-1.5 font-normal"
+              onClick={() => navigate("/patient-login")}
+            >
+              <Ticket className="h-3.5 w-3.5" />
+              <span>Patient Ticket Sign In</span>
+            </Button>
             <Button
               variant="outline"
               size="sm"

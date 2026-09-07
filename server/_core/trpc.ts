@@ -57,7 +57,7 @@ export const staffReadProcedure = t.procedure.use(
     const staff: StaffSession = await resolveStaffSession(ctx.req);
     const oauthUser = ctx.user;
     if (staff.role === "patient" && staff.username !== "patient.guest") {
-      const patientReads = ["machines.list", "machines.listFloors", "rooms.list", "waiting.list", "waiting.vacantCount"];
+      const patientReads = ["machines.list", "machines.listFloors", "rooms.list", "waiting.list", "waiting.kioskCalls", "waiting.vacantCount"];
       if (!patientReads.includes(opts.path)) {
         throw new TRPCError({ code: "FORBIDDEN", message: "You can only view your assigned floor board." });
       }

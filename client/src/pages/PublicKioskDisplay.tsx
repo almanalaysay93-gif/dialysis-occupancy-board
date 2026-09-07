@@ -190,8 +190,8 @@ export default function PublicKioskDisplay() {
   const staff = staffMe.data;
   const isPatient = staff?.role === "patient";
   const userTicket = isPatient && staff.username !== "patient.guest" ? staff.username.toUpperCase() : null;
-  const isFloorRestricted = Boolean(userTicket);
   const patientFloorId = staff?.assignedFloorId ?? null;
+  const isFloorRestricted = Boolean(userTicket && patientFloorId !== null);
 
   const { data: machineData, isLoading: machinesLoading } = trpc.machines.list.useQuery(undefined, {
     enabled: staffMe.isSuccess,
@@ -210,6 +210,7 @@ export default function PublicKioskDisplay() {
     : floorData, [floorData, isFloorRestricted, patientFloorId]);
   const activeFloorIdNum = isFloorRestricted ? patientFloorId
     : typeof selectedFloorId === "number" ? selectedFloorId : (floors?.[0]?.id ?? null);
+  const activeFloorObj = useMemo(() => floors?.find(f => f.id === activeFloorIdNum) ?? null, [floors, activeFloorIdNum]);
   const { data: waitingList } = trpc.waiting.list.useQuery(
     { floorId: activeFloorIdNum ?? 0 },
     { enabled: staffMe.isSuccess && activeFloorIdNum !== null, refetchInterval: 10000 }
@@ -508,12 +509,12 @@ export default function PublicKioskDisplay() {
                 </>
               ) : myWaitingQueuePosition !== null ? (
                 <>
-                  <p className="kiosk-patient-bay">Queue position #{myWaitingQueuePosition}</p>
-                  <p>Please wait in the lounge until called.</p>
+                  <p className="kiosk-patient-bay">Queue position #{myWaitingQueuePosition} · Est. {myWaitingQueuePosition * 25} mins</p>
+                  <p>Please wait in the lounge until your ticket is called.</p>
                 </>
               ) : (
                 <p>{patientFloorId === null
-                  ? "Waiting for your floor assignment. Please contact the nurse station."
+                  ? "Waiting in lounge for bay assignment. Keep this ticket ready and watch the queue."
                   : "Keep this ticket number ready. Watch the queue for your call."}</p>
               )}
             </div>
@@ -718,7 +719,7 @@ export default function PublicKioskDisplay() {
           </label>}
 
           {/* Machine Summary Badges */}
-          {(!isFloorRestricted || patientFloorId !== null) && <div className="kiosk-summary-badges flex flex-wrap items-center gap-2">
+          <div className="kiosk-summary-badges flex flex-wrap items-center gap-2">
             <span className="px-3 py-1 rounded-md bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-bold">
               {stats.vacant} Vacant / Ready
             </span>
@@ -730,12 +731,12 @@ export default function PublicKioskDisplay() {
                 {stats.readySoon} Ending Soon
               </span>
             )}
-          </div>}
+          </div>
         </div>
       </div>
 
       {/* Main Kiosk Content Grid: Machine Readiness Bay Grid + Anonymous Queue Strip */}
-      {(!isFloorRestricted || patientFloorId !== null) && <main className="kiosk-content flex-1 p-6 grid grid-cols-1 xl:grid-cols-4 gap-6">
+      <main className="kiosk-content flex-1 p-6 grid grid-cols-1 xl:grid-cols-4 gap-6">
         {/* Left 3 Columns: Live Machine Readiness Bay Matrix */}
         <section className="kiosk-bays xl:col-span-3 flex flex-col gap-4">
           <div className="kiosk-board-heading flex flex-wrap items-center justify-between gap-3">
@@ -805,7 +806,10 @@ export default function PublicKioskDisplay() {
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 pb-3">
             <div className="flex items-center gap-2">
               <Clock className="h-5 w-5 text-cyan-400" />
-              <h3 className="font-display text-lg font-bold">Lounge Patient Queue</h3>
+              <div>
+                <h3 className="font-display text-lg font-bold">Lounge Patient Queue</h3>
+                {activeFloorObj && <p className="text-[11px] font-semibold text-cyan-300">{activeFloorObj.name}</p>}
+              </div>
             </div>
             <span className="px-2.5 py-1 text-xs font-bold rounded-full bg-cyan-500/20 text-cyan-400">
               {anonymousQueue.length} Waiting
@@ -892,7 +896,7 @@ export default function PublicKioskDisplay() {
             </div>
           </div>
         </aside>
-      </main>}
+      </main>
 
       {/* Footer Ticker */}
       <footer

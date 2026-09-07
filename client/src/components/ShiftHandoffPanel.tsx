@@ -120,7 +120,7 @@ export default function ShiftHandoffPanel({
   const { data: waterQcLogs = [] } = trpc.waterQualityLogs.list.useQuery(undefined, {
     refetchInterval: 30_000,
   });
-  const { data: endorsementsHistory = [] } = trpc.shiftEndorsements.list.useQuery(undefined, {
+  const { data: endorsementsHistory = [] } = trpc.shiftEndorsements.list.useQuery({ floorId: activeFloorNum }, {
     refetchInterval: 30_000,
   });
   const latestWaterQC = waterQcLogs[0];

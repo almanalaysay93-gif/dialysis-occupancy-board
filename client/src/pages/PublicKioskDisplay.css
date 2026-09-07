@@ -132,8 +132,27 @@ body:has(.public-kiosk)::-webkit-scrollbar {
   flex-shrink: 0;
 }
 
+.kiosk-callout-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgb(0 0 0 / 65%);
+}
+
 .kiosk-callout {
+  max-width: 48rem;
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
+  scrollbar-width: none;
+  border-radius: 1rem;
   flex-wrap: wrap;
+}
+
+.kiosk-callout::-webkit-scrollbar {
+  display: none;
 }
 
 .kiosk-callout-ticket {

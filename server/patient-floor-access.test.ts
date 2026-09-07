@@ -55,13 +55,13 @@ describe("patient floor access", () => {
     expect(countVacant).not.toHaveBeenCalled();
   });
 
-  it("returns no boards when placement is absent, including machines without a floor", async () => {
+  it("serves public kiosk boards and queue when placement is absent", async () => {
     resolve.mockResolvedValue({ ...patient, assignedFloorId: null });
     const caller = appRouter.createCaller(context());
-    expect(await caller.machines.list()).toEqual([]);
-    expect(await caller.machines.listFloors()).toEqual([]);
-    expect(await caller.rooms.list()).toEqual([]);
-    await expect(caller.waiting.list({ floorId: 4 })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(await caller.machines.list()).toHaveLength(3);
+    expect(await caller.machines.listFloors()).toHaveLength(2);
+    expect(await caller.rooms.list()).toHaveLength(2);
+    expect(await caller.waiting.list({ floorId: 4 })).toEqual([{ ticket: "TK-5138" }]);
   });
 
   it("refreshes placement for old cookies and transfers, then removes access after discharge", async () => {

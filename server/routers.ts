@@ -33,7 +33,7 @@ import { mapBackendError } from "./errors";
 import { eq } from "drizzle-orm";
 
 function isAssignedPatient(staff: StaffSession) {
-  return staff.role === "patient" && staff.username !== "patient.guest";
+  return staff.role === "patient" && staff.username !== "patient.guest" && staff.assignedFloorId !== null;
 }
 
 async function visibleFloors(staff: StaffSession) {
@@ -676,6 +676,18 @@ export const appRouter = router({
   }),
 
   waiting: router({
+    /** Recent public call events, independent of the floor tab shown on the kiosk. */
+    kioskCalls: staffReadProcedure.query(async ({ ctx }) => {
+      const identifiedPatient = ctx.staff.role === "patient" && ctx.staff.username !== "patient.guest";
+      if (identifiedPatient && ctx.staff.assignedFloorId === null) return [];
+      const rows = identifiedPatient
+        ? await machineDb.listWaiting({ floorId: ctx.staff.assignedFloorId! }, { canSeePhi: false })
+        : await machineDb.listWaitingAll({ canSeePhi: false });
+      const cutoff = Date.now() - 90_000;
+      return rows.filter(row => row.calledAt && row.calledAt.getTime() >= cutoff)
+        .map(row => ({ id: row.id, ticket: row.ticket, floorId: row.floorId, calledAt: row.calledAt! }))
+        .sort((a, b) => a.calledAt.getTime() - b.calledAt.getTime());
+    }),
     /** Waiting patients per floor. Public so every staff device sees the same queue,
      *  but guest viewers never receive clinical queue data. */
     list: staffReadProcedure
@@ -1355,13 +1367,15 @@ export const appRouter = router({
   shiftEndorsements: router({
     list: clinicalReadProcedure
       .input(
-        z.object({
-          floorId: z.number().int().positive(),
-          date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-        })
+        z
+          .object({
+            floorId: z.number().int().positive().optional(),
+            date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+          })
+          .optional()
       )
       .query(async ({ ctx, input }) => {
-        requireFloorAccess(ctx.staff, input.floorId, ctx.user);
+        if (input?.floorId) requireFloorAccess(ctx.staff, input.floorId, ctx.user);
         return machineDb.listShiftEndorsements(input);
       }),
 
