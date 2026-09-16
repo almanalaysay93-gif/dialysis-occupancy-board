@@ -1,24 +1,33 @@
-// Ensures the documented staff credentials in staff-credentials.md always
-// verify against the stored salted SHA-256 hashes in the database, and that
-// the staff.login procedure accepts them. Regression guard for the bug where
-// nurse.skti-main's stored hash drifted from "Nurse1234" (Aug 2026).
+// Ensures the staff credentials in the local staff-credentials.md always
+// verify against the stored salted SHA-256 hashes in the database. Regression
+// guard for the bug where nurse.skti-main's stored hash drifted from its
+// documented password (Aug 2026).
+//
+// staff-credentials.md is gitignored, so passwords never enter the repository.
+// Without that file (for example in CI) the credential checks are skipped.
 
 process.env.JWT_SECRET = process.env.JWT_SECRET || "test-secret-for-vitest";
 import { describe, expect, it } from "vitest";
 import { createHash } from "node:crypto";
+import { existsSync, readFileSync } from "node:fs";
+import path from "node:path";
 import { sql } from "drizzle-orm";
 import { getDb } from "./db";
 import { staffAccounts } from "../drizzle/schema";
 
-const documented: Record<string, string> = {
-  supervisor: "Supervisor1234",
-  "nurse.skti-main": "Nurse1234",
-  "nurse.rdu-annex": "Nurse1234",
-  "nurse.rdu-main": "Nurse1234",
-  "nurse.skti-icu": "Seed@1234",
-  "nurse.skti-service-ward": "Seed@1234",
-  auditor: "Auditor1234",
-};
+/** Reads `| `username` | `password` |` rows from the local credentials file. */
+function readDocumentedCredentials(): Record<string, string> {
+  const file = path.resolve(import.meta.dirname, "..", "staff-credentials.md");
+  if (!existsSync(file)) return {};
+  const documented: Record<string, string> = {};
+  for (const match of readFileSync(file, "utf8").matchAll(/^\| `([^`]+)` \| `([^`]+)` \|/gm)) {
+    documented[match[1]] = match[2];
+  }
+  return documented;
+}
+
+const documented = readDocumentedCredentials();
+const hasDatabase = Boolean(process.env.DATABASE_URL || process.env.SUPABASE_DATABASE_URL_B64);
 
 async function hashOf(password: string, salt: string): Promise<string> {
   const db = await getDb();
@@ -42,8 +51,13 @@ async function hashOf(password: string, salt: string): Promise<string> {
   return String(computed);
 }
 
+it.skipIf(Object.keys(documented).length > 0 && hasDatabase)(
+  "credential checks need a local staff-credentials.md and a database URL",
+  () => {}
+);
+
 for (const [username, password] of Object.entries(documented)) {
-  describe(`documented staff credential: ${username}`, () => {
+  describe.skipIf(!hasDatabase)(`documented staff credential: ${username}`, () => {
     it("stored hash verifies against the documented password", async () => {
       const db = await getDb();
       if (!db) return;

@@ -116,3 +116,7 @@ client/public/__manus__/version.json
 
 # Cygwin/MSYS crash dumps
 *.stackdump
+
+# Local secrets: staff passwords and database backups
+staff-credentials.md
+backups/
