@@ -1,14 +1,16 @@
 import { useState } from "react";
-import { useLocation } from "wouter";
+import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollReveal } from "@/components/ScrollReveal";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { startLogin } from "@/const";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { Activity, Eye, EyeOff, ShieldCheck, Tv } from "lucide-react";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 
 type Mode = "guest" | "staff";
 
@@ -69,7 +71,10 @@ export default function StaffLogin() {
   };
 
   return (
-    <div className="min-h-screen bg-[#f5f4ef] flex items-center justify-center p-4">
+    <div id="main-content" className="min-h-screen bg-background flex items-center justify-center p-4">
+      <div className="absolute top-4 right-4">
+        <ThemeToggle />
+      </div>
       <ScrollReveal yOffset={36}>
       <div className="w-full max-w-md space-y-6">
         <div className="glass-deep relative overflow-hidden border border-[#1F2A52]/25 px-8 py-7 text-center bg-gradient-to-b from-[#1F2A52]/10 to-[#1F2A52]/5">
@@ -197,8 +202,33 @@ export default function StaffLogin() {
                 </Button>
               </CardFooter>
             </Card>
+            <Accordion type="single" collapsible className="glass-panel px-4">
+              <AccordionItem value="guest">
+                <AccordionTrigger>What can a guest see?</AccordionTrigger>
+                <AccordionContent>
+                  Guests see machine occupancy on every floor. Waiting lists, nurse assignments, and narratives stay staff-only.
+                </AccordionContent>
+              </AccordionItem>
+              <AccordionItem value="nurse">
+                <AccordionTrigger>How does a nurse sign in?</AccordionTrigger>
+                <AccordionContent>
+                  Choose Nurse / Supervisor Sign In. Use the username and password assigned to your floor.
+                </AccordionContent>
+              </AccordionItem>
+              <AccordionItem value="kiosk">
+                <AccordionTrigger>Where do patients sign in?</AccordionTrigger>
+                <AccordionContent>
+                  Open Patient / Family Sign In. That path opens the lounge kiosk only.
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
           </div>
         )}
+        <p className="text-center text-xs text-muted-foreground">
+          <Link href="/privacy" className="underline underline-offset-2 hover:text-foreground">Privacy Policy</Link>
+          {" · "}
+          <Link href="/terms" className="underline underline-offset-2 hover:text-foreground">Terms of Use</Link>
+        </p>
       </div>
       </ScrollReveal>
     </div>

@@ -7,6 +7,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
 import DashboardLayout from "./components/DashboardLayout";
+import { SiteChrome } from "./components/SiteChrome";
 import { Skeleton } from "@/components/ui/skeleton";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -22,6 +23,8 @@ const PublicKioskDisplay = lazy(() => import("./pages/PublicKioskDisplay"));
 const ShiftEndorsementPage = lazy(() => import("./pages/ShiftEndorsementPage"));
 const WaterQualityQCPage = lazy(() => import("./pages/WaterQualityQCPage"));
 const PatientLogin = lazy(() => import("./pages/PatientLogin"));
+const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
+const TermsOfService = lazy(() => import("./pages/TermsOfService"));
 
 function PageLoader() {
   return (
@@ -73,6 +76,8 @@ function Router() {
         <Route path={"/patient"}>
           <Redirect to="/patient-login" />
         </Route>
+        <Route path={"/privacy"} component={PrivacyPolicy} />
+        <Route path={"/terms"} component={TermsOfService} />
         <Route path={"/report"} component={EndOfDayReport} />
         <Route path={"/floor/:id"}>
           <DashboardLayout>
@@ -95,12 +100,10 @@ function Router() {
 function App() {
   return (
     <ErrorBoundary>
-      <ThemeProvider
-        defaultTheme="light"
-        // switchable
-      >
+      <ThemeProvider defaultTheme="light" switchable>
         <TooltipProvider>
           <Toaster />
+          <SiteChrome />
           <Router />
         </TooltipProvider>
       </ThemeProvider>

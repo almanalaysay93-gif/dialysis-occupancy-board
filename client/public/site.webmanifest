@@ -1,0 +1,21 @@
+{
+  "name": "SPMCKTI Dialysis Occupancy Board",
+  "short_name": "SKTI Dialysis",
+  "description": "Hemodialysis occupancy, waiting lists, and shift reporting for Southern Philippines Medical Center Kidney and Transplant Institute.",
+  "start_url": "/staff-login",
+  "display": "standalone",
+  "background_color": "#F7F9FB",
+  "theme_color": "#1F2A52",
+  "icons": [
+    {
+      "src": "/images/skti-seal-transparent.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/images/skti-seal-transparent.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

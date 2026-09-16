@@ -13,7 +13,7 @@
       "destination": "/api/index.js"
     },
     {
-      "source": "/((?!api/|images/|manus-storage/|assets/).*)",
+      "source": "/((?!api/|images/|manus-storage/|assets/|robots\\.txt|sitemap\\.xml|site\\.webmanifest).*)",
       "destination": "/index.html"
     }
   ]

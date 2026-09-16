@@ -68,7 +68,7 @@ export default function PatientLogin() {
   };
 
   return (
-    <div className="min-h-screen bg-[#f5f4ef] flex items-center justify-center p-4">
+    <div id="main-content" className="min-h-screen bg-background flex items-center justify-center p-4">
       <ScrollReveal yOffset={36}>
         <div className="w-full max-w-md space-y-6">
           {/* Header Banner with SKTI Seal */}
@@ -165,6 +165,11 @@ export default function PatientLogin() {
                     <ArrowRight className="h-3 w-3" />
                   </Link>
                 </div>
+                <p className="w-full text-center text-xs text-muted-foreground pt-2">
+                  <Link href="/privacy" className="underline underline-offset-2 hover:text-foreground">Privacy Policy</Link>
+                  {" · "}
+                  <Link href="/terms" className="underline underline-offset-2 hover:text-foreground">Terms of Use</Link>
+                </p>
               </CardFooter>
             </form>
           </Card>

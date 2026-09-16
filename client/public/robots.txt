@@ -1,0 +1,10 @@
+# SPMCKTI Hemodialysis Occupancy Board
+# https://dialysis-occupancy-board.vercel.app/robots.txt
+#
+# This is a hospital operations tool. Floor boards display patient
+# identifiers. Search engines must not index any path.
+
+User-agent: *
+Disallow: /
+
+Sitemap: https://dialysis-occupancy-board.vercel.app/sitemap.xml

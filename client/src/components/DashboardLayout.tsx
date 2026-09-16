@@ -23,9 +23,10 @@ import { startLogin } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
 import { Activity, BellRing, ClipboardCheck, ClipboardList, Droplets, LogOut, PanelLeft, LayoutGrid, Layers, Ticket, Tv, Wrench } from "lucide-react";
 import { CSSProperties, useRef } from "react";
-import { Redirect, useLocation } from "wouter";
+import { Link, Redirect, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
+import { ThemeToggle } from "./ThemeToggle";
 import { Button } from "./ui/button";
 
 const menuItems: { icon: typeof Activity; label: string; path: string }[] = [
@@ -324,6 +325,15 @@ function DashboardLayoutContent({
           </SidebarContent>
 
           <SidebarFooter className="p-3 border-t border-sidebar-border">
+            <div className="flex items-center gap-3 px-2 pb-2 text-[11px] text-muted-foreground group-data-[collapsible=icon]:hidden">
+              <Link href="/privacy" className="hover:text-foreground underline-offset-2 hover:underline">
+                Privacy
+              </Link>
+              <span aria-hidden="true">·</span>
+              <Link href="/terms" className="hover:text-foreground underline-offset-2 hover:underline">
+                Terms
+              </Link>
+            </div>
             <div className="flex items-center gap-3 rounded-sm px-2 py-2 w-full">
               <Avatar className="h-8 w-8 border border-sidebar-border shrink-0 bg-background">
                 <AvatarFallback className="text-xs font-serif text-foreground">
@@ -370,14 +380,15 @@ function DashboardLayoutContent({
       </div>
 
       <SidebarInset className="min-w-0 flex-1 bg-background">
-        <div className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-[#D4DFE5]/80 bg-[#FBFCFD]/95 px-4 backdrop-blur supports-[backdrop-filter]:backdrop-blur">
+        <div className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-border bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:backdrop-blur">
           <div className="flex items-center gap-3">
-            <SidebarTrigger className="h-9 w-9 rounded-sm border border-[#D4DFE5] bg-[#F4F7F8] text-[#1F2A52] hover:bg-[#E8EFF1] hover:text-[#1F2A52]" />
-            <span className="font-display text-base tracking-tight text-[#1F2A52]">
+            <SidebarTrigger className="h-9 w-9 rounded-sm border border-border bg-muted text-foreground hover:bg-accent hover:text-accent-foreground" />
+            <span className="font-display text-base tracking-tight text-foreground">
               {activeMenuItem?.label ?? "Dialysis Board"}
             </span>
           </div>
           <div className="flex items-center gap-2 sm:gap-3">
+            <ThemeToggle />
             <Button
               variant="outline"
               size="sm"
@@ -425,7 +436,7 @@ function DashboardLayoutContent({
             )}
           </div>
         </div>
-        <main className="flex-1 w-full min-w-0">{children}</main>
+        <main id="main-content" className="flex-1 w-full min-w-0">{children}</main>
       </SidebarInset>
     </>
   );
