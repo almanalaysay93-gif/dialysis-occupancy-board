@@ -51,7 +51,9 @@ function mockDb(opts: { columnPresent: boolean; allowDdl: boolean }) {
       if (!opts.allowDdl) throw new Error("permission denied for table waiting_list");
       return { rows: [] };
     }),
-    update: vi.fn(() => ({ set: vi.fn(() => ({ where: vi.fn(async () => undefined) })) })),
+    update: vi.fn(() => ({ set: vi.fn(() => ({ where: vi.fn(() => ({
+      returning: vi.fn(async () => [{ id: WAITING_ROW.id }]),
+    })) })) })),
   };
 
   vi.mocked(getDb).mockResolvedValue(db as never);
@@ -64,6 +66,15 @@ beforeEach(() => {
 });
 
 describe("waiting list without the call columns", () => {
+  it("rejects a call when the waiting row was already admitted or removed", async () => {
+    const { db } = mockDb({ columnPresent: true, allowDdl: true });
+    db.update.mockReturnValueOnce({ set: vi.fn(() => ({ where: vi.fn(() => ({
+      returning: vi.fn(async () => []),
+    })) })) });
+    await expect(setWaitingCall({ entryId: 15, floorId: 30001, called: true, calledBy: "Nurse Ana" }))
+      .rejects.toThrow("NO_WAITING_PATIENT");
+  });
+
   it("still returns the queue when the columns are missing and cannot be added", async () => {
     const { selectedColumns } = mockDb({ columnPresent: false, allowDdl: false });
 

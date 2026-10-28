@@ -684,7 +684,8 @@ export const appRouter = router({
         ? await machineDb.listWaiting({ floorId: ctx.staff.assignedFloorId! }, { canSeePhi: false })
         : await machineDb.listWaitingAll({ canSeePhi: false });
       const cutoff = Date.now() - 90_000;
-      return rows.filter(row => row.calledAt && row.calledAt.getTime() >= cutoff)
+      return rows.filter(row => row.calledAt && row.calledAt.getTime() >= cutoff &&
+        (!identifiedPatient || row.ticket.toUpperCase() === ctx.staff.username.toUpperCase()))
         .map(row => ({ id: row.id, ticket: row.ticket, floorId: row.floorId, calledAt: row.calledAt! }))
         .sort((a, b) => a.calledAt.getTime() - b.calledAt.getTime());
     }),

@@ -4,6 +4,19 @@
  */
 
 let sharedAudioCtx: AudioContext | null = null;
+let pendingSpeech: ReturnType<typeof setTimeout> | undefined;
+// Safari can garbage-collect an utterance before playback ends without a reference.
+let currentUtterance: SpeechSynthesisUtterance | null = null;
+let speechPrimed = false;
+
+export function stopAnnouncement(): void {
+  clearTimeout(pendingSpeech);
+  pendingSpeech = undefined;
+  if (typeof window !== "undefined" && "speechSynthesis" in window) {
+    window.speechSynthesis.cancel();
+  }
+  currentUtterance = null;
+}
 
 export function getAudioContext(): AudioContext | null {
   try {
@@ -16,7 +29,7 @@ export function getAudioContext(): AudioContext | null {
       }
     }
     if (sharedAudioCtx && sharedAudioCtx.state === "suspended") {
-      void sharedAudioCtx.resume();
+      void sharedAudioCtx.resume().catch(() => {});
     }
     return sharedAudioCtx;
   } catch {
@@ -33,6 +46,13 @@ export async function unlockAudio(): Promise<boolean> {
     const ctx = getAudioContext();
     if (typeof window !== "undefined" && "speechSynthesis" in window) {
       window.speechSynthesis.resume();
+      if (!speechPrimed) {
+        // Must be submitted synchronously inside the user's tap, before await.
+        currentUtterance = new SpeechSynthesisUtterance(" ");
+        currentUtterance.volume = 0;
+        window.speechSynthesis.speak(currentUtterance);
+        speechPrimed = true;
+      }
     }
     if (ctx && ctx.state !== "running") await ctx.resume();
     return ctx?.state === "running";
@@ -119,60 +139,39 @@ export function treatmentAreaCallText(
   return `${board ? `${board}. ` : ""}Ticket ${spokenTicket(ticket)}.${machine}`;
 }
 
-/** Speaks the admission call for a ticket. */
-export function announceTicketVoice(ticket: string, bayLabel: string, floorName: string): void {
+/** Only the newest request may speak; older delayed callbacks are canceled. */
+function speakCall(text: string): void {
   if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
   try {
-    if (window.speechSynthesis.paused) {
-      window.speechSynthesis.resume();
-    }
-    window.speechSynthesis.cancel();
-    setTimeout(() => {
+    stopAnnouncement();
+    window.speechSynthesis.resume();
+    pendingSpeech = setTimeout(() => {
+      pendingSpeech = undefined;
       try {
-        const text = ticketCallText(ticket, bayLabel, floorName);
         const utterance = new SpeechSynthesisUtterance(text);
+        currentUtterance = utterance;
+        utterance.lang = "en-US";
         utterance.rate = 0.88;
         utterance.pitch = 1.05;
-        const voices = window.speechSynthesis.getVoices();
-        const englishVoice = voices.find(v => v.lang.startsWith("en"));
+        const englishVoice = window.speechSynthesis.getVoices().find(v => v.lang.startsWith("en"));
         if (englishVoice) utterance.voice = englishVoice;
+        const release = () => { if (currentUtterance === utterance) currentUtterance = null; };
+        utterance.onend = release;
+        utterance.onerror = release;
         window.speechSynthesis.speak(utterance);
-      } catch {
-        // ignore voice error
-      }
+      } catch { currentUtterance = null; }
     }, 100);
-  } catch {
-    // ignore voice error
-  }
+  } catch { currentUtterance = null; }
 }
 
-/** Speaks the nurse call for a waiting ticket. */
+export function announceTicketVoice(ticket: string, bayLabel: string, floorName: string): void {
+  speakCall(ticketCallText(ticket, bayLabel, floorName));
+}
+
 export function announceTreatmentArea(
   ticket: string,
   floorName: string,
   nextMachineLabel: string | null
 ): void {
-  if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
-  try {
-    if (window.speechSynthesis.paused) {
-      window.speechSynthesis.resume();
-    }
-    window.speechSynthesis.cancel();
-    setTimeout(() => {
-      try {
-        const text = treatmentAreaCallText(ticket, floorName, nextMachineLabel);
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.rate = 0.88;
-        utterance.pitch = 1.05;
-        const voices = window.speechSynthesis.getVoices();
-        const englishVoice = voices.find(v => v.lang.startsWith("en"));
-        if (englishVoice) utterance.voice = englishVoice;
-        window.speechSynthesis.speak(utterance);
-      } catch {
-        // ignore voice error
-      }
-    }, 100);
-  } catch {
-    // ignore voice error
-  }
+  speakCall(treatmentAreaCallText(ticket, floorName, nextMachineLabel));
 }

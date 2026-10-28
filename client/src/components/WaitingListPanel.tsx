@@ -17,6 +17,7 @@ import {
   playHospitalChime,
   announceTicketVoice,
   announceTreatmentArea,
+  unlockAudio,
 } from "@/lib/kioskAudio";
 
 export type WaitingPriority = "normal" | "urgent" | "veryUrgent";
@@ -603,6 +604,21 @@ function WaitingRow({
   admitDisabledReason,
   canWrite,
 }: RowProps) {
+  const callPatient = () => {
+    // Unlock during the tap; confirm the saved call before playing its cue.
+    void unlockAudio();
+    callMut.mutate(
+      { entryId: entry.id, floorId: entry.floorId, called: true },
+      {
+        onSuccess: res => {
+          playHospitalChime();
+          if (entry.ticket)
+            announceTreatmentArea(entry.ticket, res.floorName, res.machineLabel);
+          toast.success(`Ticket ${entry.ticket || entry.patientId} called to the treatment area`);
+        },
+      }
+    );
+  };
   const isVeryUrgent = tier === "veryUrgent";
   const isUrgent = tier === "urgent";
   const isCalled = entry.calledAt != null;
@@ -706,28 +722,17 @@ function WaitingRow({
                 variant="outline"
                 disabled={callMut.isPending}
                 title={`Call ticket ${entry.ticket || entry.patientId} into the treatment area`}
-                onClick={() => {
-                  // Chime locally so the nurse hears the call land; the lounge TV
-                  // announces from the stored call state. The machine spoken comes
-                  // back with the call, so both screens name the same one.
-                  playHospitalChime();
-                  callMut.mutate(
-                    { entryId: entry.id, floorId: entry.floorId, called: true },
-                    {
-                      onSuccess: res => {
-                        if (entry.ticket)
-                          announceTreatmentArea(entry.ticket, res.floorName, res.machineLabel);
-                        toast.success(
-                          `Ticket ${entry.ticket || entry.patientId} called to the treatment area`
-                        );
-                      },
-                    }
-                  );
-                }}
+                onClick={callPatient}
                 className="h-10 sm:h-9 px-3 border-cyan-600/60 text-cyan-700 dark:text-cyan-300 font-medium hover:bg-cyan-50 dark:hover:bg-cyan-950/40"
               >
                 <Volume2 className="mr-1.5 h-3.5 w-3.5" />
                 Call in
+              </Button>
+            )}
+            {isCalled && (
+              <Button size="sm" variant="outline" disabled={callMut.isPending} onClick={callPatient}>
+                <Volume2 className="mr-1.5 h-3.5 w-3.5" />
+                Call again
               </Button>
             )}
             <Button
