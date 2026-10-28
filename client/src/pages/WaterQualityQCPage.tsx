@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { formatShiftLabel, formatTimeOfDay } from "@shared/time-format";
 import DashboardLayout from "@/components/DashboardLayout";
 import WaterQualityQCModal from "@/components/WaterQualityQCModal";
 import {
@@ -228,7 +229,7 @@ export default function WaterQualityQCPage() {
                     <tr key={log.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-900/50 transition-colors">
                       <td className="py-3 px-4 font-mono font-medium">
                         <div>{log.date}</div>
-                        <div className="text-[10px] text-muted-foreground">{log.shift} ({log.timeOfDay})</div>
+                        <div className="text-[10px] text-muted-foreground">{formatShiftLabel(log.shift)} ({formatTimeOfDay(log.timeOfDay)})</div>
                       </td>
                       <td className="py-3 px-4 font-medium">
                         {log.technician}

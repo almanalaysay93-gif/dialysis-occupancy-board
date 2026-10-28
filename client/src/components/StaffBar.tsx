@@ -32,7 +32,7 @@ export default function StaffBar() {
 
   if (!staff) {
     return (
-      <div className="flex items-center gap-2 text-xs">
+      <div className="flex min-w-0 flex-wrap items-center gap-2 text-xs">
         <span className="text-[#4a4a45]">Viewing as guest</span>
         <Button variant="outline" size="sm" className="h-7 px-2 border-[#1F2A52]/25 text-[#1F2A52]" onClick={() => navigate("/staff-login")}>
           <span className="hidden xs:inline">Sign in </span>as staff
@@ -42,14 +42,14 @@ export default function StaffBar() {
   }
 
   return (
-    <div className="flex items-center gap-2 text-xs">
+    <div className="flex min-w-0 flex-wrap items-center gap-2 text-xs">
       {isGuest ? (
         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#1F2A52]/8 text-[#1F2A52]">
           <UserRound className="w-3 h-3" /> Guest
         </span>
       ) : (
         <span
-          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full ${
+          className={`inline-flex min-w-0 max-w-full items-center gap-1 px-2 py-0.5 rounded-full ${
             staff.role === "supervisor"
               ? "bg-[#9E1F2B] text-white"
               : isAuditor
@@ -57,17 +57,20 @@ export default function StaffBar() {
                 : "bg-[#2E9A9B]/15 text-[#1d6b6c]"
           }`}
         >
-          <ShieldCheck className="w-3 h-3" />
-          {isNurse ? `Nurse · ${staff.displayName}` : isAuditor ? "Auditor" : "SKTI Supervisor"}
+          <ShieldCheck className="w-3 h-3 shrink-0" />
+          <span className="min-w-0 break-words">
+            {isNurse ? `Nurse · ${staff.displayName}` : isAuditor ? "Auditor" : "SKTI Supervisor"}
+          </span>
         </span>
       )}
       <Button
         variant="ghost"
         size="sm"
-        className="h-7 px-2 text-[#4a4a45] hover:text-[#9E1F2B]"
+        className="h-11 min-w-11 shrink-0 px-2 text-[#4a4a45] hover:text-[#9E1F2B] sm:h-8 sm:min-w-8"
         onClick={() => logoutMut.mutate()}
         disabled={logoutMut.isPending}
         title="Sign out"
+        aria-label="Sign out"
       >
         <LogOut className="w-3 h-3 mr-1 sm:mr-1" />
         <span className="hidden xs:inline">Sign out</span>

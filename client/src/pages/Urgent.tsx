@@ -273,7 +273,7 @@ export default function Urgent() {
                           </Badge>
                           <span className="smallcaps-detail text-[#556680]">
                             Waiting since{" "}
-                            {new Date(w.joinedAt).toLocaleTimeString([], {
+                            {new Date(w.joinedAt).toLocaleTimeString("en-US", { hour12: true,
                               hour: "2-digit",
                               minute: "2-digit",
                             })}

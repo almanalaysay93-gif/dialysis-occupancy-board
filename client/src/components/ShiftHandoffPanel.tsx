@@ -1,3 +1,4 @@
+import { formatShiftLabel } from "@shared/time-format";
 import { useState, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import {
@@ -76,7 +77,7 @@ export default function ShiftHandoffPanel({
     "Patient in HD-04 (P-4821) had Nadir BP 84/52 at 2nd hour; UF goal reduced by 500mL. Patient in HD-12 had calf cramps; relieved by stretching and 100mL saline."
   );
   const [recommendations, setRecommendations] = useState(
-    "1. Check post-dialysis standing BP for HD-04.\n2. Collect post-BUN lab for HD-08 at 12:45.\n3. Machine HD-06 flagged for technician preventive maintenance after shift 2."
+    "1. Check post-dialysis standing BP for HD-04.\n2. Collect post-BUN lab for HD-08 at 12:45 PM.\n3. Machine HD-06 flagged for technician preventive maintenance after shift 2."
   );
 
   // Safety Checklist
@@ -276,7 +277,7 @@ export default function ShiftHandoffPanel({
                       className="flex flex-wrap items-center justify-between gap-2 p-2 rounded-lg border bg-background text-xs"
                     >
                       <span className="font-mono font-semibold">{item.date}</span>
-                      <span>{item.shift}</span>
+                      <span>{formatShiftLabel(item.shift)}</span>
                       <span className="text-muted-foreground">
                         {item.outgoingNurse} to {item.incomingNurse}
                       </span>
@@ -316,7 +317,7 @@ export default function ShiftHandoffPanel({
               >
                 {ENDORSEMENT_SHIFTS.map(s => (
                   <option key={s} value={s}>
-                    {s}
+                    {formatShiftLabel(s)}
                   </option>
                 ))}
               </select>
@@ -584,7 +585,7 @@ export default function ShiftHandoffPanel({
 
         <CardFooter className="bg-slate-50 dark:bg-slate-900 p-4 border-t flex flex-wrap items-center justify-between gap-4">
           <div className="text-xs text-muted-foreground">
-            Endorsement Timestamp: <strong>{new Date().toLocaleString()}</strong>
+            Endorsement Timestamp: <strong>{new Date().toLocaleString("en-US", { hour12: true })}</strong>
           </div>
           <div className="flex items-center gap-3">
             <Button

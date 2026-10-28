@@ -1,3 +1,4 @@
+import TimeInput12Hour from "@/components/TimeInput12Hour";
 import {
   Accordion,
   AccordionContent,
@@ -482,7 +483,7 @@ export default function ComponentsShowcase() {
                       >
                         <CalendarIcon className="mr-2 h-4 w-4" />
                         {datePickerDate ? (
-                          format(datePickerDate, "PPP HH:mm", { locale: zhCN })
+                          format(datePickerDate, "PPP h:mm a", { locale: zhCN })
                         ) : (
                           <span>Select date and time</span>
                         )}
@@ -501,16 +502,14 @@ export default function ComponentsShowcase() {
                             Time
                           </Label>
                           <div className="flex gap-2">
-                            <Input
-                              type="time"
+                            <TimeInput12Hour
                               value={
                                 datePickerDate
                                   ? format(datePickerDate, "HH:mm")
                                   : "00:00"
                               }
-                              onChange={e => {
-                                const [hours, minutes] =
-                                  e.target.value.split(":");
+                              onChange={value => {
+                                const [hours, minutes] = value.split(":");
                                 const newDate = datePickerDate
                                   ? new Date(datePickerDate)
                                   : new Date();
@@ -527,7 +526,7 @@ export default function ComponentsShowcase() {
                   {datePickerDate && (
                     <p className="text-sm text-muted-foreground">
                       Selected:{" "}
-                      {format(datePickerDate, "yyyy/MM/dd  HH:mm", {
+                      {format(datePickerDate, "yyyy/MM/dd  h:mm a", {
                         locale: zhCN,
                       })}
                     </p>

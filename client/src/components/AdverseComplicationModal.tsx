@@ -251,7 +251,7 @@ export default function AdverseComplicationModal({
             </div>
             <div>
               <span className="text-muted-foreground">Time:</span>{" "}
-              <strong>{new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</strong>
+              <strong>{new Date().toLocaleTimeString("en-US", { hour12: true, hour: "2-digit", minute: "2-digit" })}</strong>
             </div>
             <div>
               <span className="text-muted-foreground">Nurse:</span>{" "}
