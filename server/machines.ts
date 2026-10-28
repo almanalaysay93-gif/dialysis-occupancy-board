@@ -1284,7 +1284,7 @@ export async function setWaitingCall(input: {
   if (!db) throw new Error("Database not available");
   if (!(await waitingCallColumnsReady())) throw new Error("WAITING_CALL_UNAVAILABLE");
 
-  await db
+  const updated = await db
     .update(waitingList)
     .set(
       input.called
@@ -1293,7 +1293,9 @@ export async function setWaitingCall(input: {
     )
     .where(
       and(eq(waitingList.id, input.entryId), eq(waitingList.floorId, input.floorId), eq(waitingList.status, "waiting"))
-    );
+    )
+    .returning({ id: waitingList.id });
+  if (updated.length === 0) throw new Error("NO_WAITING_PATIENT");
 }
 
 /** Number of vacant machines on a floor (no active session). */

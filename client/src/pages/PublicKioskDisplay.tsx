@@ -2,12 +2,13 @@ import { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import { Link, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
+import { useLiveCalls } from "@/hooks/useLiveCalls";
 import {
-  getAudioContext,
   unlockAudio,
   playHospitalChime,
   announceTicketVoice,
   announceTreatmentArea,
+  stopAnnouncement,
 } from "@/lib/kioskAudio";
 import {
   Activity,
@@ -157,7 +158,7 @@ export default function PublicKioskDisplay() {
   const [calloutQueue, setCalloutQueue] = useState<KioskCallout[]>([]);
 
   const prevAdmittedIdsRef = useRef<Set<number>>(new Set());
-  const announcedKeyRef = useRef<string | null>(null);
+  const playedAudioKeyRef = useRef<string | null>(null);
   /** Waiting entry id to the call timestamp already announced, so a poll never repeats it. */
   const announcedCallsRef = useRef<Map<number, number>>(new Map());
   const isInitializedRef = useRef(false);
@@ -166,8 +167,7 @@ export default function PublicKioskDisplay() {
   // Auto-unlock audio context on first user interaction
   useEffect(() => {
     const handleGesture = () => {
-      unlockAudio();
-      setAudioUnlocked(true);
+      void unlockAudio().then(setAudioUnlocked);
     };
     window.addEventListener("click", handleGesture, { once: true });
     window.addEventListener("touchstart", handleGesture, { once: true });
@@ -187,6 +187,20 @@ export default function PublicKioskDisplay() {
     refetchInterval: 10000,
   });
   const staff = staffMe.data;
+  const refreshCalls = useCallback(() => {
+    void utils.waiting.kioskCalls.invalidate();
+    void utils.waiting.list.invalidate();
+    void utils.machines.list.invalidate();
+    void utils.staff.me.invalidate();
+  }, [utils]);
+  const liveCallsConnected = useLiveCalls(staffMe.isSuccess, refreshCalls);
+  const { data: callEvents } = trpc.waiting.kioskCalls.useQuery(undefined, {
+    enabled: staffMe.isSuccess,
+    // Realtime is the fast path; polling covers disconnections and lost events.
+    refetchInterval: liveCallsConnected ? 10_000 : 2_000,
+    refetchOnWindowFocus: "always",
+    refetchOnReconnect: "always",
+  });
   const isPatient = staff?.role === "patient";
   const userTicket = isPatient && staff.username !== "patient.guest" ? staff.username.toUpperCase() : null;
   const canAnnounceTicket = useCallback(
@@ -198,6 +212,13 @@ export default function PublicKioskDisplay() {
   useEffect(() => {
     setCalloutQueue(queue => queue.filter(callout => canAnnounceTicket(callout.ticket)));
   }, [canAnnounceTicket]);
+
+  useEffect(() => {
+    setCalloutQueue([]);
+    announcedCallsRef.current.clear();
+    playedAudioKeyRef.current = null;
+    isInitializedRef.current = false;
+  }, [userTicket]);
   const patientFloorId = staff?.assignedFloorId ?? null;
   const { data: machineData, isLoading: machinesLoading } = trpc.machines.list.useQuery(undefined, {
     enabled: staffMe.isSuccess,
@@ -251,7 +272,6 @@ export default function PublicKioskDisplay() {
     if (activeFloorIdNum !== null) {
       setSelectedFloorId(activeFloorIdNum);
     }
-    setCalloutQueue([]);
     void utils.machines.list.invalidate();
     void utils.machines.listFloors.invalidate();
   }, [isFloorRestricted, activeFloorIdNum, utils]);
@@ -288,6 +308,7 @@ export default function PublicKioskDisplay() {
     const idx = waitingList.findIndex(w => w.ticket?.toUpperCase() === userTicket);
     return idx >= 0 ? idx + 1 : null;
   }, [userTicket, waitingList]);
+  const myWaitingCall = waitingList?.find(w => w.ticket.toUpperCase() === userTicket && w.calledAt);
 
   // Handle Fullscreen toggle
   const toggleFullscreen = () => {
@@ -354,11 +375,19 @@ export default function PublicKioskDisplay() {
     prevAdmittedIdsRef.current = activeIds;
   }, [machines, floors, staffMe.isSuccess, canAnnounceTicket]);
 
-  // Announce the head of the queue, then hand over to the next after 12s.
+  // Visual notice is immediate, even before the browser has unlocked audio.
   useEffect(() => {
     if (!activeCallout) return;
-    if (announcedKeyRef.current !== activeCallout.key) {
-      announcedKeyRef.current = activeCallout.key;
+    const timer = setTimeout(() => setCalloutQueue(q => q.filter(callout => callout.key !== activeCallout.key)), 12000);
+    return () => clearTimeout(timer);
+  }, [activeCallout]);
+
+  // Do not consume a voice call while iOS autoplay is blocked. Enabling sound
+  // during the notice plays the pending call instead of silently losing it.
+  useEffect(() => {
+    if (!activeCallout || !audioUnlocked || (!soundEnabled && !voiceEnabled)) return;
+    if (playedAudioKeyRef.current !== activeCallout.key) {
+      playedAudioKeyRef.current = activeCallout.key;
       if (soundEnabled) playHospitalChime();
       if (voiceEnabled) {
         if (activeCallout.bay)
@@ -371,18 +400,29 @@ export default function PublicKioskDisplay() {
           );
       }
     }
-    const timer = setTimeout(() => setCalloutQueue(q => q.filter(callout => callout.key !== activeCallout.key)), 12000);
-    return () => clearTimeout(timer);
-  }, [activeCallout, soundEnabled, voiceEnabled]);
+  }, [activeCallout, soundEnabled, voiceEnabled, audioUnlocked]);
+
+  useEffect(() => () => stopAnnouncement(), [activeCallout?.key]);
+
+  // A patient returning after the short callout expired still has a current
+  // call. Enabling sound must let them hear it, even after a locked screen.
+  useEffect(() => {
+    if (activeCallout || !myWaitingCall?.calledAt || !audioUnlocked || (!soundEnabled && !voiceEnabled)) return;
+    const key = `call-${myWaitingCall.id}-${new Date(myWaitingCall.calledAt).getTime()}`;
+    if (playedAudioKeyRef.current === key) return;
+    playedAudioKeyRef.current = key;
+    if (soundEnabled) playHospitalChime();
+    if (voiceEnabled) announceTreatmentArea(myWaitingCall.ticket, activeFloorObj?.name ?? "", null);
+  }, [activeCallout, myWaitingCall, audioUnlocked, soundEnabled, voiceEnabled, activeFloorObj]);
 
   // A nurse called a waiting patient in. The call is stored server-side, so this
   // fires on whichever kiosk sees it first and survives a reload. Only a recent
   // call is announced; an old one still shows as CALLING on the queue card.
   useEffect(() => {
     // The board is needed too: the call names the machine the next admit lands on.
-    if (!staffMe.isSuccess || !waitingList || !machines) return;
+    if (!staffMe.isSuccess || !callEvents) return;
     const calls: KioskCallout[] = [];
-    for (const w of waitingList) {
+    for (const w of callEvents) {
       if (!w.calledAt || !canAnnounceTicket(w.ticket)) continue;
       const calledMs = new Date(w.calledAt).getTime();
       if (announcedCallsRef.current.get(w.id) === calledMs) continue;
@@ -397,8 +437,10 @@ export default function PublicKioskDisplay() {
         floorName: floorObj?.name ?? "Dialysis Unit",
       });
     }
-    if (calls.length > 0) setCalloutQueue(q => [...q, ...calls]);
-  }, [waitingList, machines, floors, staffMe.isSuccess, canAnnounceTicket]);
+    // A canceled/replaced call must not remain on screen or in the voice queue.
+    const currentKeys = new Set(callEvents.map(w => `call-${w.id}-${new Date(w.calledAt).getTime()}`));
+    setCalloutQueue(q => [...q.filter(c => !c.key.startsWith("call-") || currentKeys.has(c.key)), ...calls]);
+  }, [callEvents, machines, floors, staffMe.isSuccess, canAnnounceTicket]);
 
   // Filtered machines
   const filteredMachines = useMemo(() => {
@@ -443,13 +485,12 @@ export default function PublicKioskDisplay() {
 
   // Test Chime Action
   const handleTestChime = () => {
-    unlockAudio();
-    setAudioUnlocked(true);
+    void unlockAudio().then(setAudioUnlocked);
     setCalloutQueue(q => [
       ...q,
       {
         key: `test-${Date.now()}`,
-        ticket: "TK-4821",
+        ticket: userTicket ?? "TK-4821",
         bay: "HD-01",
         nextMachine: null,
         floorName: "SKTI Main",
@@ -538,6 +579,15 @@ export default function PublicKioskDisplay() {
                   <p className="kiosk-patient-bay">{myActiveSession.bay}</p>
                   <p>{myActiveSession.floorName}</p>
                 </>
+              ) : myWaitingCall ? (
+                <div role="alert">
+                  <p className="kiosk-patient-bay">Your ticket has been called</p>
+                  <p>Please proceed to {activeFloorObj?.name ?? "the treatment area"}.</p>
+                  <button className="mt-2 underline" onClick={() => {
+                    void unlockAudio().then(setAudioUnlocked);
+                    announceTreatmentArea(userTicket, activeFloorObj?.name ?? "", null);
+                  }}>Hear my call again</button>
+                </div>
               ) : myWaitingQueuePosition !== null ? (
                 <>
                   <p className="kiosk-patient-bay">Queue position #{myWaitingQueuePosition} · Est. {myWaitingQueuePosition * 25} mins</p>
@@ -551,6 +601,9 @@ export default function PublicKioskDisplay() {
             </div>
           </section>
         )}
+        {userTicket && <p className="text-xs" role="status">
+          {liveCallsConnected ? "Live calls connected" : "Reconnecting live calls · checking for updates"}
+        </p>}
 
         {/* Live Clock & Control Suite */}
         <div className="kiosk-controls-row flex items-center gap-4 sm:gap-6">
@@ -577,10 +630,16 @@ export default function PublicKioskDisplay() {
 
             {/* Audio Chime Toggle */}
             <button
-              onClick={() => setSoundEnabled(!soundEnabled)}
-              title={soundEnabled ? "Mute Ready Chime" : "Enable Ready Chime"}
-              aria-label={soundEnabled ? "Mute ready chime" : "Enable ready chime"}
-              aria-pressed={soundEnabled}
+              onClick={() => {
+                const enable = !soundEnabled || !voiceEnabled;
+                setSoundEnabled(enable);
+                setVoiceEnabled(enable);
+                if (enable) void unlockAudio().then(setAudioUnlocked);
+                else stopAnnouncement();
+              }}
+              title={soundEnabled && voiceEnabled ? "Mute calls" : "Enable call sound"}
+              aria-label={soundEnabled && voiceEnabled ? "Mute calls" : "Enable call sound"}
+              aria-pressed={soundEnabled && voiceEnabled}
               className={cn(
                 "p-2 rounded-md hover:bg-white/10 transition-colors",
                 soundEnabled ? "text-emerald-400" : "text-slate-500 line-through"
@@ -640,16 +699,18 @@ export default function PublicKioskDisplay() {
 
       {/* Audio Unlock Banner for Browser Autoplay Policy */}
       {!audioUnlocked && (
-        <div
+        <button
+          type="button"
           onClick={() => {
-            unlockAudio();
-            setAudioUnlocked(true);
+            setSoundEnabled(true);
+            setVoiceEnabled(true);
+            void unlockAudio().then(setAudioUnlocked);
           }}
           className="w-full bg-amber-500/15 border-b border-amber-500/30 px-4 py-2 text-center text-xs text-amber-300 flex items-center justify-center gap-2 cursor-pointer hover:bg-amber-500/20 transition-colors"
         >
           <Volume2 className="h-4 w-4 animate-bounce text-amber-400" />
-          <span>Lounge Audio is on standby. <strong>Click anywhere</strong> on this TV display to enable live ticket voice calls &amp; chimes.</span>
-        </div>
+          <span><strong>Enable sound</strong> for ticket calls. Keep this page open and your phone unlocked.</span>
+        </button>
       )}
 
       {/* Prominent Real-Time Callout Banner (Appears when ticket is called!) */}

@@ -55,6 +55,19 @@ describe("patient floor access", () => {
     expect(countVacant).not.toHaveBeenCalled();
   });
 
+  it("delivers only the signed-in patient's recent calls", async () => {
+    const calledAt = new Date();
+    listWaiting.mockResolvedValue([
+      { id: 1, ticket: "TK-5138", floorId: 4, calledAt },
+      { id: 2, ticket: "TK-9999", floorId: 4, calledAt },
+      { id: 3, ticket: "TK-5138", floorId: 4, calledAt: new Date(Date.now() - 120_000) },
+      { id: 4, ticket: "TK-5138", floorId: 4, calledAt: null },
+    ]);
+    const calls = await appRouter.createCaller(context()).waiting.kioskCalls();
+    expect(calls).toEqual([{ id: 1, ticket: "TK-5138", floorId: 4, calledAt }]);
+    expect(listWaiting).toHaveBeenCalledWith({ floorId: 4 }, { canSeePhi: false });
+  });
+
   it("serves public kiosk boards and queue when placement is absent", async () => {
     resolve.mockResolvedValue({ ...patient, assignedFloorId: null });
     const caller = appRouter.createCaller(context());
