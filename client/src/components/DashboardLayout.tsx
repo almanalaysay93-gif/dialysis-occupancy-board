@@ -298,7 +298,7 @@ function DashboardLayoutContent({
             </SidebarMenu>
 
             {floorBoardItems.length > 0 && (
-              <p className="mt-3 px-3 text-[10px] uppercase tracking-[0.22em] text-muted-foreground/80 whitespace-nowrap overflow-hidden text-center group-data-[collapsible=icon]:px-0">
+              <p className="mt-3 shrink-0 px-3 text-[10px] uppercase tracking-[0.22em] text-muted-foreground/80 whitespace-nowrap overflow-hidden text-center group-data-[collapsible=icon]:px-0">
                 {isCollapsed ? "FB" : "Floor Boards"}
               </p>
             )}
