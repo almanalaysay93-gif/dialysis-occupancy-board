@@ -573,9 +573,9 @@ export default function ShiftHandoffPanel({
                       onChange={e =>
                         setChecklist({ ...checklist, [item.key]: e.target.checked })
                       }
-                      className="accent-emerald-600 rounded h-4 w-4"
+                      className="accent-emerald-600 rounded h-4 w-4 shrink-0"
                     />
-                    <span>{item.label}</span>
+                    <span className="min-w-0 break-words">{item.label}</span>
                   </label>
                 );
               })}
@@ -583,16 +583,17 @@ export default function ShiftHandoffPanel({
           </div>
         </CardContent>
 
-        <CardFooter className="bg-slate-50 dark:bg-slate-900 p-4 border-t flex flex-wrap items-center justify-between gap-4">
-          <div className="text-xs text-muted-foreground">
+        <CardFooter className="bg-slate-50 dark:bg-slate-900 p-4 border-t flex min-w-0 flex-col items-stretch gap-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+          <div className="min-w-0 break-words text-xs leading-relaxed text-muted-foreground">
             Endorsement Timestamp: <strong>{new Date().toLocaleString("en-US", { hour12: true })}</strong>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:flex-wrap">
             <Button
               variant="outline"
               size="sm"
               disabled={saveEndorsement.isPending}
               onClick={() => handleSaveEndorsement(false)}
+              className="h-auto min-h-11 min-w-0 w-full whitespace-normal py-2 sm:w-auto"
             >
               Save as Draft
             </Button>
@@ -600,9 +601,9 @@ export default function ShiftHandoffPanel({
               size="sm"
               disabled={saveEndorsement.isPending}
               onClick={() => handleSaveEndorsement(true)}
-              className="bg-[#1F2A52] text-white hover:bg-[#151D3A]"
+              className="h-auto min-h-11 min-w-0 w-full whitespace-normal bg-[#1F2A52] py-2 text-white hover:bg-[#151D3A] sm:w-auto"
             >
-              <Lock className="mr-1.5 h-4 w-4" />
+              <Lock className="mr-1.5 h-4 w-4 shrink-0" />
               {saveEndorsement.isPending ? "Saving..." : "Sign & Lock Shift Endorsement"}
             </Button>
           </div>

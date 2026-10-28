@@ -267,7 +267,7 @@ export default function MonthlySummaryView({
     <div className="w-full space-y-6">
       {/* Header Controls & Filter Bar */}
       <div className="flex flex-wrap items-center justify-between gap-4 rounded-sm border border-[#1F2A52]/15 bg-gradient-to-r from-[#1F2A52]/8 via-[#F7F9FB] to-[#2E9A9B]/8 p-4 print:hidden">
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex w-full min-w-0 flex-wrap items-center gap-3 sm:w-auto">
           <div className="flex items-center gap-2">
             <Calendar className="h-4 w-4 text-[#1F2A52]" />
             <span className="text-xs font-semibold uppercase tracking-[0.14em] text-[#1F2A52]">
@@ -278,15 +278,15 @@ export default function MonthlySummaryView({
             type="month"
             value={month}
             onChange={e => onMonthChange(e.target.value)}
-            className="h-9 rounded-sm border border-[#D4DFE5] bg-white px-3 text-sm font-medium text-[#1F2A52] shadow-xs outline-none focus:border-[#2E9A9B]"
+            className="h-11 min-w-0 max-w-full rounded-sm border border-[#D4DFE5] bg-white px-3 text-base font-medium text-[#1F2A52] shadow-xs outline-none focus:border-[#2E9A9B]"
           />
 
-          <div className="flex items-center gap-2 pl-2">
+          <div className="flex w-full min-w-0 items-center gap-2 sm:w-auto">
             <Filter className="h-4 w-4 text-[#7684A0]" />
             <select
               value={selectedFloorId}
               onChange={e => setSelectedFloorId(e.target.value)}
-              className="h-9 rounded-sm border border-[#D4DFE5] bg-white px-3 text-sm text-[#1F2A52] shadow-xs outline-none focus:border-[#2E9A9B]"
+              className="h-11 w-full min-w-0 max-w-full rounded-sm border border-[#D4DFE5] bg-white px-3 text-sm text-[#1F2A52] shadow-xs outline-none focus:border-[#2E9A9B]"
             >
               <option value="all">All Boards (Institute-Wide Summary)</option>
               {monthly?.map(b => (
@@ -300,7 +300,7 @@ export default function MonthlySummaryView({
 
         <Button
           size="sm"
-          className="h-9 bg-[#9E1F2B] text-white shadow-xs hover:bg-[#7a1822]"
+          className="h-auto min-h-11 w-full min-w-0 whitespace-normal bg-[#9E1F2B] py-2 text-white shadow-xs hover:bg-[#7a1822] sm:w-auto"
           onClick={onPrint}
         >
           <Printer className="mr-1.5 h-4 w-4" />

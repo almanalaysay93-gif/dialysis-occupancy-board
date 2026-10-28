@@ -234,14 +234,14 @@ export default function EndOfDayReport() {
         <div className="w-full px-4 sm:px-6 py-6">
           {/* Report Mode Tabs (Screen Only) */}
           <div className="mb-6 flex flex-wrap items-center justify-between gap-4 border-b border-[#D4DFE5] pb-4 print:hidden">
-            <div className="flex items-center gap-1.5 rounded-sm bg-[#E8EFF1] p-1">
+            <div className="grid w-full min-w-0 grid-cols-2 items-stretch gap-1.5 rounded-sm bg-[#E8EFF1] p-1 sm:w-auto">
               <button
                 type="button"
                 onClick={() => {
                   setActiveReportTab("daily");
                   setPrintMonthOnly(false);
                 }}
-                className={`flex items-center gap-2 rounded-xs px-4 py-2 text-xs font-semibold uppercase tracking-[0.14em] transition-all ${
+                className={`flex min-w-0 items-center justify-center gap-2 rounded-xs px-2 py-3 text-center text-xs leading-relaxed font-semibold whitespace-normal uppercase tracking-[0.14em] transition-all sm:px-4 ${
                   activeReportTab === "daily"
                     ? "bg-[#1F2A52] text-white shadow-xs"
                     : "text-[#556680] hover:text-[#1F2A52]"
@@ -257,7 +257,7 @@ export default function EndOfDayReport() {
                     setActiveReportTab("monthly");
                     setPrintMonthOnly(false);
                   }}
-                  className={`flex items-center gap-2 rounded-xs px-4 py-2 text-xs font-semibold uppercase tracking-[0.14em] transition-all ${
+                  className={`flex min-w-0 items-center justify-center gap-2 rounded-xs px-2 py-3 text-center text-xs leading-relaxed font-semibold whitespace-normal uppercase tracking-[0.14em] transition-all sm:px-4 ${
                     activeReportTab === "monthly"
                       ? "bg-[#9E1F2B] text-white shadow-xs"
                       : "text-[#556680] hover:text-[#9E1F2B]"
@@ -269,13 +269,13 @@ export default function EndOfDayReport() {
               )}
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex w-full min-w-0 flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap">
               {!isClinicalHidden && (
                 <Button
                   type="button"
                   size="sm"
                   variant="outline"
-                  className="h-9 border-[#D4DFE5] text-[#1F2A52] hover:bg-[#E8EFF1] gap-1.5"
+                  className="h-auto min-h-11 w-full min-w-0 whitespace-normal border-[#D4DFE5] py-2 text-[#1F2A52] hover:bg-[#E8EFF1] gap-1.5 sm:w-auto"
                   onClick={() => setExportDialogOpen(true)}
                   aria-label="Export Machine Metrics as Excel"
                 >
@@ -287,7 +287,7 @@ export default function EndOfDayReport() {
                 <Button
                   size="sm"
                   variant="outline"
-                  className="h-9 border-[#D4DFE5] text-[#1F2A52] hover:bg-[#E8EFF1]"
+                  className="h-auto min-h-11 w-full min-w-0 whitespace-normal border-[#D4DFE5] py-2 text-[#1F2A52] hover:bg-[#E8EFF1] sm:w-auto"
                   onClick={() => {
                     setPrintMonthOnly(false);
                     window.print();
@@ -300,7 +300,7 @@ export default function EndOfDayReport() {
               ) : (
                 <Button
                   size="sm"
-                  className="h-9 bg-[#9E1F2B] text-white hover:bg-[#7a1822]"
+                  className="h-auto min-h-11 w-full min-w-0 whitespace-normal bg-[#9E1F2B] py-2 text-white hover:bg-[#7a1822] sm:w-auto"
                   onClick={() => {
                     setPrintMonthOnly(true);
                     setTimeout(() => window.print(), 50);
@@ -347,7 +347,7 @@ export default function EndOfDayReport() {
                     board{isMulti ? "s" : ""} for {dateLabel}.
                   </p>
                 </div>
-                <div className="flex items-center gap-2 print:screen-only">
+                <div className="w-full min-w-0 sm:w-auto print:screen-only">
                   <input
                     type="date"
                     value={date}
@@ -355,21 +355,9 @@ export default function EndOfDayReport() {
                     onChange={e => {
                       setDate(e.target.value || localDateStr(0));
                     }}
-                    className="h-9 rounded-sm border border-[#D4DFE5] bg-white px-2 text-sm text-[#1F2A52] outline-none focus:border-[#2E9A9B]"
+                    aria-label="Report date"
+                    className="h-11 w-full min-w-0 rounded-sm border border-[#D4DFE5] bg-white px-2 text-base text-[#1F2A52] outline-none focus:border-[#2E9A9B] sm:w-auto"
                   />
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-9 border-[#D4DFE5] text-[#1F2A52] hover:bg-[#E8EFF1]"
-                    onClick={() => {
-                      setPrintMonthOnly(false);
-                      window.print();
-                    }}
-                    aria-label="Print Daily Report as PDF"
-                  >
-                    <Printer className="mr-1.5 h-4 w-4 text-[#2E9A9B]" />
-                    Print Daily Report as PDF
-                  </Button>
                 </div>
               </div>
 
@@ -385,7 +373,7 @@ export default function EndOfDayReport() {
                     id="shift-selector"
                     value={shiftKey}
                     onChange={e => setShiftKey(e.target.value)}
-                    className="h-9 rounded-sm border border-[#D4DFE5] bg-white px-2 text-sm text-[#1F2A52] outline-none focus:border-[#2E9A9B]"
+                    className="h-11 w-full min-w-0 max-w-full rounded-sm border border-[#D4DFE5] bg-white px-2 text-sm text-[#1F2A52] outline-none focus:border-[#2E9A9B] sm:w-auto"
                   >
                     <option value="all">All Shifts</option>
                     {REPORT_SHIFTS.map(s => (
@@ -1014,10 +1002,11 @@ function DailySummaryTable({ boards }: { boards: ReportBoard[] }) {
           {totals.pausedMinutes > 0 && ` · ${totals.pausedMinutes} paused minutes across the center`}
         </p>
       </div>
-      <div className="overflow-x-auto px-5 py-4">
-        <table className="w-full min-w-0 table-fixed print:w-full print:text-[11px] text-sm">
+      <p className="px-5 pt-3 text-sm text-[#556680] lg:hidden print:hidden">Swipe left or right to see all columns.</p>
+      <div className="max-w-full overflow-x-auto px-5 py-4 print:overflow-visible" role="region" aria-label="Daily report summary table" tabIndex={0}>
+        <table className="w-full min-w-[1000px] table-fixed print:min-w-0 print:w-full print:text-[11px] text-sm">
           <colgroup>
-            {allFloors && <col className="w-[15%]" />}
+            {allFloors && <col className="w-[20%]" />}
             <col className="w-[9%]" />
             <col className="w-[9%]" />
             <col className="w-[9%]" />

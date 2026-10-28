@@ -85,10 +85,17 @@ function ScrollToTop() {
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
-    const onScroll = () => setVisible(window.scrollY > 300);
+    const onScroll = () => setVisible(
+      window.scrollY > 300 &&
+      document.documentElement.scrollHeight - window.scrollY - window.innerHeight > 160
+    );
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
+    window.addEventListener("resize", onScroll);
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+    };
   }, []);
 
   if (!visible) return null;
@@ -98,7 +105,7 @@ function ScrollToTop() {
       data-scroll-to-top=""
       variant="outline"
       size="icon"
-      className="fixed bottom-20 right-6 z-40 rounded-full shadow-lg bg-background/80 backdrop-blur-sm border-primary/20 print:hidden"
+      className="fixed bottom-20 right-6 z-40 hidden rounded-full shadow-lg bg-background/80 backdrop-blur-sm border-primary/20 md:inline-flex print:hidden"
       onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
       aria-label="Scroll to top"
       title="Scroll to top"

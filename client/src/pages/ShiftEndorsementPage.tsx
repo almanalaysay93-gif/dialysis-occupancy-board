@@ -27,7 +27,7 @@ export default function ShiftEndorsementPage() {
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex w-full min-w-0 flex-col items-start gap-2 sm:w-auto sm:flex-row sm:items-center">
             <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
               <Layers className="h-3.5 w-3.5" /> Scope:
             </span>
@@ -36,7 +36,7 @@ export default function ShiftEndorsementPage() {
               onChange={e =>
                 setSelectedFloorId(e.target.value ? Number(e.target.value) : undefined)
               }
-              className="h-9 rounded-md border text-xs px-3 bg-background font-medium"
+              className="h-11 w-full min-w-0 max-w-full rounded-md border text-sm px-3 bg-background font-medium sm:w-auto"
             >
               <option value="">All Floor Units (Master Unit Endorsement)</option>
               {floors?.map(f => (
