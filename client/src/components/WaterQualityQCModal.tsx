@@ -163,7 +163,7 @@ export default function WaterQualityQCModal({
 
   return (
     <Dialog open={open} onOpenChange={o => !o && onClose()}>
-      <DialogContent className="max-w-3xl max-h-[92vh] overflow-y-auto">
+      <DialogContent className="max-w-3xl sm:max-w-3xl max-h-[92vh] overflow-y-auto">
         <DialogHeader>
           <div className="flex items-center gap-2 text-cyan-600 dark:text-cyan-400">
             <Droplets className="h-6 w-6" />
@@ -212,7 +212,7 @@ export default function WaterQualityQCModal({
 
         <div className="space-y-5 py-2">
           {/* Metadata & Inspector Sign-off */}
-          <div className="grid grid-cols-1 sm:grid-cols-5 gap-3 p-3 rounded-lg border bg-slate-50 dark:bg-slate-900 text-xs">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 p-3 rounded-lg border bg-slate-50 dark:bg-slate-900 text-xs">
             <div>
               <Label className="text-[11px]">Floor / RO Loop</Label>
               <select
