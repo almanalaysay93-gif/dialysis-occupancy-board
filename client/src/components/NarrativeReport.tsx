@@ -170,7 +170,7 @@ export function NarrativeReport({
                       </p>
                       <p className="mt-1.5 text-[10px] text-[#7684A0]">
                         by {entry.author} · updated{" "}
-                        {new Date(entry.updatedAt).toLocaleString([], { timeZone: "Asia/Manila", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                        {new Date(entry.updatedAt).toLocaleString("en-US", { hour12: true, timeZone: "Asia/Manila", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
                       </p>
                     </div>
                     {canWriteBoard && (
@@ -257,7 +257,7 @@ export function NarrativeReport({
                       </p>
                       <p className="mt-1.5 text-[10px] text-[#7684A0]">
                         by {entry.author} · updated{" "}
-                        {new Date(entry.updatedAt).toLocaleString([], { timeZone: "Asia/Manila", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                        {new Date(entry.updatedAt).toLocaleString("en-US", { hour12: true, timeZone: "Asia/Manila", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
                       </p>
                     </div>
                     <Button

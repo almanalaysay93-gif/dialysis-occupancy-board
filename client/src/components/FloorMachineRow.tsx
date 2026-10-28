@@ -367,7 +367,7 @@ export function FloorMachineChip({
               <DropdownMenuItem className="text-[13px]">
                 <Activity className="mr-2 h-4 w-4" />
                 Patient {session.patientId} {session.ticket ? `(${session.ticket})` : ""} · {durationLabel(session.durationMinutes)} · started{" "}
-                {new Date(session.startedAt).toLocaleTimeString([], {
+                {new Date(session.startedAt).toLocaleTimeString("en-US", { hour12: true,
                   hour: "2-digit",
                   minute: "2-digit",
                 })}

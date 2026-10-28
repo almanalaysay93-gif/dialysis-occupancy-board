@@ -196,12 +196,12 @@ export function OccupancyBoardContent({ floorId }: { floorId?: number }) {
         {/* Editorial masthead */}
         <header className="flex flex-col gap-2">
           <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between border-b border-[#1F2A52]/80 pb-3">
-            <p className="smallcaps-detail text-[#7684A0] whitespace-nowrap">
+            <p className="smallcaps-detail min-w-0 break-words text-[#7684A0]">
               SPMC Kidney & Transplant Institute · Live Board
             </p>
-            <div className="flex items-center justify-between gap-4 sm:justify-start sm:gap-5">
+            <div className="flex min-w-0 flex-col items-start gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-5">
               <StaffBar />
-              <p className="smallcaps-detail text-[#7684A0] whitespace-nowrap">
+              <p className="smallcaps-detail min-w-0 whitespace-normal leading-relaxed text-[#7684A0]">
                 {new Date().toLocaleDateString([], {
                   weekday: "long",
                   month: "long",

@@ -713,7 +713,7 @@ function SupervisorNarrativeSection({
                               </p>
                               <p className="mt-1.5 text-[10px] text-[#7684A0]">
                                 by {entry.author} · updated{" "}
-                                {new Date(entry.updatedAt).toLocaleString([], {
+                                {new Date(entry.updatedAt).toLocaleString("en-US", { hour12: true,
                                   timeZone: "Asia/Manila",
                                   month: "short",
                                   day: "numeric",
@@ -1345,7 +1345,7 @@ function NarrativeHistorySection({
                 {(historyQuery.data ?? []).map(row => (
                   <tr key={row.id} className="border-b border-[#D4DFE5]/60 align-top">
                     <td className="whitespace-nowrap py-2 pr-3 text-[#556680]">
-                      {new Date(row.createdAt).toLocaleString([], { timeZone: "Asia/Manila", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                      {new Date(row.createdAt).toLocaleString("en-US", { hour12: true, timeZone: "Asia/Manila", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
                     </td>
                     <td className="py-2 pr-3 font-medium text-[#1F2A52]">{floorName(row.floorId)}</td>
                     <td className="whitespace-nowrap py-2 pr-3 text-[#556680]">{periodLabel(row.periodKey)}</td>

@@ -557,8 +557,8 @@ export async function generateMachineMetricsExcel(report: MachineMetricsReport):
         id: s.id,
         machineLabel: s.machineLabel,
         date: s.date,
-        startedAt: s.startedAt.toLocaleString([], { timeZone: "Asia/Manila" }),
-        endedAt: s.endedAt ? s.endedAt.toLocaleString([], { timeZone: "Asia/Manila" }) : "Active",
+        startedAt: s.startedAt.toLocaleString("en-US", { timeZone: "Asia/Manila", hour12: true }),
+        endedAt: s.endedAt ? s.endedAt.toLocaleString("en-US", { timeZone: "Asia/Manila", hour12: true }) : "Active",
         duration: s.durationMinutes,
         actual: s.actualTreatmentMinutes,
         paused: s.pausedMinutes,
@@ -612,13 +612,13 @@ export async function generateMachineMetricsExcel(report: MachineMetricsReport):
       const row = repairsSheet.addRow({
         id: r.id,
         machineLabel: r.machineLabel,
-        reportedAt: r.reportedAt.toLocaleString([], { timeZone: "Asia/Manila" }),
+        reportedAt: r.reportedAt.toLocaleString("en-US", { timeZone: "Asia/Manila", hour12: true }),
         reportedBy: r.reportedBy,
         technician: r.technician ?? "—",
         issue: r.issue,
         actionTaken: r.actionTaken ?? "—",
         partsReplaced: r.partsReplaced ?? "—",
-        resolvedAt: r.resolvedAt ? r.resolvedAt.toLocaleString([], { timeZone: "Asia/Manila" }) : "Unresolved",
+        resolvedAt: r.resolvedAt ? r.resolvedAt.toLocaleString("en-US", { timeZone: "Asia/Manila", hour12: true }) : "Unresolved",
         status: r.status.toUpperCase(),
       });
       row.height = 20;

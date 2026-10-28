@@ -623,7 +623,7 @@ function WaitingRow({
   const isUrgent = tier === "urgent";
   const isCalled = entry.calledAt != null;
   const calledClock = entry.calledAt
-    ? new Date(entry.calledAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+    ? new Date(entry.calledAt).toLocaleTimeString("en-US", { hour12: true, hour: "2-digit", minute: "2-digit" })
     : "";
 
   return (
@@ -669,7 +669,7 @@ function WaitingRow({
           )}
         </div>
         <p className="smallcaps-detail mt-0.5 text-[#7684A0]">
-          Added {new Date(entry.joinedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+          Added {new Date(entry.joinedAt).toLocaleTimeString("en-US", { hour12: true, hour: "2-digit", minute: "2-digit" })}
           {entry.addedBy ? ` · by ${entry.addedBy}` : ""}
           {entry.assignedNurse ? ` · nurse ${entry.assignedNurse}` : ""}
         </p>

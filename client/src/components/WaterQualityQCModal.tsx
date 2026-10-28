@@ -1,4 +1,6 @@
 import { useState, useEffect } from "react";
+import TimeInput12Hour from "@/components/TimeInput12Hour";
+import { formatShiftLabel } from "@shared/time-format";
 import {
   Dialog,
   DialogContent,
@@ -155,7 +157,7 @@ export default function WaterQualityQCModal({
       chlorineLevel: String(chlorineNum),
       hardness: String(Number(waterHardness) || 0),
       waterTemp: String(Number(waterTemperature) || 0),
-      notes: notes || `RO Water Daily QC verified for ${shift}. Rejection: ${computedRejection}%. Chlorine: ${totalChlorine} mg/L. Safe for treatment.`,
+      notes: notes || `RO Water Daily QC verified for ${formatShiftLabel(shift)}. Rejection: ${computedRejection}%. Chlorine: ${totalChlorine} mg/L. Safe for treatment.`,
     });
   };
 
@@ -236,12 +238,7 @@ export default function WaterQualityQCModal({
             </div>
             <div>
               <Label className="text-[11px]">Time</Label>
-              <Input
-                type="time"
-                value={time}
-                onChange={e => setTime(e.target.value)}
-                className="h-8 text-xs mt-1"
-              />
+              <TimeInput12Hour value={time} onChange={setTime} />
             </div>
             <div>
               <Label className="text-[11px]">Shift</Label>
@@ -250,9 +247,7 @@ export default function WaterQualityQCModal({
                 onChange={e => setShift(e.target.value as WaterQcShift)}
                 className="w-full h-8 rounded-md border text-xs px-2 mt-1 bg-background"
               >
-                <option value="Morning (05:00-13:00)">Morning (05:00-13:00)</option>
-                <option value="Afternoon (13:00-21:00)">Afternoon (13:00-21:00)</option>
-                <option value="Night (21:00-05:00)">Night (21:00-05:00)</option>
+                {WATER_QC_SHIFTS.map(value => <option key={value} value={value}>{formatShiftLabel(value)}</option>)}
               </select>
             </div>
             <div>
