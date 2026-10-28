@@ -3,6 +3,7 @@ import { Link, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 import { useLiveCalls } from "@/hooks/useLiveCalls";
+import PatientHelp from "@/components/PatientHelp";
 import {
   unlockAudio,
   playHospitalChime,
@@ -671,6 +672,7 @@ export default function PublicKioskDisplay() {
             {/* Patient Session Indicator / Sign In */}
             {isPatient ? (
               <div className="flex items-center gap-1.5">
+                <PatientHelp autoOpen urgent={Boolean(activeCallout || myWaitingCall || myActiveSession)} />
                 <button
                   onClick={() => logoutMut.mutate(undefined, { onSuccess: () => navigate("/patient-login") })}
                   title="Sign Out of Patient Kiosk"

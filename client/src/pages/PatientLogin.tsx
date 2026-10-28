@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
+import PatientHelp from "@/components/PatientHelp";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -88,6 +89,10 @@ export default function PatientLogin() {
               <h1 className="font-serif text-3xl text-[#1F2A52]">Patient Lounge Display</h1>
               <p className="text-sm text-[#4a4a45]">SPMC Kidney &amp; Transplant Institute</p>
             </div>
+          </div>
+
+          <div className="flex justify-center">
+            <PatientHelp />
           </div>
 
           <Card className="glass-deep border-[#1F2A52]/15 shadow-sm">
