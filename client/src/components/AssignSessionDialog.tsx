@@ -97,18 +97,18 @@ export default function AssignSessionDialog({
 
   return (
     <Dialog open={open} onOpenChange={v => !v && onClose()}>
-      <DialogContent className="max-w-md bg-[#FBFCFD]">
-        <DialogHeader>
+      <DialogContent className="max-w-md sm:max-w-lg max-h-[calc(100dvh-2rem)] overflow-y-auto bg-[#FBFCFD] p-4 sm:p-6">
+        <DialogHeader className="min-w-0 pr-7">
           <p className="smallcaps-detail text-muted-foreground">
             New Treatment Session
           </p>
-          <div className="flex items-center gap-2">
-            <DialogTitle className="font-display text-3xl text-[#1F2A52]">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <DialogTitle className="min-w-0 break-words font-display text-2xl text-[#1F2A52] sm:text-3xl">
               Assign {machineLabel}
             </DialogTitle>
             {editLabelOpen ? (
                 <form
-                className="flex items-center gap-1.5"
+                className="flex w-full min-w-0 flex-wrap items-center gap-1.5"
                 onSubmit={e => {
                   e.preventDefault();
                   setEditLabelOpen(false);
@@ -119,7 +119,7 @@ export default function AssignSessionDialog({
                   onChange={e => setDisplayLabel(e.target.value)}
                   maxLength={64}
                   placeholder="e.g. Bed 4 — P-1042"
-                  className="h-9 w-44 border-[#D4DFE5] bg-[#F4F7F8] text-sm"
+                  className="h-10 min-w-0 w-full border-[#D4DFE5] bg-[#F4F7F8] text-base sm:w-44"
                   autoFocus
                 />
                 <Button
@@ -183,7 +183,7 @@ export default function AssignSessionDialog({
             <RadioGroup
               value={String(duration)}
               onValueChange={v => setDuration(v as DurationValue)}
-              className="grid grid-cols-5 gap-2"
+              className="grid grid-cols-2 gap-2 sm:grid-cols-4"
             >
               {[
                 { v: 180, label: "3", sub: "hours" },
@@ -195,7 +195,7 @@ export default function AssignSessionDialog({
                 <label
                   key={String(opt.v)}
                   htmlFor={`duration-${String(opt.v)}`}
-                  className="flex cursor-pointer flex-col items-center gap-0.5 border border-[#D4DFE5] bg-[#F4F7F8] p-3 transition-colors has-[[data-state=checked]]:border-[#1F2A52] has-[[data-state=checked]]:bg-[#E8EFF1]"
+                  className={`flex min-w-0 cursor-pointer items-center justify-center border border-[#D4DFE5] bg-[#F4F7F8] p-3 transition-colors has-[[data-state=checked]]:border-[#1F2A52] has-[[data-state=checked]]:bg-[#E8EFF1] ${opt.v === "custom" ? "col-span-2 flex-row gap-3 sm:col-span-4" : "flex-col gap-0.5"}`}
                 >
                   <RadioGroupItem
                     id={`duration-${String(opt.v)}`}

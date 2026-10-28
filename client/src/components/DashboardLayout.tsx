@@ -380,20 +380,20 @@ function DashboardLayoutContent({
       </div>
 
       <SidebarInset className="min-w-0 flex-1 bg-background">
-        <div className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-border bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:backdrop-blur">
-          <div className="flex items-center gap-3">
+        <div className="sticky top-0 z-30 flex min-h-14 min-w-0 items-center justify-between gap-2 border-b border-border bg-background/95 px-4 py-2 backdrop-blur supports-[backdrop-filter]:backdrop-blur">
+          <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
             <SidebarTrigger className="h-9 w-9 rounded-sm border border-border bg-muted text-foreground hover:bg-accent hover:text-accent-foreground" />
-            <span className="font-display text-base tracking-tight text-foreground">
+            <span className="min-w-0 break-words font-display text-sm leading-snug tracking-tight text-foreground sm:text-base">
               {activeMenuItem?.label ?? "Dialysis Board"}
             </span>
           </div>
-          <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex shrink-0 items-center gap-2 sm:gap-3">
             <ThemeToggle />
             <Button
               variant="outline"
               size="sm"
               onClick={() => window.open("/display", "_blank")}
-              className="hidden sm:inline-flex h-8 px-2.5 text-xs bg-cyan-50 border-cyan-300 text-cyan-900 hover:bg-cyan-100 font-semibold"
+              className="hidden lg:inline-flex h-8 px-2.5 text-xs bg-cyan-50 border-cyan-300 text-cyan-900 hover:bg-cyan-100 font-semibold"
             >
               <Tv className="mr-1.5 h-3.5 w-3.5 text-cyan-600" />
               Lounge TV Kiosk ↗
@@ -403,7 +403,7 @@ function DashboardLayoutContent({
               variant="outline"
               size="sm"
               onClick={() => setLocation("/water-qc")}
-              className={`hidden md:inline-flex h-8 px-2.5 text-xs font-semibold ${
+              className={`hidden xl:inline-flex h-8 px-2.5 text-xs font-semibold ${
                 waterQcStatus === null
                   ? "bg-slate-50 border-slate-300 text-slate-700 hover:bg-slate-100"
                   : waterQcPassed
@@ -424,7 +424,7 @@ function DashboardLayoutContent({
             </Button>
             )}
             {staff && (
-              <span className="smallcaps-detail rounded border border-[#D4DFE5] bg-[#F4F7F8] px-2 py-1 text-[#556680]">
+              <span className="smallcaps-detail max-w-28 truncate rounded border border-[#D4DFE5] bg-[#F4F7F8] px-2 py-1 tracking-[0.12em] text-[#556680] sm:max-w-48">
                 {staff.role === "guest"
                   ? "Guest"
                   : staff.role === "supervisor"
