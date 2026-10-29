@@ -199,7 +199,19 @@ import { eq } from "drizzle-orm";
  * Resolve the staff session from a request. Guests (no staff cookie, and
  * optionally no OAuth session) browse with GUEST_SESSION.
  */
-export async function resolveStaffSession(req: Request): Promise<StaffSession> {
+// Share concurrent authentication reads within one HTTP request only. Never
+// cache between requests: transfers, deactivation and revocation remain live.
+const requestSessions = new WeakMap<Request, Promise<StaffSession>>();
+export function resolveStaffSession(req: Request): Promise<StaffSession> {
+  let session = requestSessions.get(req);
+  if (!session) {
+    session = resolveRequestStaffSession(req);
+    requestSessions.set(req, session);
+  }
+  return session;
+}
+
+async function resolveRequestStaffSession(req: Request): Promise<StaffSession> {
   const cookies = parseCookieHeader(req.headers.cookie ?? "");
   const token = cookies[STAFF_COOKIE_NAME] ?? null;
   const staff = await verifyStaffSession(token);

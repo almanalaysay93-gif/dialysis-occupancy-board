@@ -23,9 +23,11 @@ export function useLiveCalls(enabled: boolean, refresh: () => void) {
     let timer: ReturnType<typeof setTimeout> | undefined;
     let lastRefresh = 0;
     const refreshSoon = () => {
-      clearTimeout(timer);
+      // Keep the first deadline: a continuous burst must not postpone calls.
+      if (timer !== undefined) return;
       // This is an untrusted public hint: coalesce bursts and bound API work.
       timer = setTimeout(() => {
+        timer = undefined;
         if (!disposed) {
           lastRefresh = Date.now();
           refreshRef.current();

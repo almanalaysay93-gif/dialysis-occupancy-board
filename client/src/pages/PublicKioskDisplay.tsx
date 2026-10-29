@@ -189,10 +189,13 @@ export default function PublicKioskDisplay() {
   });
   const staff = staffMe.data;
   const refreshCalls = useCallback(() => {
-    void utils.waiting.kioskCalls.invalidate();
-    void utils.waiting.list.invalidate();
-    void utils.machines.list.invalidate();
-    void utils.staff.me.invalidate();
+    // Fetch the small call response first; board reads must not compete with
+    // the announcement for the server's limited database connections.
+    void utils.waiting.kioskCalls.invalidate().finally(() => {
+      void utils.waiting.list.invalidate();
+      void utils.machines.list.invalidate();
+      void utils.staff.me.invalidate();
+    });
   }, [utils]);
   const liveCallsConnected = useLiveCalls(staffMe.isSuccess, refreshCalls);
   const { data: callEvents } = trpc.waiting.kioskCalls.useQuery(undefined, {
