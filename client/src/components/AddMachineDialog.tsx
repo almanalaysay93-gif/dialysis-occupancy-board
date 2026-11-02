@@ -1,3 +1,4 @@
+import { roomListQueryOptions } from "@/lib/room-views";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -30,7 +31,7 @@ export default function AddMachineDialog({
   initialFloorId?: number | null;
 }) {
   const utils = trpc.useUtils();
-  const { data: floors } = trpc.machines.listFloors.useQuery();
+  const { data: floors } = trpc.machines.listFloors.useQuery(undefined, roomListQueryOptions);
 
   const [label, setLabel] = useState("");
   const [floorId, setFloorId] = useState<string>("none");

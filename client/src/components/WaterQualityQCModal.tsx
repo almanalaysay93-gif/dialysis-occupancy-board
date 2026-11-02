@@ -1,3 +1,4 @@
+import { roomListQueryOptions } from "@/lib/room-views";
 import { useState, useEffect } from "react";
 import TimeInput12Hour from "@/components/TimeInput12Hour";
 import { formatShiftLabel } from "@shared/time-format";
@@ -83,7 +84,7 @@ export default function WaterQualityQCModal({
 
   // The log belongs to a floor: each floor runs its own RO loop, so a reading
   // with no floor cannot be acted on.
-  const { data: floors } = trpc.machines.listFloors.useQuery();
+  const { data: floors } = trpc.machines.listFloors.useQuery(undefined, roomListQueryOptions);
   const [floorId, setFloorId] = useState<number | null>(null);
   const effectiveFloorId = floorId ?? floors?.[0]?.id ?? null;
 

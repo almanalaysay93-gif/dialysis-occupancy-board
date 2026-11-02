@@ -1,3 +1,4 @@
+import { roomListQueryOptions } from "@/lib/room-views";
 import AddMachineDialog from "@/components/AddMachineDialog";
 import AssignSessionDialog from "@/components/AssignSessionDialog";
 import EndSessionDialog from "@/components/EndSessionDialog";
@@ -64,9 +65,7 @@ export function OccupancyBoardContent({ floorId }: { floorId?: number }) {
   });
   const { data: staff } = trpc.staff.me.useQuery(undefined, { refetchInterval: 15_000 });
   const isGuest = staff?.role === "guest";
-  const { data: floors } = trpc.machines.listFloors.useQuery(undefined, {
-    refetchInterval: 30_000,
-  });
+  const { data: floors } = trpc.machines.listFloors.useQuery(undefined, roomListQueryOptions);
 
   const [assignTarget, setAssignTarget] = useState<number | null>(null);
   const scoped = floorId !== undefined;

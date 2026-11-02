@@ -1,3 +1,4 @@
+import { roomListQueryOptions } from "@/lib/room-views";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -56,10 +57,7 @@ export const GUEST_HIDDEN_PATHS = new Set([
 
 /** Per-floor board entries loaded from the floors table at runtime. */
 function useFloorBoardItems() {
-  const { data: floors } = trpc.machines.listFloors.useQuery(undefined, {
-    refetchInterval: 30_000,
-    staleTime: 20_000,
-  });
+  const { data: floors } = trpc.machines.listFloors.useQuery(undefined, roomListQueryOptions);
   return (
     floors?.map(f => ({
       icon: Layers,

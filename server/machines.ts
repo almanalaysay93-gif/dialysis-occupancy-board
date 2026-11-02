@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { getDb } from "./db";
 import { invalidateMachineMetricsCache } from "./machine-metrics";
 import { patientTicket } from "./patient-ticket";
@@ -1015,6 +1015,7 @@ export async function addRoom(input: { name: string }) {
     })
     .returning({ id: floors.id });
 
+  reportCache.clear();
   return result[0];
 }
 
@@ -1040,32 +1041,53 @@ export async function renameRoom(input: { roomId: number; name: string }) {
     .update(floors)
     .set({ name: newName })
     .where(eq(floors.id, input.roomId));
+  reportCache.clear();
 }
 
 export async function removeRoom(input: { roomId: number }) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
-  const active = await db
-    .select({ id: sessions.id })
-    .from(sessions)
-    .innerJoin(machines, eq(machines.id, sessions.machineId))
-    .where(and(eq(machines.floorId, input.roomId), eq(sessions.status, "active")))
-    .limit(1);
-  if (active.length > 0) {
-    throw new Error("ROOM_HAS_ACTIVE_SESSIONS");
-  }
+  await db.transaction(async tx => {
+    const active = await tx
+      .select({ id: sessions.id })
+      .from(sessions)
+      .innerJoin(machines, eq(machines.id, sessions.machineId))
+      .where(
+        and(eq(machines.floorId, input.roomId), eq(sessions.status, "active"))
+      )
+      .limit(1);
+    if (active.length > 0) {
+      throw new Error("ROOM_HAS_ACTIVE_SESSIONS");
+    }
 
-  const machineCount = await db
-    .select({ id: machines.id })
-    .from(machines)
-    .where(eq(machines.floorId, input.roomId))
-    .limit(1);
-  if (machineCount.length > 0) {
-    throw new Error("ROOM_HAS_MACHINES");
-  }
+    // Backup/repair machines retain their last floor for display and access
+    // scoping, but they no longer occupy that room on the board.
+    const machineCount = await tx
+      .select({ id: machines.id })
+      .from(machines)
+      .where(
+        and(eq(machines.floorId, input.roomId), eq(machines.status, "active"))
+      )
+      .limit(1);
+    if (machineCount.length > 0) {
+      throw new Error("ROOM_HAS_MACHINES");
+    }
 
-  await db.delete(floors).where(eq(floors.id, input.roomId));
+    // Keep the physical machines and their treatment/repair history. Clear the
+    // old location so they do not reference a room that no longer exists.
+    await tx
+      .update(machines)
+      .set({ floorId: null })
+      .where(
+        and(
+          eq(machines.floorId, input.roomId),
+          inArray(machines.status, ["backup", "repair"])
+        )
+      );
+    await tx.delete(floors).where(eq(floors.id, input.roomId));
+  });
+  reportCache.clear();
 }
 
 // ---------------------------------------------------------------------------

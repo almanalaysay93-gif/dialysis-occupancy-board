@@ -182,7 +182,7 @@ export default function EndOfDayReport() {
   const isMulti = staff?.role === "supervisor";
   const isGuest = staff?.role === "guest";
   const isLoading = isMulti
-    ? ((floors ?? []).length === 0 || floors === undefined || pageQuery.isLoading)
+    ? (floors === undefined || pageQuery.isLoading)
     : singleQuery.isLoading;
   const refresh = () => {
     if (isMulti) {
@@ -620,7 +620,7 @@ function SupervisorNarrativeSection({
         <CardTitle className="font-display text-base text-[#1F2A52]">Supervisor Narrative Report</CardTitle>
         <p className="text-xs text-[#556680]">
           {canWriteSupervisor
-            ? "Supervisor shift handover notes — 7 AM–3 PM, 3 PM–11 PM, and 11 PM–7 AM, with a note per area (SKTI Main, RDU Annex, RDU Main). Write one per area per shift on duty."
+            ? "Supervisor shift handover notes — 7 AM–3 PM, 3 PM–11 PM, and 11 PM–7 AM, with a note per active room. Write one per room per shift on duty."
             : "Supervisor shift handover notes recorded for this day — supervisors write, everyone else views."}
         </p>
       </CardHeader>

@@ -1,3 +1,4 @@
+import { refreshRoomViews } from "@/lib/room-views";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -32,11 +33,9 @@ export default function RenameRoomDialog({
   }, [open, roomName]);
 
   const renameRoom = trpc.rooms.rename.useMutation({
-    onSuccess: (_v, vars) => {
+    onSuccess: async (_v, vars) => {
       toast.success(`Room renamed to “${vars.name.trim()}”`);
-      void utils.rooms.list.invalidate();
-      void utils.machines.listFloors.invalidate();
-      void utils.machines.list.invalidate();
+      await refreshRoomViews(utils);
       onClose();
     },
     onError: e => toast.error(e.message),

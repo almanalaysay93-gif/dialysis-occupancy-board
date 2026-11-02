@@ -1,3 +1,4 @@
+import { refreshRoomViews } from "@/lib/room-views";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -24,11 +25,9 @@ export default function AddRoomDialog({
   const [name, setName] = useState("");
 
   const addRoom = trpc.rooms.add.useMutation({
-    onSuccess: (_v, vars) => {
+    onSuccess: async (_v, vars) => {
       toast.success(`Room “${vars.name.trim()}” added to the board`);
-      void utils.rooms.list.invalidate();
-      void utils.machines.listFloors.invalidate();
-      void utils.machines.list.invalidate();
+      await refreshRoomViews(utils);
       setName("");
       onClose();
     },

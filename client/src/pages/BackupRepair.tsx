@@ -1,3 +1,4 @@
+import { roomListQueryOptions } from "@/lib/room-views";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -38,9 +39,7 @@ export default function BackupRepair() {
     refetchInterval: 15_000,
   });
 
-  const { data: floors = [] } = trpc.machines.listFloors.useQuery(undefined, {
-    refetchInterval: 30_000,
-  });
+  const { data: floors = [] } = trpc.machines.listFloors.useQuery(undefined, roomListQueryOptions);
 
   const setStorage = trpc.machines.setStatus.useMutation({
     onSuccess: async (_v, vars) => {

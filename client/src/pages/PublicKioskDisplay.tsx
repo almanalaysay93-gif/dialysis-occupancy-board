@@ -1,3 +1,4 @@
+import { roomListQueryOptions, currentRoomId } from "@/lib/room-views";
 import { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import { Link, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
@@ -151,7 +152,7 @@ export default function PublicKioskDisplay() {
   const [theme, setTheme] = useState<ThemeMode>("dark-oled");
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [voiceEnabled, setVoiceEnabled] = useState(true);
-  const [selectedFloorId, setSelectedFloorId] = useState<number | "ALL">("ALL");
+  const [requestedFloorId, setSelectedFloorId] = useState<number | "ALL">("ALL");
   const [autoCycle, setAutoCycle] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
   // Callouts are queued, not overwritten. Two bays can start a session inside
@@ -229,8 +230,8 @@ export default function PublicKioskDisplay() {
     refetchInterval: 10000,
   });
   const { data: floorData } = trpc.machines.listFloors.useQuery(undefined, {
+    ...roomListQueryOptions,
     enabled: staffMe.isSuccess,
-    refetchInterval: 10000,
   });
 
   // Effective assigned floor: check staff profile first, then fallback to any single floor present in floorData
@@ -261,9 +262,10 @@ export default function PublicKioskDisplay() {
     return (floorData ?? []).slice(0, 1);
   }, [floorData, isFloorRestricted, effectivePatientFloorId]);
 
+  const selectedFloorId = currentRoomId(floors, typeof requestedFloorId === "number" ? requestedFloorId : null) ?? "ALL";
   const activeFloorIdNum = isFloorRestricted
-    ? (effectivePatientFloorId ?? floors?.[0]?.id ?? null)
-    : typeof selectedFloorId === "number" ? selectedFloorId : (floors?.[0]?.id ?? null);
+    ? currentRoomId(floors, effectivePatientFloorId)
+    : currentRoomId(floors, typeof selectedFloorId === "number" ? selectedFloorId : null) ?? floors?.[0]?.id ?? null;
   const activeFloorObj = useMemo(() => floors?.find(f => f.id === activeFloorIdNum) ?? null, [floors, activeFloorIdNum]);
   const { data: waitingList } = trpc.waiting.list.useQuery(
     { floorId: activeFloorIdNum ?? 0 },
@@ -449,9 +451,10 @@ export default function PublicKioskDisplay() {
   // Filtered machines
   const filteredMachines = useMemo(() => {
     if (!machines) return [];
-    if (isFloorRestricted || selectedFloorId === "ALL") return machines;
-    return machines.filter(m => m.machine.floorId === selectedFloorId);
-  }, [machines, selectedFloorId, isFloorRestricted]);
+    const visibleMachines = machines.filter(m => currentRoomId(floors, m.machine.floorId) !== null);
+    if (isFloorRestricted || selectedFloorId === "ALL") return visibleMachines;
+    return visibleMachines.filter(m => m.machine.floorId === activeFloorIdNum);
+  }, [machines, floors, selectedFloorId, isFloorRestricted, activeFloorIdNum]);
 
   // Aggregate stats
   const stats = useMemo(() => {
@@ -497,7 +500,7 @@ export default function PublicKioskDisplay() {
         ticket: userTicket ?? "TK-4821",
         bay: "HD-01",
         nextMachine: null,
-        floorName: "SKTI Main",
+        floorName: activeFloorObj?.name ?? "Dialysis Unit",
       },
     ]);
   };

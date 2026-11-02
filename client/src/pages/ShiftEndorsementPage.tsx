@@ -1,3 +1,4 @@
+import { roomListQueryOptions } from "@/lib/room-views";
 import DashboardLayout from "@/components/DashboardLayout";
 import ShiftHandoffPanel from "@/components/ShiftHandoffPanel";
 import { trpc } from "@/lib/trpc";
@@ -5,9 +6,7 @@ import { useState } from "react";
 import { Layers } from "lucide-react";
 
 export default function ShiftEndorsementPage() {
-  const { data: floors } = trpc.machines.listFloors.useQuery(undefined, {
-    refetchInterval: 30_000,
-  });
+  const { data: floors } = trpc.machines.listFloors.useQuery(undefined, roomListQueryOptions);
 
   const [selectedFloorId, setSelectedFloorId] = useState<number | undefined>(undefined);
 

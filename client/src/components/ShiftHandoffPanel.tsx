@@ -1,3 +1,4 @@
+import { roomListQueryOptions } from "@/lib/room-views";
 import { formatShiftLabel } from "@shared/time-format";
 import { useState, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
@@ -50,7 +51,7 @@ export default function ShiftHandoffPanel({
 }: ShiftHandoffPanelProps) {
   const { data: staff } = trpc.staff.me.useQuery(undefined, { refetchInterval: 15_000 });
   const { data: machines } = trpc.machines.list.useQuery(undefined, { refetchInterval: 8_000 });
-  const { data: floors } = trpc.machines.listFloors.useQuery(undefined, { refetchInterval: 30_000 });
+  const { data: floors } = trpc.machines.listFloors.useQuery(undefined, roomListQueryOptions);
 
   const activeFloorNum = floorId ?? floors?.[0]?.id ?? 1;
   const { data: waiting } = trpc.waiting.list.useQuery(

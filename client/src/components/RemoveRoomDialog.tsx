@@ -1,3 +1,4 @@
+import { refreshRoomViews } from "@/lib/room-views";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -28,41 +29,52 @@ export default function RemoveRoomDialog({
 }) {
   const utils = trpc.useUtils();
   const removeRoom = trpc.rooms.remove.useMutation({
-    onSuccess: () => {
+    onSuccess: async (_value, variables) => {
       toast.success(`Room “${roomName}” removed from the board`);
-      void utils.rooms.list.invalidate();
-      void utils.machines.listFloors.invalidate();
-      void utils.machines.list.invalidate();
+      await refreshRoomViews(utils, variables.roomId);
       onRemoved();
     },
     onError: e => toast.error(e.message),
   });
 
   return (
-    <AlertDialog open={open} onOpenChange={v => !v && onClose()}>
+    <AlertDialog
+      open={open}
+      onOpenChange={v => !v && !removeRoom.isPending && onClose()}
+    >
       <AlertDialogContent className="max-w-sm bg-[#FBFCFD]">
         <AlertDialogHeader>
-          <p className="smallcaps-detail text-muted-foreground">
-            Remove Room
-          </p>
+          <p className="smallcaps-detail text-muted-foreground">Remove Room</p>
           <AlertDialogTitle className="font-display text-2xl text-[#1F2A52]">
             Remove “{roomName}”?
           </AlertDialogTitle>
           <AlertDialogDescription className="font-serif-light text-base text-[#556680]">
             {machineCount > 0
               ? `This room still holds ${machineCount} machine${machineCount > 1 ? "s" : ""}. Remove its machines from the Occupancy Board first, then return to remove the room.`
-              : "The room will be removed from the board. Machines cannot be re-added to a removed room — create a new one instead."}
+              : "The room will be removed from the board. Machines in Backup & Repair and their history will be kept. Machines cannot be re-added to a removed room — create a new one instead."}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter className="gap-2">
-          <AlertDialogCancel className="h-10 border-[#D4DFE5] bg-transparent text-[#1F2A52] hover:bg-[#E8EFF1]">
+          <AlertDialogCancel
+            disabled={removeRoom.isPending}
+            className="h-10 border-[#D4DFE5] bg-transparent text-[#1F2A52] hover:bg-[#E8EFF1]"
+          >
             Keep room
           </AlertDialogCancel>
           <AlertDialogAction
-            onClick={() =>
-              roomId && machineCount === 0 && removeRoom.mutate({ roomId })
+            onClick={event => {
+              event.preventDefault();
+              if (
+                roomId !== null &&
+                machineCount === 0 &&
+                !removeRoom.isPending
+              ) {
+                removeRoom.mutate({ roomId });
+              }
+            }}
+            disabled={
+              roomId === null || machineCount > 0 || removeRoom.isPending
             }
-            disabled={machineCount > 0}
             className="h-10 bg-[#1F2A52] text-[#F4F7F8] hover:bg-[#151D3A] disabled:pointer-events-none disabled:opacity-40"
           >
             {removeRoom.isPending ? "Removing…" : "Remove Room"}
