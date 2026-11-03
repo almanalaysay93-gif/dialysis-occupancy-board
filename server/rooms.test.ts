@@ -108,16 +108,6 @@ describe("rooms.remove", () => {
     expect(machineDb.removeRoom).toHaveBeenCalledWith({ roomId: 3 });
   });
 
-  it("blocks removal when machines still belong to the room", async () => {
-    vi.mocked(machineDb.removeRoom).mockRejectedValueOnce(
-      new Error("ROOM_HAS_MACHINES")
-    );
-    const caller = appRouter.createCaller(createStaffContext().ctx);
-    await expect(
-      caller.rooms.remove({ roomId: 1 })
-    ).rejects.toThrow("still has machines");
-  });
-
   it("blocks removal when sessions are active in the room", async () => {
     vi.mocked(machineDb.removeRoom).mockRejectedValueOnce(
       new Error("ROOM_HAS_ACTIVE_SESSIONS")

@@ -486,12 +486,6 @@ export const appRouter = router({
               message: "Cannot remove a room with machines currently in treatment. End those sessions first.",
             });
           }
-          if (msg === "ROOM_HAS_MACHINES") {
-            throw new TRPCError({
-              code: "CONFLICT",
-              message: "Cannot remove a room that still has machines. Remove its machines first.",
-            });
-          }
           mapBackendError(error);
         }
       }),

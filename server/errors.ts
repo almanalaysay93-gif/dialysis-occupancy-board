@@ -33,8 +33,6 @@ export function mapBackendError(error: unknown): never {
       throw new TRPCError({ code: "BAD_REQUEST", message: "Board name is too long (max 64 characters)." });
     case "ROOM_HAS_ACTIVE_SESSIONS":
       throw new TRPCError({ code: "CONFLICT", message: "Cannot remove a board with machines currently in treatment. End those sessions first." });
-    case "ROOM_HAS_MACHINES":
-      throw new TRPCError({ code: "CONFLICT", message: "Cannot remove a board that still has machines. Remove its machines first." });
     case "MACHINE_LABEL_EXISTS":
       throw new TRPCError({ code: "CONFLICT", message: "A machine with this label already exists on the board." });
     case "LABEL_REQUIRED":

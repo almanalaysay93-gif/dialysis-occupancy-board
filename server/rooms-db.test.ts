@@ -143,17 +143,35 @@ describe("room deletion against Postgres", () => {
     ).toEqual([{ machineId: 2, issue: "Test maintenance record" }]);
   });
 
-  it("still blocks a room with an idle machine on its board", async () => {
+  it("moves idle board machines to Backup while preserving repair status and history", async () => {
     await addMachine(1, "active");
     await addMachine(2, "repair");
-    await expect(removeRoom({ roomId: 1 })).rejects.toThrow(
-      "ROOM_HAS_MACHINES"
-    );
-    expect(await remainingRooms()).toHaveLength(2);
-    expect((await pg.query('SELECT "floorId" FROM machines')).rows).toEqual([
-      { floorId: 1 },
-      { floorId: 1 },
+    await addSession("ended");
+    await removeRoom({ roomId: 1 });
+    expect(await remainingRooms()).toEqual([{ id: 2 }]);
+    expect(
+      (await pg.query('SELECT id, status, "floorId" FROM machines ORDER BY id'))
+        .rows
+    ).toEqual([
+      { id: 1, status: "backup", floorId: null },
+      { id: 2, status: "repair", floorId: null },
     ]);
+    expect(
+      (await pg.query('SELECT "machineId", status FROM sessions')).rows
+    ).toEqual([{ machineId: 1, status: "ended" }]);
+  });
+
+  it("removes the screenshot's 98-machine room without deleting machines", async () => {
+    await pg.exec(`INSERT INTO machines (label, location, "floorId", status)
+      SELECT 'HD-' || n, 'Bay A', 1, 'active' FROM generate_series(1, 98) n`);
+    await removeRoom({ roomId: 1 });
+    expect(await remainingRooms()).toEqual([{ id: 2 }]);
+    expect(
+      (
+        await pg.query(`SELECT count(*)::int AS total FROM machines
+      WHERE status = 'backup' AND "floorId" IS NULL`)
+      ).rows
+    ).toEqual([{ total: 98 }]);
   });
 
   it.each(["active", "backup", "repair"] as const)(
@@ -169,7 +187,7 @@ describe("room deletion against Postgres", () => {
   );
 
   it("rolls back detached machines if deleting the room fails", async () => {
-    await addMachine(1, "backup");
+    await addMachine(1, "active");
     await pg.exec(`CREATE FUNCTION reject_room_delete() RETURNS trigger LANGUAGE plpgsql AS $$
       BEGIN RAISE EXCEPTION 'test deletion failure'; END $$;
       CREATE TRIGGER reject_room_delete BEFORE DELETE ON floors
@@ -179,9 +197,9 @@ describe("room deletion against Postgres", () => {
         cause: expect.objectContaining({ message: "test deletion failure" }),
       });
       expect(await remainingRooms()).toHaveLength(2);
-      expect((await pg.query('SELECT "floorId" FROM machines')).rows).toEqual([
-        { floorId: 1 },
-      ]);
+      expect(
+        (await pg.query('SELECT status, "floorId" FROM machines')).rows
+      ).toEqual([{ status: "active", floorId: 1 }]);
     } finally {
       await pg.exec(
         "DROP TRIGGER reject_room_delete ON floors; DROP FUNCTION reject_room_delete()"

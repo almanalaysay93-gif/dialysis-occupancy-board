@@ -233,8 +233,8 @@ export default function Rooms() {
         <ScrollReveal>
         <footer className="mt-10 border-t border-[#D4DFE5] pt-4">
           <p className="font-serif-light text-sm italic text-[#7684A0]">
-            A room must be empty of machines before it can be removed — remove
-            its machines from the Occupancy Board first, then return here.
+            Removing a room moves its idle machines to Backup and preserves
+            their history. End any active treatments before removing the room.
           </p>
         </footer>
         </ScrollReveal>

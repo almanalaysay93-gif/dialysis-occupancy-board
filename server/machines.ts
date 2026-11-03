@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { getDb } from "./db";
 import { invalidateMachineMetricsCache } from "./machine-metrics";
 import { patientTicket } from "./patient-ticket";
@@ -1061,30 +1061,21 @@ export async function removeRoom(input: { roomId: number }) {
       throw new Error("ROOM_HAS_ACTIVE_SESSIONS");
     }
 
-    // Backup/repair machines retain their last floor for display and access
-    // scoping, but they no longer occupy that room on the board.
-    const machineCount = await tx
-      .select({ id: machines.id })
-      .from(machines)
+    // Retiring a room must not require deleting every physical machine and
+    // its treatment history. Park idle board machines in Backup instead.
+    await tx
+      .update(machines)
+      .set({ status: "backup", floorId: null })
       .where(
         and(eq(machines.floorId, input.roomId), eq(machines.status, "active"))
-      )
-      .limit(1);
-    if (machineCount.length > 0) {
-      throw new Error("ROOM_HAS_MACHINES");
-    }
+      );
 
     // Keep the physical machines and their treatment/repair history. Clear the
     // old location so they do not reference a room that no longer exists.
     await tx
       .update(machines)
       .set({ floorId: null })
-      .where(
-        and(
-          eq(machines.floorId, input.roomId),
-          inArray(machines.status, ["backup", "repair"])
-        )
-      );
+      .where(eq(machines.floorId, input.roomId));
     await tx.delete(floors).where(eq(floors.id, input.roomId));
   });
   reportCache.clear();

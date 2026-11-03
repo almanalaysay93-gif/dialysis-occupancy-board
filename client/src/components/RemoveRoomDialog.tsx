@@ -50,7 +50,7 @@ export default function RemoveRoomDialog({
           </AlertDialogTitle>
           <AlertDialogDescription className="font-serif-light text-base text-[#556680]">
             {machineCount > 0
-              ? `This room still holds ${machineCount} machine${machineCount > 1 ? "s" : ""}. Remove its machines from the Occupancy Board first, then return to remove the room.`
+              ? `The room will be removed and its ${machineCount} machine${machineCount > 1 ? "s" : ""} moved to Backup. All machines and their history will be kept. If any patient is currently in treatment, removal will be blocked until those sessions end.`
               : "The room will be removed from the board. Machines in Backup & Repair and their history will be kept. Machines cannot be re-added to a removed room — create a new one instead."}
           </AlertDialogDescription>
         </AlertDialogHeader>
@@ -64,17 +64,11 @@ export default function RemoveRoomDialog({
           <AlertDialogAction
             onClick={event => {
               event.preventDefault();
-              if (
-                roomId !== null &&
-                machineCount === 0 &&
-                !removeRoom.isPending
-              ) {
+              if (roomId !== null && !removeRoom.isPending) {
                 removeRoom.mutate({ roomId });
               }
             }}
-            disabled={
-              roomId === null || machineCount > 0 || removeRoom.isPending
-            }
+            disabled={roomId === null || removeRoom.isPending}
             className="h-10 bg-[#1F2A52] text-[#F4F7F8] hover:bg-[#151D3A] disabled:pointer-events-none disabled:opacity-40"
           >
             {removeRoom.isPending ? "Removing…" : "Remove Room"}
