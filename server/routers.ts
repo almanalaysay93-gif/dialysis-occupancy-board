@@ -470,13 +470,13 @@ export const appRouter = router({
 
     /** Remove a room (supervisor/admin only — global resource, not floor-scoped). */
     remove: staffOrAdminProcedure
-      .input(z.object({ roomId: z.number().int().positive() }))
+      .input(z.object({ roomId: z.number().int().positive(), replacementRoomId: z.number().int().positive().optional() }))
       .mutation(async ({ ctx, input }) => {
         if (!ctx.user && ctx.staff.role !== "supervisor") {
           throw new TRPCError({ code: "FORBIDDEN", message: "Only the supervisor may manage rooms." });
         }
         try {
-          await machineDb.removeRoom({ roomId: input.roomId });
+          await machineDb.removeRoom(input);
           return { success: true } as const;
         } catch (error) {
           const msg = (error as Error)?.message;
@@ -484,6 +484,16 @@ export const appRouter = router({
             throw new TRPCError({
               code: "CONFLICT",
               message: "Cannot remove a room with machines currently in treatment. End those sessions first.",
+            });
+          }
+          const databaseError = (error as { cause?: { code?: string; table?: string; constraint?: string } })?.cause;
+          if (databaseError?.code) {
+            // Keep database diagnostics in server logs without logging query
+            // parameters, patient identifiers, or raw database error text.
+            console.error("[rooms.remove] Database error", {
+              code: databaseError.code,
+              table: databaseError.table,
+              constraint: databaseError.constraint,
             });
           }
           mapBackendError(error);

@@ -58,3 +58,9 @@ After the row exists, `drizzle-kit migrate` skips the baseline and applies only 
 `manual/` holds statements that drizzle-kit does not generate.
 Apply them by hand.
 They are not part of the journal.
+
+`manual/0006_archive_removed_rooms.sql` adds the nullable room archive timestamp.
+Apply it before deploying the room-retirement code. Removed rooms stay in the
+database so admitted waiting-list records and clinical history keep their foreign
+keys. Runtime room lists exclude archived rows. Pending waiting patients must be
+transferred to a room selected by the supervisor before archiving.

@@ -109,6 +109,8 @@ export const floors = pgTable("floors", {
   code: varchar("code", { length: 16 }).notNull().unique(),
   /** Display name, e.g. "Floor 1". */
   name: varchar("name", { length: 64 }).notNull(),
+  /** Removed from active boards while historical queue/report references remain valid. */
+  archivedAt: timestamp("archivedAt", { mode: "date", withTimezone: true }),
   /** Sort/display order. */
   sortOrder: integer("sortOrder").notNull().default(0),
   createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),

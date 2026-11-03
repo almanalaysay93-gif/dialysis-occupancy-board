@@ -48,5 +48,6 @@ export async function refreshRoomViews(
     utils.rooms.invalidate(),
     utils.machines.invalidate(),
     utils.endOfDay.invalidate(),
+    utils.waiting.invalidate(),
   ]);
 }

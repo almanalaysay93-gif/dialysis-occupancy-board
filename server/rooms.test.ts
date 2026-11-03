@@ -49,7 +49,13 @@ function createStaffContext(): { ctx: TrpcContext; mocked: typeof machineDb } {
 describe("rooms.list", () => {
   it("returns floors via listFloors", async () => {
     vi.mocked(machineDb.listFloors).mockResolvedValueOnce([
-      { id: 1, code: "F1", name: "Floor 1", sortOrder: 1, createdAt: new Date() },
+      {
+        id: 1,
+        code: "F1",
+        name: "Floor 1",
+        sortOrder: 1,
+        createdAt: new Date(),
+      },
     ]);
     const caller = appRouter.createCaller(createStaffContext().ctx);
     const rooms = await caller.rooms.list();
@@ -66,9 +72,9 @@ describe("rooms.add", () => {
       res: {} as TrpcContext["res"],
     };
     const caller = appRouter.createCaller(anonymousCtx);
-    await expect(
-      caller.rooms.add({ name: "Floor 4" })
-    ).rejects.toBeInstanceOf(TRPCError);
+    await expect(caller.rooms.add({ name: "Floor 4" })).rejects.toBeInstanceOf(
+      TRPCError
+    );
   });
 
   it("adds a room with the supplied name", async () => {
@@ -80,11 +86,13 @@ describe("rooms.add", () => {
   });
 
   it("reports a conflict when the room name already exists", async () => {
-    vi.mocked(machineDb.addRoom).mockRejectedValueOnce(new Error("ROOM_EXISTS"));
+    vi.mocked(machineDb.addRoom).mockRejectedValueOnce(
+      new Error("ROOM_EXISTS")
+    );
     const caller = appRouter.createCaller(createStaffContext().ctx);
-    await expect(
-      caller.rooms.add({ name: "Floor 1" })
-    ).rejects.toThrow("already exists");
+    await expect(caller.rooms.add({ name: "Floor 1" })).rejects.toThrow(
+      "already exists"
+    );
   });
 });
 
@@ -96,9 +104,9 @@ describe("rooms.remove", () => {
       res: {} as TrpcContext["res"],
     };
     const caller = appRouter.createCaller(anonymousCtx);
-    await expect(
-      caller.rooms.remove({ roomId: 1 })
-    ).rejects.toBeInstanceOf(TRPCError);
+    await expect(caller.rooms.remove({ roomId: 1 })).rejects.toBeInstanceOf(
+      TRPCError
+    );
   });
 
   it("removes an empty room", async () => {
@@ -113,8 +121,27 @@ describe("rooms.remove", () => {
       new Error("ROOM_HAS_ACTIVE_SESSIONS")
     );
     const caller = appRouter.createCaller(createStaffContext().ctx);
-    await expect(
-      caller.rooms.remove({ roomId: 2 })
-    ).rejects.toThrow("in treatment");
+    await expect(caller.rooms.remove({ roomId: 2 })).rejects.toThrow(
+      "in treatment"
+    );
+  });
+
+  it("passes the supervisor's waiting-patient destination to the database", async () => {
+    const caller = appRouter.createCaller(createStaffContext().ctx);
+    await caller.rooms.remove({ roomId: 3, replacementRoomId: 2 });
+    expect(machineDb.removeRoom).toHaveBeenCalledWith({
+      roomId: 3,
+      replacementRoomId: 2,
+    });
+  });
+
+  it("reports the missing waiting-patient destination clearly", async () => {
+    vi.mocked(machineDb.removeRoom).mockRejectedValueOnce(
+      new Error("ROOM_HAS_WAITING_PATIENTS")
+    );
+    const caller = appRouter.createCaller(createStaffContext().ctx);
+    await expect(caller.rooms.remove({ roomId: 3 })).rejects.toThrow(
+      "Choose another room"
+    );
   });
 });

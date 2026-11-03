@@ -12,6 +12,7 @@ import {
   sessionComplications,
   sessions,
   shiftEndorsements,
+  staffAccounts,
   waitingList,
   waterQualityLogs,
 } from "../drizzle/schema";
@@ -351,7 +352,7 @@ export async function getMachineById(machineId: number) {
 export async function listFloors() {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(floors).orderBy(floors.sortOrder, floors.id);
+  return db.select().from(floors).where(isNull(floors.archivedAt)).orderBy(floors.sortOrder, floors.id);
 }
 
 export async function addMachine(input: {
@@ -479,7 +480,7 @@ export async function setMachineStatus(input: {
     if (input.floorId === undefined || input.floorId === null) {
       throw new Error("FLOOR_REQUIRED");
     }
-    const floor = await db.select({ id: floors.id }).from(floors).where(eq(floors.id, input.floorId)).limit(1);
+    const floor = await db.select({ id: floors.id }).from(floors).where(and(eq(floors.id, input.floorId), isNull(floors.archivedAt))).limit(1);
     if (floor.length === 0) throw new Error("FLOOR_NOT_FOUND");
   }
 
@@ -992,7 +993,7 @@ export async function addRoom(input: { name: string }) {
   const existing = await db
     .select({ id: floors.id })
     .from(floors)
-    .where(eq(floors.name, input.name.trim()))
+    .where(and(eq(floors.name, input.name.trim()), isNull(floors.archivedAt)))
     .limit(1);
   if (existing.length > 0) {
     throw new Error("ROOM_EXISTS");
@@ -1044,11 +1045,14 @@ export async function renameRoom(input: { roomId: number; name: string }) {
   reportCache.clear();
 }
 
-export async function removeRoom(input: { roomId: number }) {
+export async function removeRoom(input: { roomId: number; replacementRoomId?: number }) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
   await db.transaction(async tx => {
+    const room = await tx.select({ id: floors.id }).from(floors)
+      .where(and(eq(floors.id, input.roomId), isNull(floors.archivedAt))).limit(1).for("update");
+    if (room.length === 0) throw new Error("FLOOR_NOT_FOUND");
     const active = await tx
       .select({ id: sessions.id })
       .from(sessions)
@@ -1059,6 +1063,19 @@ export async function removeRoom(input: { roomId: number }) {
       .limit(1);
     if (active.length > 0) {
       throw new Error("ROOM_HAS_ACTIVE_SESSIONS");
+    }
+
+    const waiting = await tx.select({ id: waitingList.id }).from(waitingList)
+      .where(and(eq(waitingList.floorId, input.roomId), eq(waitingList.status, "waiting")))
+      .limit(1);
+    if (waiting.length > 0) {
+      if (!input.replacementRoomId) throw new Error("ROOM_HAS_WAITING_PATIENTS");
+      if (input.replacementRoomId === input.roomId) throw new Error("INVALID_REPLACEMENT_ROOM");
+      const replacement = await tx.select({ id: floors.id }).from(floors)
+        .where(and(eq(floors.id, input.replacementRoomId), isNull(floors.archivedAt))).limit(1);
+      if (replacement.length === 0) throw new Error("INVALID_REPLACEMENT_ROOM");
+      await tx.update(waitingList).set({ floorId: input.replacementRoomId, calledAt: null, calledBy: null })
+        .where(and(eq(waitingList.floorId, input.roomId), eq(waitingList.status, "waiting")));
     }
 
     // Retiring a room must not require deleting every physical machine and
@@ -1076,7 +1093,11 @@ export async function removeRoom(input: { roomId: number }) {
       .update(machines)
       .set({ floorId: null })
       .where(eq(machines.floorId, input.roomId));
-    await tx.delete(floors).where(eq(floors.id, input.roomId));
+    // Keep the room row for admitted patients and clinical history. Production
+    // has a restrictive waiting_list foreign key that the baseline omitted.
+    await tx.update(staffAccounts).set({ assignedFloorId: null })
+      .where(eq(staffAccounts.assignedFloorId, input.roomId));
+    await tx.update(floors).set({ archivedAt: new Date() }).where(eq(floors.id, input.roomId));
   });
   reportCache.clear();
 }
@@ -1860,7 +1881,7 @@ export async function monthReport(opts?: {
   // Load everything once, in parallel: the remote pooler serializes queries
   // (~1.3s each), so one round trip per table beats a per-floor loop.
   const [floorRows, allMachines, monthSessions, allWaiting, activeRows] = await Promise.all([
-    db.select().from(floors).where(opts?.floorId ? eq(floors.id, opts.floorId) : undefined),
+    db.select().from(floors).where(and(isNull(floors.archivedAt), opts?.floorId ? eq(floors.id, opts.floorId) : undefined)),
     db.select().from(machines),
     db.execute(sql`
       SELECT * FROM ${sessions}
@@ -2089,7 +2110,7 @@ export async function endOfDayReportBulk(opts?: { date?: string }): Promise<{
   }
 
   const t0 = Date.now();
-  const floorList = await db.select().from(floors).orderBy(floors.sortOrder, floors.id);
+  const floorList = await db.select().from(floors).where(isNull(floors.archivedAt)).orderBy(floors.sortOrder, floors.id);
 
   const narrativeEntries = await listNarrativesBulk(db, { reportDate });
 

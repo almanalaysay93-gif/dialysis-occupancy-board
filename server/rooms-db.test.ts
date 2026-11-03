@@ -41,11 +41,31 @@ describe("room deletion against Postgres", () => {
         "utf8"
       )
     );
+    await pg.exec(
+      readFileSync(
+        new URL("../drizzle/manual/0005_waiting_called.sql", import.meta.url),
+        "utf8"
+      )
+    );
+    await pg.exec(
+      readFileSync(
+        new URL(
+          "../drizzle/manual/0006_archive_removed_rooms.sql",
+          import.meta.url
+        ),
+        "utf8"
+      )
+    );
+    // Match the restrictive foreign key present in production, not just the
+    // unconstrained baseline that missed the user's server error.
+    await pg.exec(
+      'ALTER TABLE waiting_list ADD CONSTRAINT waiting_list_floorId_fkey FOREIGN KEY ("floorId") REFERENCES floors(id)'
+    );
   }, 30_000);
 
   beforeEach(async () => {
     await pg.exec(
-      "TRUNCATE machine_repairs, sessions, machines, floors RESTART IDENTITY CASCADE"
+      "TRUNCATE waiting_list, machine_repairs, sessions, machines, floors RESTART IDENTITY CASCADE"
     );
     await pg.exec(`INSERT INTO floors (code, name, "sortOrder") VALUES
       ('F1', 'Room 1', 1), ('F2', 'Room 2', 2)`);
@@ -80,7 +100,11 @@ describe("room deletion against Postgres", () => {
   }
 
   async function remainingRooms() {
-    return (await pg.query("SELECT id FROM floors ORDER BY id")).rows;
+    return (
+      await pg.query(
+        'SELECT id FROM floors WHERE "archivedAt" IS NULL ORDER BY id'
+      )
+    ).rows;
   }
 
   it("removes an empty room", async () => {
@@ -95,9 +119,90 @@ describe("room deletion against Postgres", () => {
     await removeRoom({ roomId: 1 });
     expect(await remainingRooms()).toEqual([{ id: 2 }]);
     expect((await listFloors()).map(room => room.id)).toEqual([2]);
+    expect(
+      (
+        await pg.query(
+          'SELECT "archivedAt" IS NOT NULL AS archived FROM floors WHERE id = 1'
+        )
+      ).rows
+    ).toEqual([{ archived: true }]);
     expect(reportCacheGet("eodBulk", { date: "2026-11-02" })).toBeNull();
     expect(reportCacheGet("eom", { month: "2026-11", floorId: "" })).toBeNull();
   });
+
+  it("requires a destination for waiting patients and preserves the production foreign-key history", async () => {
+    await addMachine(1, "active");
+    await pg.exec(`INSERT INTO waiting_list ("patientId", "floorId", status, priority, "joinedAt", "calledAt", "calledBy")
+      VALUES ('TEST-WAITING', 1, 'waiting', 'urgent', '2026-11-03T01:00:00Z', now(), 'Test nurse'),
+             ('TEST-ADMITTED', 1, 'admitted', 'normal', '2026-11-02T01:00:00Z', null, null)`);
+    await expect(removeRoom({ roomId: 1 })).rejects.toThrow(
+      "ROOM_HAS_WAITING_PATIENTS"
+    );
+    expect(await remainingRooms()).toEqual([{ id: 1 }, { id: 2 }]);
+    expect(
+      (await pg.query('SELECT status, "floorId" FROM machines')).rows
+    ).toEqual([{ status: "active", floorId: 1 }]);
+
+    await removeRoom({ roomId: 1, replacementRoomId: 2 });
+
+    expect(await remainingRooms()).toEqual([{ id: 2 }]);
+    expect(
+      (
+        await pg.query(
+          'SELECT "patientId", "floorId", status, priority, "calledAt", "calledBy" FROM waiting_list ORDER BY id'
+        )
+      ).rows
+    ).toEqual([
+      {
+        patientId: "TEST-WAITING",
+        floorId: 2,
+        status: "waiting",
+        priority: "urgent",
+        calledAt: null,
+        calledBy: null,
+      },
+      {
+        patientId: "TEST-ADMITTED",
+        floorId: 1,
+        status: "admitted",
+        priority: "normal",
+        calledAt: null,
+        calledBy: null,
+      },
+    ]);
+    expect(
+      (await pg.query('SELECT "joinedAt" FROM waiting_list WHERE id = 1'))
+        .rows[0].joinedAt
+    ).toEqual(new Date("2026-11-03T01:00:00Z"));
+  });
+
+  it("archives a room with admitted entries without deleting or reassigning historical queue records", async () => {
+    await pg.exec(
+      `INSERT INTO waiting_list ("patientId", "floorId", status) VALUES ('TEST-ADMITTED', 1, 'admitted')`
+    );
+    await removeRoom({ roomId: 1 });
+    expect(await remainingRooms()).toEqual([{ id: 2 }]);
+    expect(
+      (await pg.query('SELECT "floorId", status FROM waiting_list')).rows
+    ).toEqual([{ floorId: 1, status: "admitted" }]);
+  });
+
+  it.each([1, 999, 2])(
+    "rejects a same, nonexistent, or archived destination (%s)",
+    async replacementRoomId => {
+      await pg.exec(
+        `INSERT INTO waiting_list ("patientId", "floorId") VALUES ('TEST-WAITING', 1)`
+      );
+      if (replacementRoomId === 2)
+        await pg.exec('UPDATE floors SET "archivedAt" = now() WHERE id = 2');
+      await expect(
+        removeRoom({ roomId: 1, replacementRoomId })
+      ).rejects.toThrow("INVALID_REPLACEMENT_ROOM");
+      expect(
+        (await pg.query('SELECT "floorId" FROM waiting_list')).rows
+      ).toEqual([{ floorId: 1 }]);
+    }
+  );
 
   it("also refreshes cached room names and report lists on rename and add", async () => {
     reportCacheSet(
@@ -190,7 +295,7 @@ describe("room deletion against Postgres", () => {
     await addMachine(1, "active");
     await pg.exec(`CREATE FUNCTION reject_room_delete() RETURNS trigger LANGUAGE plpgsql AS $$
       BEGIN RAISE EXCEPTION 'test deletion failure'; END $$;
-      CREATE TRIGGER reject_room_delete BEFORE DELETE ON floors
+      CREATE TRIGGER reject_room_delete BEFORE UPDATE ON floors
       FOR EACH ROW EXECUTE FUNCTION reject_room_delete();`);
     try {
       await expect(removeRoom({ roomId: 1 })).rejects.toMatchObject({
