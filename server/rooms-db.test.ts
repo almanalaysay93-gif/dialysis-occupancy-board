@@ -23,6 +23,8 @@ import {
   renameRoom,
   reportCacheSet,
   reportCacheGet,
+  listKioskCalls,
+  setWaitingCall,
 } from "./machines";
 
 describe("room deletion against Postgres", () => {
@@ -128,6 +130,38 @@ describe("room deletion against Postgres", () => {
     ).toEqual([{ archived: true }]);
     expect(reportCacheGet("eodBulk", { date: "2026-11-02" })).toBeNull();
     expect(reportCacheGet("eom", { month: "2026-11", floorId: "" })).toBeNull();
+  });
+
+  it("saves nurse calls and delivers a small public feed, excluding old and cancelled calls", async () => {
+    await pg.exec(`INSERT INTO waiting_list ("patientId", "floorId", status, "calledAt") VALUES
+      ('TEST-NEW-CALL', 1, 'waiting', null),
+      ('TEST-OLD-CALL', 1, 'waiting', now() - interval '5 minutes'),
+      ('TEST-ADMITTED', 1, 'admitted', now()),
+      ('TEST-OTHER-ROOM', 2, 'waiting', now())`);
+    await setWaitingCall({
+      entryId: 1,
+      floorId: 1,
+      called: true,
+      calledBy: "Test nurse",
+    });
+    const calls = await listKioskCalls({ floorId: 1 });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatchObject({
+      id: 1,
+      floorId: 1,
+      floorName: "Room 1",
+      calledAt: expect.any(Date),
+    });
+    expect(calls[0]).not.toHaveProperty("patientId");
+    expect(calls[0]).not.toHaveProperty("calledBy");
+    expect(await listKioskCalls()).toHaveLength(2);
+    await setWaitingCall({
+      entryId: 1,
+      floorId: 1,
+      called: false,
+      calledBy: "Test nurse",
+    });
+    expect(await listKioskCalls({ floorId: 1 })).toEqual([]);
   });
 
   it("requires a destination for waiting patients and preserves the production foreign-key history", async () => {

@@ -55,7 +55,9 @@ export async function unlockAudio(): Promise<boolean> {
       }
     }
     if (ctx && ctx.state !== "running") await ctx.resume();
-    return ctx?.state === "running";
+    // Some devices provide speech synthesis without Web Audio. They can
+    // announce calls even when a chime cannot be synthesized.
+    return ctx?.state === "running" || (typeof window !== "undefined" && "speechSynthesis" in window);
   } catch {
     return false;
   }

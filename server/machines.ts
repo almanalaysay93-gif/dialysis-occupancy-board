@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, gte, isNull, sql } from "drizzle-orm";
 import { getDb } from "./db";
 import { invalidateMachineMetricsCache } from "./machine-metrics";
 import { patientTicket } from "./patient-ticket";
@@ -1203,6 +1203,34 @@ const waitingBaseColumns = {
 };
 
 const waitingCallColumns = { calledAt: waitingList.calledAt, calledBy: waitingList.calledBy };
+
+/** Small public call feed: do not load and map the entire clinical queue. */
+export async function listKioskCalls(input?: { floorId?: number }) {
+  const db = await getDb();
+  if (!db || !(await waitingCallColumnsReady())) return [];
+  const rows = await db.select({
+    id: waitingList.id,
+    patientId: waitingList.patientId,
+    floorId: waitingList.floorId,
+    calledAt: waitingList.calledAt,
+    floorName: floors.name,
+  }).from(waitingList)
+    .innerJoin(floors, eq(floors.id, waitingList.floorId))
+    .where(and(
+      eq(waitingList.status, "waiting"),
+      gte(waitingList.calledAt, new Date(Date.now() - 90_000)),
+      isNull(floors.archivedAt),
+      input?.floorId === undefined ? undefined : eq(waitingList.floorId, input.floorId)
+    ))
+    .orderBy(waitingList.calledAt, waitingList.id);
+  return rows.map(row => ({
+    id: row.id,
+    ticket: patientTicket(row.patientId),
+    floorId: row.floorId,
+    floorName: row.floorName,
+    calledAt: row.calledAt!,
+  }));
+}
 
 /** Every still-waiting patient across all floors (for the cross-board urgent register). */
 export async function listWaitingAll(

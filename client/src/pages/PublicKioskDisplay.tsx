@@ -1,4 +1,5 @@
 import { roomListQueryOptions, currentRoomId } from "@/lib/room-views";
+import { createKioskCallRefresh } from "@/lib/refresh-kiosk-calls";
 import { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import { Link, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
@@ -189,20 +190,12 @@ export default function PublicKioskDisplay() {
     refetchInterval: 10000,
   });
   const staff = staffMe.data;
-  const refreshCalls = useCallback(() => {
-    // Fetch the small call response first; board reads must not compete with
-    // the announcement for the server's limited database connections.
-    void utils.waiting.kioskCalls.invalidate().finally(() => {
-      void utils.waiting.list.invalidate();
-      void utils.machines.list.invalidate();
-      void utils.staff.me.invalidate();
-    });
-  }, [utils]);
+  const refreshCalls = useMemo(() => createKioskCallRefresh(utils), [utils]);
   const liveCallsConnected = useLiveCalls(staffMe.isSuccess, refreshCalls);
   const { data: callEvents } = trpc.waiting.kioskCalls.useQuery(undefined, {
     enabled: staffMe.isSuccess,
     // Realtime is the fast path; polling covers disconnections and lost events.
-    refetchInterval: liveCallsConnected ? 10_000 : 2_000,
+    refetchInterval: 2_000,
     refetchOnWindowFocus: "always",
     refetchOnReconnect: "always",
   });
@@ -433,14 +426,15 @@ export default function PublicKioskDisplay() {
       const calledMs = new Date(w.calledAt).getTime();
       if (announcedCallsRef.current.get(w.id) === calledMs) continue;
       announcedCallsRef.current.set(w.id, calledMs);
-      if (Date.now() - calledMs > 90_000) continue;
+      // The API already filters by server time. A phone clock that runs ahead
+      // must not discard a call the server has just delivered.
       const floorObj = floors?.find(f => f.id === w.floorId);
       calls.push({
         key: `call-${w.id}-${calledMs}`,
         ticket: w.ticket,
         bay: null,
         nextMachine: nextVacantLabel(machines, w.floorId),
-        floorName: floorObj?.name ?? "Dialysis Unit",
+        floorName: w.floorName || floorObj?.name || "Dialysis Unit",
       });
     }
     // A canceled/replaced call must not remain on screen or in the voice queue.
@@ -723,6 +717,7 @@ export default function PublicKioskDisplay() {
 
       {/* Prominent Real-Time Callout Banner (Appears when ticket is called!) */}
       {activeCallout && (
+        <div className="kiosk-callout-overlay" role="alert" aria-live="assertive" aria-atomic="true">
         <div
           className={cn(
             "kiosk-callout w-full py-4 px-6 text-center shadow-2xl flex items-center justify-center gap-4 transition-all z-50",
@@ -752,6 +747,17 @@ export default function PublicKioskDisplay() {
               )}
             </span>
           </div>
+          {!audioUnlocked && (
+            <button type="button" className="rounded-md bg-white px-5 py-3 font-bold text-slate-900"
+              onClick={() => {
+                setSoundEnabled(true);
+                setVoiceEnabled(true);
+                void unlockAudio().then(setAudioUnlocked);
+              }}>
+              Enable sound and hear this call
+            </button>
+          )}
+        </div>
         </div>
       )}
 

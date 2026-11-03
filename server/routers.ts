@@ -684,14 +684,8 @@ export const appRouter = router({
     kioskCalls: staffReadProcedure.query(async ({ ctx }) => {
       const identifiedPatient = ctx.staff.role === "patient" && ctx.staff.username !== "patient.guest";
       if (identifiedPatient && ctx.staff.assignedFloorId === null) return [];
-      const rows = identifiedPatient
-        ? await machineDb.listWaiting({ floorId: ctx.staff.assignedFloorId! }, { canSeePhi: false })
-        : await machineDb.listWaitingAll({ canSeePhi: false });
-      const cutoff = Date.now() - 90_000;
-      return rows.filter(row => row.calledAt && row.calledAt.getTime() >= cutoff &&
-        (!identifiedPatient || row.ticket.toUpperCase() === ctx.staff.username.toUpperCase()))
-        .map(row => ({ id: row.id, ticket: row.ticket, floorId: row.floorId, calledAt: row.calledAt! }))
-        .sort((a, b) => a.calledAt.getTime() - b.calledAt.getTime());
+      const rows = await machineDb.listKioskCalls(identifiedPatient ? { floorId: ctx.staff.assignedFloorId! } : undefined);
+      return rows.filter(row => !identifiedPatient || row.ticket.toUpperCase() === ctx.staff.username.toUpperCase());
     }),
     /** Waiting patients per floor. Public so every staff device sees the same queue,
      *  but guest viewers never receive clinical queue data. */

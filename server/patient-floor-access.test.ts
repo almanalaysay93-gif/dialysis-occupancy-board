@@ -3,13 +3,13 @@ import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
 import { createStaffSessionToken, verifyStaffSession, type StaffSession } from "./staffAuth";
 
-const { resolve, assignment, listMachines, listFloors, listWaiting, countVacant } = vi.hoisted(() => ({
-  resolve: vi.fn(), assignment: vi.fn(), listMachines: vi.fn(), listFloors: vi.fn(), listWaiting: vi.fn(), countVacant: vi.fn(),
+const { resolve, assignment, listMachines, listFloors, listWaiting, listKioskCalls, countVacant } = vi.hoisted(() => ({
+  resolve: vi.fn(), assignment: vi.fn(), listMachines: vi.fn(), listFloors: vi.fn(), listWaiting: vi.fn(), listKioskCalls: vi.fn(), countVacant: vi.fn(),
 }));
 vi.mock("./patient-assignment", () => ({ findPatientAssignment: assignment }));
 vi.mock("./staffAuth", async original => ({ ...await original<typeof import("./staffAuth")>(), resolveStaffSession: resolve }));
 vi.mock("./machines", async original => ({
-  ...await original<typeof import("./machines")>(), listMachines, listFloors, listWaiting, countVacantMachines: countVacant,
+  ...await original<typeof import("./machines")>(), listMachines, listFloors, listWaiting, listKioskCalls, countVacantMachines: countVacant,
 }));
 
 const patient: StaffSession = { accountId: 0, username: "TK-5138", displayName: "Patient", role: "patient", assignedFloorId: 4, fromCookie: true };
@@ -57,15 +57,13 @@ describe("patient floor access", () => {
 
   it("delivers only the signed-in patient's recent calls", async () => {
     const calledAt = new Date();
-    listWaiting.mockResolvedValue([
+    listKioskCalls.mockResolvedValue([
       { id: 1, ticket: "TK-5138", floorId: 4, calledAt },
       { id: 2, ticket: "TK-9999", floorId: 4, calledAt },
-      { id: 3, ticket: "TK-5138", floorId: 4, calledAt: new Date(Date.now() - 120_000) },
-      { id: 4, ticket: "TK-5138", floorId: 4, calledAt: null },
     ]);
     const calls = await appRouter.createCaller(context()).waiting.kioskCalls();
     expect(calls).toEqual([{ id: 1, ticket: "TK-5138", floorId: 4, calledAt }]);
-    expect(listWaiting).toHaveBeenCalledWith({ floorId: 4 }, { canSeePhi: false });
+    expect(listKioskCalls).toHaveBeenCalledWith({ floorId: 4 });
   });
 
   it("serves public kiosk boards and queue when placement is absent", async () => {

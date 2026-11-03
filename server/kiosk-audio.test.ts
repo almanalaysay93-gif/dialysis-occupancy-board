@@ -8,12 +8,21 @@ describe("voice call delivery", () => {
     vi.useFakeTimers();
     speak.mockReset();
     cancel.mockReset();
-    vi.stubGlobal("window", { speechSynthesis: {
-      speak, cancel, resume: vi.fn(), paused: false, getVoices: () => [],
-    } });
-    vi.stubGlobal("SpeechSynthesisUtterance", class {
-      constructor(public text: string) {}
+    vi.stubGlobal("window", {
+      speechSynthesis: {
+        speak,
+        cancel,
+        resume: vi.fn(),
+        paused: false,
+        getVoices: () => [],
+      },
     });
+    vi.stubGlobal(
+      "SpeechSynthesisUtterance",
+      class {
+        constructor(public text: string) {}
+      }
+    );
   });
   afterEach(() => {
     vi.useRealTimers();
@@ -43,6 +52,6 @@ describe("voice call delivery", () => {
     const unlock = audio.unlockAudio();
     expect(speak).toHaveBeenCalledTimes(1);
     expect(speak.mock.calls[0][0].volume).toBe(0);
-    await unlock;
+    expect(await unlock).toBe(true);
   });
 });
