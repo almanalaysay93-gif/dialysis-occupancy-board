@@ -13,12 +13,6 @@ import { AlarmClock, ArrowRightCircle, BellRing, Droplets, Plus, Siren, UserPlus
 import { useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
-import {
-  playHospitalChime,
-  announceTicketVoice,
-  announceTreatmentArea,
-  unlockAudio,
-} from "@/lib/kioskAudio";
 
 export type WaitingPriority = "normal" | "urgent" | "veryUrgent";
 
@@ -306,10 +300,6 @@ export default function WaitingListPanel({ floorId }: { floorId: number }) {
       const ticketInfo = res.ticket ? ` (${res.ticket})` : "";
       const bayInfo = res.machineLabel ? ` onto ${res.machineLabel}` : " onto a machine";
       toast.success(`Patient “${res.patientId}”${ticketInfo} admitted${bayInfo} — session started`);
-      if (res.ticket && res.machineLabel) {
-        playHospitalChime();
-        announceTicketVoice(res.ticket, res.machineLabel, res.floorName);
-      }
       setAdmitDraft(null);
       void utils.waiting.list.invalidate({ floorId });
       void utils.waiting.vacantCount.invalidate({ floorId });
@@ -605,16 +595,13 @@ function WaitingRow({
   canWrite,
 }: RowProps) {
   const callPatient = () => {
-    // Unlock during the tap; confirm the saved call before playing its cue.
-    void unlockAudio();
+    // The clinical board sends the call; the patient's kiosk owns its prompt
+    // and audio. Local playback here cannot confirm cross-device delivery.
     callMut.mutate(
       { entryId: entry.id, floorId: entry.floorId, called: true },
       {
-        onSuccess: res => {
-          playHospitalChime();
-          if (entry.ticket)
-            announceTreatmentArea(entry.ticket, res.floorName, res.machineLabel);
-          toast.success(`Ticket ${entry.ticket || entry.patientId} called to the treatment area`);
+        onSuccess: () => {
+          toast.success(`Call saved for ticket ${entry.ticket || entry.patientId}. Announcement plays on the kiosk.`);
         },
       }
     );

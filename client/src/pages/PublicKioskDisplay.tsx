@@ -166,6 +166,7 @@ export default function PublicKioskDisplay() {
   const announcedCallsRef = useRef<Map<number, number>>(new Map());
   const isInitializedRef = useRef(false);
   const [audioUnlocked, setAudioUnlocked] = useState(false);
+  const callSoundReady = audioUnlocked && soundEnabled && voiceEnabled;
 
   // Auto-unlock audio context on first user interaction
   useEffect(() => {
@@ -192,7 +193,7 @@ export default function PublicKioskDisplay() {
   const staff = staffMe.data;
   const refreshCalls = useMemo(() => createKioskCallRefresh(utils), [utils]);
   const liveCallsConnected = useLiveCalls(staffMe.isSuccess, refreshCalls);
-  const { data: callEvents } = trpc.waiting.kioskCalls.useQuery(undefined, {
+  const { data: callEvents, isError: callFeedError } = trpc.waiting.kioskCalls.useQuery(undefined, {
     enabled: staffMe.isSuccess,
     // Realtime is the fast path; polling covers disconnections and lost events.
     refetchInterval: 2_000,
@@ -602,8 +603,9 @@ export default function PublicKioskDisplay() {
             </div>
           </section>
         )}
-        {userTicket && <p className="text-xs" role="status">
-          {liveCallsConnected ? "Live calls connected" : "Reconnecting live calls · checking for updates"}
+        {staffMe.isSuccess && <p className="text-xs" role="status">
+          {callFeedError ? "Call updates unavailable · retrying" : liveCallsConnected ? "Live calls connected" : "Checking for new calls"}
+          {" · "}{callSoundReady ? "Call sound enabled on this device" : "Enable call sound on this device"}
         </p>}
 
         {/* Live Clock & Control Suite */}
@@ -632,21 +634,21 @@ export default function PublicKioskDisplay() {
             {/* Audio Chime Toggle */}
             <button
               onClick={() => {
-                const enable = !soundEnabled || !voiceEnabled;
+                const enable = !callSoundReady;
                 setSoundEnabled(enable);
                 setVoiceEnabled(enable);
                 if (enable) void unlockAudio().then(setAudioUnlocked);
                 else stopAnnouncement();
               }}
-              title={soundEnabled && voiceEnabled ? "Mute calls" : "Enable call sound"}
-              aria-label={soundEnabled && voiceEnabled ? "Mute calls" : "Enable call sound"}
-              aria-pressed={soundEnabled && voiceEnabled}
+              title={callSoundReady ? "Mute calls" : "Enable call sound"}
+              aria-label={callSoundReady ? "Mute calls" : "Enable call sound"}
+              aria-pressed={callSoundReady}
               className={cn(
                 "p-2 rounded-md hover:bg-white/10 transition-colors",
-                soundEnabled ? "text-emerald-400" : "text-slate-500 line-through"
+                callSoundReady ? "text-emerald-400" : "text-slate-500"
               )}
             >
-              {soundEnabled ? <Volume2 className="h-5 w-5" /> : <VolumeX className="h-5 w-5" />}
+              {callSoundReady ? <Volume2 className="h-5 w-5" /> : <VolumeX className="h-5 w-5" />}
             </button>
 
             {/* Test Audio Button */}
